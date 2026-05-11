@@ -5,6 +5,7 @@ import {
   ShoppingCart, Filter, Eye, Download, MessageCircle,
   Calendar, User, CreditCard, DollarSign
 } from 'lucide-react';
+import { generateQuotationPDF } from '../../lib/pdfGenerator';
 
 interface Customer {
   id: number;
@@ -33,11 +34,15 @@ interface Quotation {
   customerName: string;
   customerDocNumber?: string;
   customerPhone?: string;
+  customerAddress?: string;
   status: string;
   currency?: string;
   totalAmount: number;
   exchangeRate: number;
   createdAt: string;
+  pickupPlace?: string;
+  sellerId?: number;
+  customerId?: number;
   items?: QuotationItem[];
 }
 
@@ -155,6 +160,13 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                             <ShoppingCart className="w-4 h-4" />
                           </button>
                         )}
+                        <button 
+                          onClick={async () => await generateQuotationPDF(quot, quot.items || [])}
+                          className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-600 hover:text-white transition-all shadow-sm"
+                          title="Descargar PDF"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
                         <button 
                           onClick={() => window.open(`https://wa.me/${quot.customerPhone}?text=Hola%20${quot.customerName},%20aquí%20tienes%20tu%20cotización%20${quot.docSeries}-${quot.docNumber}`, '_blank')}
                           className="p-2.5 bg-green-50 text-green-600 rounded-xl hover:bg-green-600 hover:text-white transition-all shadow-sm"

@@ -35,8 +35,8 @@ export default function ProductGrid({ forceCategory, limit, maxPrice }: { forceC
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
           // Filter active products only
-          const activeOnes = data.filter((p: any) => p.isActive !== false);
-          const mapped = activeOnes.map((p: any) => ({
+          const visibleOnes = data.filter((p: any) => p.isActive !== false && p.showInWeb !== false);
+          const mapped = visibleOnes.map((p: any) => ({
             ...p,
             // Ensure price is set from salePrice if available and parsed correctly
             price: Number(p.salePrice) || Number(p.price) || 0,

@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { 
   Package, Layers, Tag, Scale, PlusCircle, Search, 
   Edit2, Trash2, Eye, Filter, ChevronRight, LayoutGrid, 
-  List, MoreVertical, Image as ImageIcon
+  List, MoreVertical, Image as ImageIcon, Globe, Calendar, Power
 } from 'lucide-react';
 
 interface Category {
@@ -37,6 +37,10 @@ interface Product {
   category?: { name: string };
   brand?: { name: string };
   unit?: { symbol: string };
+  isActive: boolean;
+  showInWeb: boolean;
+  manageLots: boolean;
+  useExpiryDate: boolean;
 }
 
 interface ProductModuleProps {
@@ -156,7 +160,7 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-50">
               {getFilteredItems().map((item: any) => (
-                <tr key={item.id} className="hover:bg-slate-50/80 transition-colors group">
+                <tr key={item.id} className={`hover:bg-slate-50/80 transition-colors group ${!item.isActive ? 'opacity-60 bg-slate-50/30' : ''}`}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-4">
                       {activeTab === 'products' && (
@@ -168,10 +172,33 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
                           )}
                         </div>
                       )}
-                      <div className="flex flex-col">
+                        <div className="flex flex-col">
                         <span className="font-bold text-slate-900">{item.name}</span>
                         {item.code && <span className="text-[10px] text-slate-400 font-black tracking-widest uppercase">{item.code}</span>}
                         {activeTab === 'units' && <span className="text-xs text-blue-600 font-bold">{item.symbol}</span>}
+                        
+                        {activeTab === 'products' && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-tighter ${item.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                              {item.isActive ? 'Activo' : 'Inactivo'}
+                            </span>
+                            {item.showInWeb && (
+                              <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-tighter flex items-center gap-0.5">
+                                <Globe className="w-2 h-2" /> Web
+                              </span>
+                            )}
+                            {item.manageLots && (
+                              <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-tighter flex items-center gap-0.5">
+                                <Package className="w-2 h-2" /> Lote
+                              </span>
+                            )}
+                            {item.useExpiryDate && (
+                              <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-tighter flex items-center gap-0.5">
+                                <Calendar className="w-2 h-2" /> Venc.
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>

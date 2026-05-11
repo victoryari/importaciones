@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { ProductSearchModal } from './ProductSearchModal';
 import axios from 'axios';
+import { generateQuotationPDF } from '../../../lib/pdfGenerator';
 
 interface QuotationFormProps {
   isOpen: boolean;
@@ -165,7 +166,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
     <AnimatePresence>
       {isOpen && (
         <>
-          <div className="fixed inset-0 z-110 flex items-center justify-center p-0 overflow-hidden">
+          <div className="absolute inset-0 z-110 flex items-center justify-center p-0 overflow-hidden">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
           
           <motion.div 
@@ -466,7 +467,6 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                           <th className="px-2 py-1 font-bold border-r border-slate-300 w-24">Almacén</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 w-24">Código</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 min-w-50">Descripción Producto</th>
-                          <th className="px-2 py-1 font-bold border-r border-slate-300 w-32">Afectación</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-16">Cantidad</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-center w-20">U.M.</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-center w-24">Cat. Precio</th>
@@ -492,13 +492,6 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                               <td className="px-2 py-1 border-r border-slate-200 text-blue-600 font-bold">T1.P1.DP1</td>
                               <td className="px-2 py-1 border-r border-slate-200 font-bold">{item.code || 'S/C'}</td>
                               <td className="px-2 py-1 border-r border-slate-200 font-bold truncate max-w-62.5">{item.name}</td>
-                              <td className="px-2 py-1 border-r border-slate-200">
-                                <select value={item.affectationType || '10'} onChange={e => updateQuotationItem(item.productId, 'affectationType', e.target.value)} className="w-full text-[9px] bg-transparent outline-none focus:bg-white font-bold">
-                                  {sunatIgvAffectations.map(a => (
-                                    <option key={a.code} value={a.code}>{a.code} | {a.name}</option>
-                                  ))}
-                                </select>
-                              </td>
                               <td className="px-2 py-1 border-r border-slate-200"><input type="number" value={item.quantity} onChange={e => updateQuotationItem(item.productId, 'quantity', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white" /></td>
                               <td className="px-2 py-1 border-r border-slate-200 text-center">{item.unit?.symbol || 'UND'}</td>
                               <td className="px-2 py-1 border-r border-slate-200 text-center text-slate-400">--Seleccionar--</td>
@@ -548,10 +541,10 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                 <div className="bg-white p-3 rounded-lg border border-slate-300 shadow-sm flex flex-col md:flex-row justify-between items-end gap-6">
                   <div className="flex gap-2">
                     <button type="button" onClick={onClose} className="h-10 px-4 bg-slate-50 border border-slate-300 rounded text-xs font-bold hover:bg-slate-100 flex items-center gap-2"><X className="w-4 h-4 text-red-500" /> Salir</button>
-                    <button type="button" className="h-10 px-4 bg-white border border-slate-300 rounded text-xs font-bold hover:bg-slate-50 flex items-center gap-2"><Printer className="w-4 h-4 text-slate-600" /> Imprimir</button>
-                    <button type="button" className="h-10 px-4 bg-white border border-slate-300 rounded text-[10px] font-bold hover:bg-slate-50 flex items-center gap-1">Imprimir B5</button>
+                    <button type="button" onClick={async () => await generateQuotationPDF(formData, quotationItems, 'print')} className="h-10 px-4 bg-white border border-slate-300 rounded text-xs font-bold hover:bg-slate-100 flex items-center gap-2"><Printer className="w-4 h-4 text-slate-600" /> Imprimir</button>
+                    <button type="button" onClick={async () => await generateQuotationPDF(formData, quotationItems, 'print')} className="h-10 px-4 bg-white border border-slate-300 rounded text-[10px] font-bold hover:bg-slate-100 flex items-center gap-1">Imprimir B5</button>
                     <button type="submit" className="h-10 px-8 bg-blue-800 text-white rounded shadow-lg shadow-blue-100 hover:bg-blue-900 flex items-center gap-2 text-xs font-bold"><Save className="w-4 h-4" /> Guardar</button>
-                    <button type="button" className="h-10 px-4 bg-white border border-slate-300 rounded text-xs font-bold hover:bg-slate-50 flex items-center gap-2"><FileDown className="w-4 h-4 text-red-600" /> PDF</button>
+                    <button type="button" onClick={async () => await generateQuotationPDF(formData, quotationItems, 'save')} className="h-10 px-4 bg-white border border-slate-300 rounded text-xs font-bold hover:bg-slate-100 flex items-center gap-2"><FileDown className="w-4 h-4 text-red-600" /> PDF</button>
                   </div>
 
                   <div className="grid grid-cols-6 gap-x-2 gap-y-1">

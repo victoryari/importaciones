@@ -264,7 +264,9 @@ app.post('/api/products', authenticateToken, async (req, res) => {
       name, slug, stock, categoryId, images, code, weight, 
       description, features, sanitaryRegister, certificate,
       igv, costPrice, salePrice, minSalePrice, maxSalePrice,
-      brandId, unitId, isActive
+      brandId, unitId, isActive,
+      packageId, quantityPerPackage, subPackageId, quantityPerSubPackage,
+      showInWeb, manageLots, useExpiryDate
     } = req.body;
 
     if (!name || !slug || !categoryId) {
@@ -290,7 +292,14 @@ app.post('/api/products', authenticateToken, async (req, res) => {
         maxSalePrice: maxSalePrice ? parseFloat(maxSalePrice) : null,
         brandId: brandId ? parseInt(brandId) : null,
         unitId: unitId ? parseInt(unitId) : null,
-        isActive: isActive !== undefined ? isActive : true
+        isActive: isActive !== undefined ? isActive : true,
+        packageId: packageId ? parseInt(packageId) : null,
+        quantityPerPackage: parseInt(quantityPerPackage) || 1,
+        subPackageId: subPackageId ? parseInt(subPackageId) : null,
+        quantityPerSubPackage: parseInt(quantityPerSubPackage) || 1,
+        showInWeb: showInWeb !== undefined ? showInWeb : true,
+        manageLots: manageLots !== undefined ? manageLots : false,
+        useExpiryDate: useExpiryDate !== undefined ? useExpiryDate : false
       }
     });
     res.json(product);
@@ -310,7 +319,9 @@ app.put('/api/products/:id', authenticateToken, async (req, res) => {
       name, slug, stock, categoryId, images, code, weight, 
       description, features, sanitaryRegister, certificate,
       igv, costPrice, salePrice, minSalePrice, maxSalePrice,
-      brandId, unitId, isActive
+      brandId, unitId, isActive,
+      packageId, quantityPerPackage, subPackageId, quantityPerSubPackage,
+      showInWeb, manageLots, useExpiryDate
     } = req.body;
 
     if (!name || !slug || !categoryId) {
@@ -337,7 +348,14 @@ app.put('/api/products/:id', authenticateToken, async (req, res) => {
         maxSalePrice: maxSalePrice ? parseFloat(maxSalePrice) : null,
         brandId: brandId ? parseInt(brandId) : null,
         unitId: unitId ? parseInt(unitId) : null,
-        isActive: isActive !== undefined ? isActive : true
+        isActive: isActive !== undefined ? isActive : true,
+        packageId: packageId ? parseInt(packageId) : null,
+        quantityPerPackage: parseInt(quantityPerPackage) || 1,
+        subPackageId: subPackageId ? parseInt(subPackageId) : null,
+        quantityPerSubPackage: parseInt(quantityPerSubPackage) || 1,
+        showInWeb: showInWeb !== undefined ? showInWeb : true,
+        manageLots: manageLots !== undefined ? manageLots : false,
+        useExpiryDate: useExpiryDate !== undefined ? useExpiryDate : false
       }
     });
     res.json(product);
@@ -837,7 +855,7 @@ app.post('/api/quotations', authenticateToken, async (req, res) => {
     const { 
       customerId, customerName, customerPhone, customerEmail, customerDocType, 
       customerDocNumber, customerAddress, docType, docSeries, docNumber,
-      internalCode, igvPercent, exchangeRate, dueDate, sellerName, includeIgv, 
+      internalCode, igvPercent, exchangeRate, dueDate, sellerId, sellerName, includeIgv, 
       priceIncludesIgv, operationType, paymentCondition, currency, items, 
       totalAmount, globalDiscount, flete, billingStatus, purchaseOrder, 
       requirementNumber, pickupPlace, observation, notes, agencyId 
@@ -878,13 +896,13 @@ app.post('/api/quotations', authenticateToken, async (req, res) => {
         igvPercent: parseFloat(igvPercent as any) || 18, 
         exchangeRate: parseFloat(exchangeRate as any) || 1, 
         dueDate: dueDate ? new Date(dueDate) : null, 
+        sellerId: sellerId ? parseInt(sellerId as string) : null,
         sellerName, includeIgv, 
         priceIncludesIgv, operationType, paymentCondition, currency, 
         totalAmount: parseFloat(totalAmount as any) || 0, 
         globalDiscount: parseFloat(globalDiscount as any) || 0, 
         flete: parseFloat(flete as any) || 0, 
-        billingStatus, purchaseOrder, 
-        requirementNumber, pickupPlace, observation, notes,
+        billingStatus, pickupPlace, observation, notes,
         agencyId: (agencyId && !isNaN(parseInt(agencyId))) ? parseInt(agencyId) : null,
         items: {
           create: (items || []).map((item: any) => ({
@@ -926,7 +944,7 @@ app.put('/api/quotations/:id', authenticateToken, async (req, res) => {
     const { 
       customerId, customerName, customerPhone, customerEmail, customerDocType, 
       customerDocNumber, customerAddress, docType, docSeries, docNumber,
-      internalCode, igvPercent, exchangeRate, dueDate, sellerName, includeIgv, 
+      internalCode, igvPercent, exchangeRate, dueDate, sellerId, sellerName, includeIgv, 
       priceIncludesIgv, operationType, paymentCondition, currency, items, 
       totalAmount, globalDiscount, flete, billingStatus, purchaseOrder, 
       requirementNumber, pickupPlace, observation, notes, agencyId 
@@ -950,13 +968,13 @@ app.put('/api/quotations/:id', authenticateToken, async (req, res) => {
         igvPercent: parseFloat(igvPercent as any) || 18, 
         exchangeRate: parseFloat(exchangeRate as any) || 1, 
         dueDate: dueDate ? new Date(dueDate) : null, 
+        sellerId: sellerId ? parseInt(sellerId as string) : null,
         sellerName, includeIgv, 
         priceIncludesIgv, operationType, paymentCondition, currency, 
         totalAmount: parseFloat(totalAmount as any) || 0, 
         globalDiscount: parseFloat(globalDiscount as any) || 0, 
         flete: parseFloat(flete as any) || 0, 
-        billingStatus, purchaseOrder, 
-        requirementNumber, pickupPlace, observation, notes,
+        billingStatus, pickupPlace, observation, notes,
         agencyId: (agencyId && !isNaN(parseInt(agencyId))) ? parseInt(agencyId) : null,
         items: {
           create: (items || []).map((item: any) => ({
@@ -1160,14 +1178,27 @@ app.post('/api/orders', async (req, res) => {
     const { 
       customerId, customerName, customerEmail, customerPhone, customerCity, customerAddress, 
       customerDocType, customerDocNumber, docType, docSeries, docNumber,
-      exchangeRate, dueDate, sellerName, includeIgv, purchaseOrder, requirementNumber,
+      exchangeRate, dueDate, sellerId, sellerName, includeIgv, purchaseOrder, requirementNumber,
       consigneeName, consigneePhone, consigneeDocNumber, consigneeAddress,
       notes, items, totalAmount, quotationId, paymentStatus, shippingCost, agencyId,
       currency, paymentCondition, pickupPlace
     } = req.body;
     
-    if (!items || items.length === 0) {
-      return res.status(400).json({ error: 'El pedido debe tener al menos un producto' });
+    // Validate stock for all items
+    for (const item of items) {
+      const product = await prisma.product.findUnique({
+        where: { id: item.productId },
+        include: { stockRecords: true }
+      });
+      
+      if (!product) {
+        return res.status(404).json({ error: `Producto no encontrado (ID: ${item.productId})` });
+      }
+
+      const totalStock = (product as any).stockRecords.reduce((acc: number, curr: any) => acc + curr.quantity, 0);
+      if (totalStock < item.quantity) {
+        return res.status(400).json({ error: `Stock insuficiente para ${product.name}. Disponible: ${totalStock}, Solicitado: ${item.quantity}` });
+      }
     }
 
     const order = await prisma.$transaction(async (tx) => {
@@ -1187,6 +1218,7 @@ app.post('/api/orders', async (req, res) => {
           docNumber,
           exchangeRate: parseFloat(exchangeRate) || 1.0,
           dueDate: dueDate ? new Date(dueDate) : null,
+          sellerId: sellerId ? parseInt(sellerId) : null,
           sellerName,
           includeIgv: !!includeIgv,
           purchaseOrder,
@@ -1252,25 +1284,28 @@ async function moveStockToTemp(tx: any, orderId: number, items: any[]) {
 
   for (const item of items) {
     // 1. Salida de Existencias
-    await tx.stock.upsert({
-      where: { productId_warehouseId: { productId: item.productId, warehouseId: existencias.id } },
-      update: { quantity: { decrement: item.quantity } },
-      create: { productId: item.productId, warehouseId: existencias.id, quantity: -item.quantity }
-    });
+    const stockExt = await tx.stock.findFirst({ where: { productId: item.productId, warehouseId: existencias.id } });
+    if (stockExt) {
+      await tx.stock.update({ where: { id: stockExt.id }, data: { quantity: { decrement: item.quantity } } });
+    } else {
+      await tx.stock.create({ data: { productId: item.productId, warehouseId: existencias.id, quantity: -item.quantity } });
+    }
 
     // 2. Ingreso a Comprobante
-    await tx.stock.upsert({
-      where: { productId_warehouseId: { productId: item.productId, warehouseId: comprobante.id } },
-      update: { quantity: { increment: item.quantity } },
-      create: { productId: item.productId, warehouseId: comprobante.id, quantity: item.quantity }
-    });
+    const stockComp = await tx.stock.findFirst({ where: { productId: item.productId, warehouseId: comprobante.id } });
+    if (stockComp) {
+      await tx.stock.update({ where: { id: stockComp.id }, data: { quantity: { increment: item.quantity } } });
+    } else {
+      await tx.stock.create({ data: { productId: item.productId, warehouseId: comprobante.id, quantity: item.quantity } });
+    }
 
     // 3. Ingreso a Despacho
-    await tx.stock.upsert({
-      where: { productId_warehouseId: { productId: item.productId, warehouseId: despacho.id } },
-      update: { quantity: { increment: item.quantity } },
-      create: { productId: item.productId, warehouseId: despacho.id, quantity: item.quantity }
-    });
+    const stockDesp = await tx.stock.findFirst({ where: { productId: item.productId, warehouseId: despacho.id } });
+    if (stockDesp) {
+      await tx.stock.update({ where: { id: stockDesp.id }, data: { quantity: { increment: item.quantity } } });
+    } else {
+      await tx.stock.create({ data: { productId: item.productId, warehouseId: despacho.id, quantity: item.quantity } });
+    }
 
     // 4. Record movement
     await tx.stockMovement.create({
@@ -1364,12 +1399,12 @@ app.put('/api/orders/:id/status', authenticateToken, async (req, res) => {
         if (despacho && comprobante) {
           for (const item of order.items) {
             // Remove from temp warehouses
-            await tx.stock.update({
-              where: { productId_warehouseId: { productId: item.productId, warehouseId: despacho.id } },
+            await tx.stock.updateMany({
+              where: { productId: item.productId, warehouseId: despacho.id },
               data: { quantity: { decrement: item.quantity } }
             });
-            await tx.stock.update({
-              where: { productId_warehouseId: { productId: item.productId, warehouseId: comprobante.id } },
+            await tx.stock.updateMany({
+              where: { productId: item.productId, warehouseId: comprobante.id },
               data: { quantity: { decrement: item.quantity } }
             });
           }

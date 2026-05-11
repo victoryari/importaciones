@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { LayoutDashboard, Package, Save, Image as ImageIcon, Settings as SettingsIcon, LogOut, Trash2, X, CheckCircle, FileText, BarChart3, Star, ShoppingCart, Truck, DollarSign, User, MapPin, Hash } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { SettingsModule } from './admin/SettingsModule';
 import { ExchangeRateModule } from './admin/ExchangeRateModule';
 import { LogisticsModule } from './admin/LogisticsModule';
 import { QuotationModule } from './admin/QuotationModule';
@@ -28,10 +29,10 @@ import { getDeptId, getProvId, getDistId } from '../lib/ubigeoData';
 interface Category { id: number; name: string; slug: string; image?: string; isFeatured: boolean; _count?: { products: number }; }
 interface Brand { id: number; name: string; logo?: string; _count?: { products: number }; }
 interface Unit { id: number; name: string; symbol: string; }
-interface Product { id: number; code?: string; name: string; slug: string; weight?: string; description?: string; features?: string; sanitaryRegister?: string; certificate?: string; igv: number; costPrice: number; salePrice: number; minSalePrice?: number; maxSalePrice?: number; stock: number; images?: string[]; isActive: boolean; categoryId: number; category?: { name: string }; brandId?: number; brand?: { name: string }; unitId?: number; unit?: { name: string; symbol: string }; }
+interface Product { id: number; code?: string; name: string; slug: string; weight?: string; description?: string; features?: string; sanitaryRegister?: string; certificate?: string; igv: number; costPrice: number; salePrice: number; minSalePrice?: number; maxSalePrice?: number; stock: number; images?: string[]; isActive: boolean; categoryId: number; category?: { name: string }; brandId?: number; brand?: { name: string }; unitId?: number; unit?: { name: string; symbol: string }; showInWeb: boolean; manageLots: boolean; useExpiryDate: boolean; }
 interface Order { id: number; customerName: string; customerEmail?: string; customerPhone: string; totalAmount: number; status: string; createdAt: string; items: any[]; paymentStatus: string; }
 interface Customer { id: number; code?: string; name: string; personType: string; docType: string; docNumber: string; address?: string; phone?: string; email?: string; country: string; department?: string; province?: string; district?: string; firstName?: string; lastName?: string; }
-interface Quotation { id: number; customerName: string; totalAmount: number; status: string; createdAt: string; items: any[]; exchangeRate: number; docSeries?: string; docNumber?: string; customerDocNumber?: string; customerPhone?: string; currency?: string; }
+interface Quotation { id: number; customerName: string; totalAmount: number; status: string; createdAt: string; items: any[]; exchangeRate: number; docSeries?: string; docNumber?: string; customerDocNumber?: string; customerPhone?: string; customerAddress?: string; currency?: string; pickupPlace?: string; sellerId?: number; customerId?: number; }
 
 export default function Admin() {
   const { token, logout, user } = useAuth();
@@ -59,7 +60,27 @@ export default function Admin() {
   const [stats, setStats] = useState<any>(null);
 
   // Estados de UI
-  const [view, setView] = useState<'dashboard' | 'products' | 'categories' | 'brands' | 'units' | 'ads' | 'orders' | 'settings' | 'inventory' | 'customers' | 'quotations' | 'exchange-rates' | 'logistics' | 'sellers' | 'warehouses' | 'series'>('dashboard');
+  const [openTabs, setOpenTabs] = useState<{id: string, label: string}[]>([{ id: 'dashboard', label: 'Resumen' }]);
+  const [activeTabId, setActiveTabId] = useState<string>('dashboard');
+  const view = activeTabId; // Alias for backward compatibility
+
+  const handleOpenTab = (id: string, label: string) => {
+    if (!openTabs.find(t => t.id === id)) {
+      setOpenTabs([...openTabs, { id, label }]);
+    }
+    setActiveTabId(id);
+  };
+
+  const handleCloseTab = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newTabs = openTabs.filter(t => t.id !== id);
+    setOpenTabs(newTabs);
+    if (activeTabId === id && newTabs.length > 0) {
+      setActiveTabId(newTabs[newTabs.length - 1].id);
+    } else if (newTabs.length === 0) {
+      handleOpenTab('dashboard', 'Resumen');
+    }
+  };
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -75,7 +96,7 @@ export default function Admin() {
 
   // Formularios iniciales
   const initialSellerData = { name: '', dni: '', phone: '', email: '', isActive: true };
-  const initialProductData = { code: '', name: '', slug: '', weight: '', description: '', features: '', sanitaryRegister: '', certificate: '', igv: 18, costPrice: 0, salePrice: 0, minSalePrice: 0, maxSalePrice: 0, stock: 0, categoryId: '', brandId: '', unitId: '', images: [], isActive: true, isFeatured: false };
+  const initialProductData = { code: '', name: '', slug: '', weight: '', description: '', features: '', sanitaryRegister: '', certificate: '', igv: 18, costPrice: 0, salePrice: 0, minSalePrice: 0, maxSalePrice: 0, stock: 0, categoryId: '', brandId: '', unitId: '', packageId: '', quantityPerPackage: 1, subPackageId: '', quantityPerSubPackage: 1, images: [], isActive: true, isFeatured: false, showInWeb: true, manageLots: false, useExpiryDate: false };
   const initialQuotationData = { 
     igvPercent: 18,
     docType: 'COT',
@@ -151,7 +172,19 @@ export default function Admin() {
         '/api/sunat/payment_condition', '/api/sunat/operation_type', '/api/sunat/igv_affectation_type', '/api/sunat/doc_type', '/api/series'
       ];
       const responses = await Promise.all(endpoints.map(url => axios.get(url, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] }))));
-      setCategories(responses[0].data); setBrands(responses[1].data); setUnits(responses[2].data); setProducts(responses[3].data); setOrders(responses[4].data); setQuotations(responses[5].data); setCustomers(responses[6].data); setShippingAgencies(responses[7].data); setShippingZones(responses[8].data); setDocumentTypes(responses[9].data); setStats(responses[10].data); setExchangeRates(responses[11].data);
+      setCategories(responses[0].data); 
+      setBrands(responses[1].data); 
+      setUnits(responses[2].data); 
+      setProducts(responses[3].data); 
+      setOrders(responses[4].data); 
+      setQuotations(responses[5].data); 
+      setCustomers(responses[6].data); 
+      setShippingAgencies(responses[7].data); 
+      setShippingZones(responses[8].data); 
+      setDocumentTypes(responses[9].data); 
+      setStats(responses[10].data); 
+      setExchangeRates(responses[11].data);
+      setSellers(responses[12].data);
       const warehousesData = responses[13].data;
       setWarehouses(warehousesData);
       
@@ -257,9 +290,19 @@ export default function Admin() {
     e.preventDefault(); setLoading(true);
     try {
       const url = editingItem ? `/api/products/${editingItem.id}` : '/api/products';
-      await axios({ method: editingItem ? 'PUT' : 'POST', url, data: productFormData, headers: { Authorization: `Bearer ${token}` } });
+      
+      // Auto-generar slug si está vacío
+      const dataToSubmit = { ...productFormData };
+      if (!dataToSubmit.slug) {
+        dataToSubmit.slug = dataToSubmit.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+      }
+
+      await axios({ method: editingItem ? 'PUT' : 'POST', url, data: dataToSubmit, headers: { Authorization: `Bearer ${token}` } });
       showSuccess('Guardado'); setIsProductModalOpen(false); fetchData();
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+    } catch (err: any) { 
+      console.error(err); 
+      alert(err.response?.data?.error || 'Error al guardar el producto');
+    } finally { setLoading(false); }
   };
 
   const handleSubmitSeller = async (e: any) => {
@@ -314,9 +357,17 @@ export default function Admin() {
         items: quotationItems, 
         totalAmount: quotationTotal 
       };
-      const url = editingItem ? `/api/quotations/${editingItem.id}` : '/api/quotations';
-      await axios({ method: editingItem ? 'PUT' : 'POST', url, data: payload, headers: { Authorization: `Bearer ${token}` } });
-      showSuccess('Cotización guardada'); setIsQuotationModalOpen(false); fetchData();
+      const isOrder = quotationFormData.docType === 'PED';
+      const url = isOrder ? '/api/orders' : (editingItem ? `/api/quotations/${editingItem.id}` : '/api/quotations');
+      const method = (editingItem && !isOrder) ? 'PUT' : 'POST';
+      
+      const res = await axios({ method, url, data: payload, headers: { Authorization: `Bearer ${token}` } });
+      showSuccess(isOrder ? 'Pedido generado' : 'Cotización guardada'); 
+      setIsQuotationModalOpen(false); 
+      fetchData();
+      
+      // Si es un pedido exitoso, cambiar a la pestaña de pedidos
+      if (isOrder) handleOpenTab('orders', 'Pedidos');
     } catch (err: any) { 
       console.error(err);
       alert(err.response?.data?.error || 'Error al guardar la cotización'); 
@@ -453,11 +504,11 @@ export default function Admin() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-10">
+    <div className="w-full max-w-480 mx-auto px-4 py-4 md:px-6 h-screen flex flex-col">
       <AnimatePresence>{successMsg && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="fixed top-24 right-10 z-50 bg-green-600 text-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-2"><CheckCircle className="w-5 h-5" /> <span className="font-bold">{successMsg}</span></motion.div>}</AnimatePresence>
 
-      <div className="flex flex-col lg:flex-row gap-8">
-        <aside className="w-full lg:w-64 space-y-2">
+      <div className="flex flex-col lg:flex-row gap-6 h-full min-h-0">
+        <aside className="w-full lg:w-64 shrink-0 space-y-2 h-full overflow-y-auto custom-scrollbar pr-2">
           <div className="px-4 py-4 mb-4 bg-blue-900 text-white rounded-3xl shadow-lg shadow-blue-100"><div className="flex items-center gap-3 mb-1"><div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold">C</div><span className="font-bold text-lg">Panel Admin</span></div><p className="text-[10px] text-blue-300 font-bold uppercase tracking-widest pl-11">{user?.name || 'Administrador'}</p></div>
           {[
             { id: 'dashboard', icon: LayoutDashboard, label: 'Resumen' }, 
@@ -473,78 +524,170 @@ export default function Admin() {
             { id: 'series', icon: Hash, label: 'Series' }, 
             { id: 'settings', icon: SettingsIcon, label: 'Ajustes' },
           ].map(item => (
-            <button key={item.id} onClick={() => setView(item.id as any)} className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl transition-all ${view === item.id || (item.id === 'products' && ['categories', 'brands', 'units'].includes(view)) ? 'bg-blue-100 text-blue-900 font-bold scale-105 shadow-sm' : 'hover:bg-slate-100'}`}><item.icon className="w-5 h-5" /> {item.label}</button>
+            <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl transition-all ${activeTabId === item.id || (item.id === 'products' && ['categories', 'brands', 'units'].includes(activeTabId)) ? 'bg-blue-100 text-blue-900 font-bold scale-105 shadow-sm' : 'hover:bg-slate-100'}`}><item.icon className="w-5 h-5" /> {item.label}</button>
           ))}
           <div className="pt-8 mt-8 border-t border-slate-100"><button onClick={logout} className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl text-red-600 hover:bg-red-50 transition-colors"><LogOut className="w-5 h-5" />Cerrar Sesión</button></div>
         </aside>
 
-        <main className="flex-1 min-w-0">
-          {view === 'dashboard' && <DashboardModule stats={stats} onNavigate={(v: any) => setView(v)} />}
-          {['products', 'categories', 'brands', 'units'].includes(view) && <ProductModule products={products} categories={categories} brands={brands} units={units} onDelete={(t,id)=>handleDelete(t,id)} onEdit={openForm} onNew={openForm} />}
-          {view === 'quotations' && <QuotationModule quotations={quotations} onEdit={(q) => openForm('quotations', q)} onNew={() => openForm('quotations')} onDelete={(id) => handleDelete('quotations', id)} onConvertToOrder={() => {}} />}
-          {view === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => {}} onEdit={(o) => openForm('orders', o)} />}
-          {view === 'inventory' && <InventoryModule products={products} onUpdateStock={(pid, s) => axios.put(`/api/products/${pid}/stock`, {stock:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onEdit={(p) => openForm('products', p)} />}
-          {view === 'customers' && <CustomerModule customers={customers} onEdit={(c) => openForm('customers', c)} onNew={() => openForm('customers')} onDelete={(id) => handleDelete('customers', id)} departments={[]} />}
-          {view === 'exchange-rates' && <ExchangeRateModule token={token} exchangeRates={exchangeRates} onDelete={(id) => handleDelete('exchange-rates', id)} onSave={(d) => axios.post('/api/exchange-rates', d, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} loading={loading} />}
-          {view === 'logistics' && <LogisticsModule logisticsTab={logisticsTab} setLogisticsTab={setLogisticsTab} shippingAgencies={shippingAgencies} shippingZones={shippingZones} openEditModal={(item) => openForm(logisticsTab === 'agencies' ? 'shipping-agencies' : 'shipping-zones', item)} handleDelete={(t,id) => handleDelete(t,id)} />}
-          {view === 'sellers' && <SellerModule sellers={sellers} onEdit={(s) => openForm('sellers', s)} onNew={() => openForm('sellers')} onDelete={(id) => handleDelete('sellers', id)} />}
-          {view === 'warehouses' && <WarehouseModule warehouses={warehouses} onEdit={(w) => openForm('warehouses', w)} onNew={() => openForm('warehouses')} onDelete={(id) => handleDelete('warehouses', id)} />}
-          {view === 'series' && <SeriesModule series={series} warehouses={warehouses} onEdit={(s) => openForm('series', s)} onNew={() => openForm('series')} onDelete={(id) => handleDelete('series', id)} />}
-          
-          <QuotationForm 
-            isOpen={isQuotationModalOpen} 
-            onClose={() => setIsQuotationModalOpen(false)} 
-            onSubmit={handleSubmitQuotation} 
-            formData={quotationFormData} 
-            setFormData={setQuotationFormData} 
-            editingItem={editingItem} 
-            loading={loading} 
-            customers={customers} 
-            sellers={sellers}
-            warehouses={warehouses}
-            shippingAgencies={shippingAgencies}
-            sunatCurrencies={sunatCurrencies}
-            sunatPaymentConditions={sunatPaymentConditions}
-            sunatOperationTypes={sunatOperationTypes}
-            searchResults={searchResults} 
-            handleSearchProduct={(q) => { if(q.length > 1) axios.get(`/api/products/search?q=${q}`, {headers:{Authorization:`Bearer ${token}`}}).then(r=>setSearchResults(r.data)) }} 
-            quotationItems={quotationItems} 
-            addQuotationItem={(p) => { if(!quotationItems.find(i=>i.productId===p.id)) setQuotationItems([...quotationItems, {productId:p.id, name:p.name, code:p.code, price:p.salePrice, quantity:1, discount:0, unit:p.unit}]); setSearchResults([]); }} 
-            updateQuotationItem={(id, f, v) => setQuotationItems(quotationItems.map(i=>i.productId===id?{...i,[f]:v}:i))} 
-            removeQuotationItem={(id) => setQuotationItems(quotationItems.filter(i=>i.productId!==id))} 
-            quotationTotal={quotationTotal} 
-            handleConsultCustomer={handleConsultForQuotation}
-            handleQuickRegister={handleQuickRegisterCustomer}
-            onOpenCustomerForm={(doc) => {
-              setCustomerFormData({ 
-                ...initialCustomerData, 
-                docNumber: doc,
-                docType: doc.length === 11 ? 'RUC' : 'DNI',
-                personType: doc.length === 11 ? 'JURIDICA' : 'NATURAL'
-              });
-              setIsCustomerModalOpen(true);
-            }}
-            token={token}
-            sunatIgvAffectations={sunatIgvAffectations}
-            sunatDocTypes={sunatDocTypes}
-          />
-          <ProductForm isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)} onSubmit={handleSubmitProduct} formData={productFormData} setFormData={setProductFormData} editingItem={editingItem} loading={loading} categories={categories} brands={brands} units={units} handleFileUpload={handleFileUpload} setLoading={setLoading} />
-          <AgencyForm isOpen={isAgencyModalOpen} onClose={() => setIsAgencyModalOpen(false)} onSubmit={handleSubmitAgency} formData={agencyFormData} setFormData={setAgencyFormData} editingItem={editingItem} loading={loading} shippingZones={shippingZones} handleConsultDocument={handleConsultForQuotation} />
-          <WarehouseForm isOpen={isWarehouseModalOpen} onClose={() => setIsWarehouseModalOpen(false)} onSubmit={handleSubmitWarehouse} formData={warehouseFormData} setFormData={setWarehouseFormData} loading={loading} token={token} refreshData={fetchData} />
-          <CustomerForm isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} onSubmit={handleSubmitCustomer} formData={customerFormData} setFormData={setCustomerFormData} editingItem={editingItem} loading={loading} documentTypes={documentTypes} handleConsultDocument={handleConsultDocument} />
-          <SellerForm isOpen={isSellerModalOpen} onClose={() => setIsSellerModalOpen(false)} onSubmit={handleSubmitSeller} formData={sellerFormData} setFormData={setSellerFormData} loading={loading} isEditing={!!editingItem} />
-          <SimpleForm isOpen={isSimpleModalOpen} onClose={() => setIsSimpleModalOpen(false)} onSubmit={handleSubmitSimple} formData={simpleFormData} setFormData={setSimpleFormData} type={simpleModalType} loading={loading} handleFileUpload={handleFileUpload} />
-          <SeriesForm 
-            isOpen={isSeriesModalOpen}
-            onClose={() => setIsSeriesModalOpen(false)}
-            onSubmit={handleSubmitSeries}
-            formData={seriesFormData}
-            setFormData={setSeriesFormData}
-            loading={loading}
-            warehouses={warehouses}
-          />
+        <main className="flex-1 min-w-0 flex flex-col h-full bg-slate-50/50 rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+          {/* Tab Bar */}
+          <div className="flex items-center gap-2 px-4 pt-4 pb-0 bg-transparent border-b border-slate-200 overflow-x-auto custom-scrollbar shrink-0">
+            {openTabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTabId(tab.id)}
+                className={`group flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTabId === tab.id ? 'border-blue-600 text-blue-600 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.02)]' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/50'}`}
+              >
+                {tab.label}
+                {tab.id !== 'dashboard' && (
+                  <X 
+                    className={`w-3.5 h-3.5 transition-all rounded-full p-0.5 ${activeTabId === tab.id ? 'text-blue-400 hover:text-white hover:bg-red-500' : 'opacity-0 group-hover:opacity-100 hover:text-white hover:bg-red-500'}`} 
+                    onClick={(e) => handleCloseTab(tab.id, e)} 
+                  />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Content Area */}
+          <div className="flex-1 relative overflow-hidden bg-white">
+            {openTabs.map(tab => {
+              const currentTab = tab.id;
+              return (
+                <div key={tab.id} className="absolute inset-0 overflow-y-auto" style={{ display: activeTabId === tab.id ? 'block' : 'none', zIndex: activeTabId === tab.id ? 10 : 0 }}>
+                  <div className="p-4 md:p-8">
+                    {currentTab === 'dashboard' && <DashboardModule stats={stats} onNavigate={(v: any) => handleOpenTab(v, 'Módulo')} />}
+                    {['products', 'categories', 'brands', 'units'].includes(currentTab) && <ProductModule products={products} categories={categories} brands={brands} units={units} onDelete={(t,id)=>handleDelete(t,id)} onEdit={openForm} onNew={openForm} />}
+                    {currentTab === 'quotations' && (
+                      <QuotationModule 
+                        quotations={quotations} 
+                        onEdit={(q) => openForm('quotations', q)} 
+                        onNew={() => openForm('quotations')} 
+                        onDelete={(id) => handleDelete('quotations', id)} 
+                        onConvertToOrder={(q) => {
+                          setEditingItem(null); 
+                          setQuotationFormData({
+                            ...q,
+                            id: undefined,
+                            quotationId: q.id,
+                            docType: 'PED',
+                            ruc: q.customerDocNumber,
+                            razonSocial: q.customerName,
+                            address: q.customerAddress,
+                            date: new Date().toISOString().split('T')[0],
+                            expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                            pickupPlace: q.pickupPlace || '',
+                            sellerId: q.sellerId?.toString() || '',
+                            customerId: q.customerId?.toString() || '',
+                          });
+                          setQuotationItems(q.items?.map((i: any) => ({
+                            productId: i.productId,
+                            name: i.product?.name || 'Producto',
+                            code: i.product?.code || '',
+                            price: i.price,
+                            quantity: i.quantity,
+                            discount: i.discount || 0,
+                            unit: i.product?.unit
+                          })) || []);
+                          setIsQuotationModalOpen(true);
+                        }} 
+                      />
+                    )}
+                    {currentTab === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => {}} onEdit={(o) => openForm('orders', o)} />}
+                    {currentTab === 'inventory' && <InventoryModule products={products} onUpdateStock={(pid, s) => axios.put(`/api/products/${pid}/stock`, {stock:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onEdit={(p) => openForm('products', p)} />}
+                    {currentTab === 'customers' && <CustomerModule customers={customers} onEdit={(c) => openForm('customers', c)} onNew={() => openForm('customers')} onDelete={(id) => handleDelete('customers', id)} departments={[]} />}
+                    {currentTab === 'exchange-rates' && <ExchangeRateModule token={token} exchangeRates={exchangeRates} onDelete={(id) => handleDelete('exchange-rates', id)} onSave={(d) => axios.post('/api/exchange-rates', d, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} loading={loading} />}
+                    {currentTab === 'logistics' && <LogisticsModule logisticsTab={logisticsTab} setLogisticsTab={setLogisticsTab} shippingAgencies={shippingAgencies} shippingZones={shippingZones} openEditModal={(item) => openForm(logisticsTab === 'agencies' ? 'shipping-agencies' : 'shipping-zones', item)} handleDelete={(t,id) => handleDelete(t,id)} />}
+                    {currentTab === 'sellers' && <SellerModule sellers={sellers} onEdit={(s) => openForm('sellers', s)} onNew={() => openForm('sellers')} onDelete={(id) => handleDelete('sellers', id)} />}
+                    {currentTab === 'warehouses' && <WarehouseModule warehouses={warehouses} onEdit={(w) => openForm('warehouses', w)} onNew={() => openForm('warehouses')} onDelete={(id) => handleDelete('warehouses', id)} />}
+                    {currentTab === 'series' && <SeriesModule series={series} warehouses={warehouses} onEdit={(s) => openForm('series', s)} onNew={() => openForm('series')} onDelete={(id) => handleDelete('series', id)} />}
+                    {currentTab === 'settings' && <SettingsModule token={token} />}
+                  </div>
+                </div>
+              );
+            })}
+
+          {/* Modals localized to their respective tabs */}
+          <div style={{ display: activeTabId === 'quotations' ? 'block' : 'none' }}>
+            <QuotationForm 
+              isOpen={isQuotationModalOpen} 
+              onClose={() => setIsQuotationModalOpen(false)} 
+              onSubmit={handleSubmitQuotation} 
+              formData={quotationFormData} 
+              setFormData={setQuotationFormData} 
+              editingItem={editingItem} 
+              loading={loading} 
+              customers={customers} 
+              sellers={sellers}
+              warehouses={warehouses}
+              shippingAgencies={shippingAgencies}
+              sunatCurrencies={sunatCurrencies}
+              sunatPaymentConditions={sunatPaymentConditions}
+              sunatOperationTypes={sunatOperationTypes}
+              searchResults={searchResults} 
+              handleSearchProduct={(q) => { if(q.length > 1) axios.get(`/api/products/search?q=${q}`, {headers:{Authorization:`Bearer ${token}`}}).then(r=>setSearchResults(r.data)) }} 
+              quotationItems={quotationItems} 
+              addQuotationItem={(p) => { if(!quotationItems.find(i=>i.productId===p.id)) setQuotationItems([...quotationItems, {productId:p.id, name:p.name, code:p.code, price:p.salePrice, quantity:1, discount:0, unit:p.unit}]); setSearchResults([]); }} 
+              updateQuotationItem={(id, f, v) => setQuotationItems(quotationItems.map(i=>i.productId===id?{...i,[f]:v}:i))} 
+              removeQuotationItem={(id) => setQuotationItems(quotationItems.filter(i=>i.productId!==id))} 
+              quotationTotal={quotationTotal} 
+              handleConsultCustomer={handleConsultForQuotation}
+              handleQuickRegister={handleQuickRegisterCustomer}
+              onOpenCustomerForm={(doc) => {
+                setCustomerFormData({ 
+                  ...initialCustomerData, 
+                  docNumber: doc,
+                  docType: doc.length === 11 ? 'RUC' : 'DNI',
+                  personType: doc.length === 11 ? 'JURIDICA' : 'NATURAL'
+                });
+                setIsCustomerModalOpen(true);
+              }}
+              token={token}
+              sunatIgvAffectations={sunatIgvAffectations}
+              sunatDocTypes={sunatDocTypes}
+            />
+          </div>
+
+          <div style={{ display: ['products', 'categories', 'brands', 'units'].includes(activeTabId) ? 'block' : 'none' }}>
+            <ProductForm isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)} onSubmit={handleSubmitProduct} formData={productFormData} setFormData={setProductFormData} editingItem={editingItem} loading={loading} categories={categories} brands={brands} units={units} handleFileUpload={handleFileUpload} setLoading={setLoading} />
+          </div>
+
+          <div style={{ display: activeTabId === 'logistics' ? 'block' : 'none' }}>
+            <AgencyForm isOpen={isAgencyModalOpen} onClose={() => setIsAgencyModalOpen(false)} onSubmit={handleSubmitAgency} formData={agencyFormData} setFormData={setAgencyFormData} editingItem={editingItem} loading={loading} shippingZones={shippingZones} handleConsultDocument={handleConsultForQuotation} />
+          </div>
+
+          <div style={{ display: activeTabId === 'warehouses' ? 'block' : 'none' }}>
+            <WarehouseForm isOpen={isWarehouseModalOpen} onClose={() => setIsWarehouseModalOpen(false)} onSubmit={handleSubmitWarehouse} formData={warehouseFormData} setFormData={setWarehouseFormData} loading={loading} token={token} refreshData={fetchData} />
+          </div>
+
+          <div style={{ display: activeTabId === 'customers' ? 'block' : 'none' }}>
+            <CustomerForm isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} onSubmit={handleSubmitCustomer} formData={customerFormData} setFormData={setCustomerFormData} editingItem={editingItem} loading={loading} documentTypes={documentTypes} handleConsultDocument={handleConsultDocument} />
+          </div>
+
+          <div style={{ display: activeTabId === 'sellers' ? 'block' : 'none' }}>
+            <SellerForm isOpen={isSellerModalOpen} onClose={() => setIsSellerModalOpen(false)} onSubmit={handleSubmitSeller} formData={sellerFormData} setFormData={setSellerFormData} loading={loading} isEditing={!!editingItem} />
+          </div>
+
+          <div style={{ display: ['products', 'categories', 'brands', 'units', 'warehouses'].includes(activeTabId) ? 'block' : 'none' }}>
+            <SimpleForm isOpen={isSimpleModalOpen} onClose={() => setIsSimpleModalOpen(false)} onSubmit={handleSubmitSimple} formData={simpleFormData} setFormData={setSimpleFormData} type={simpleModalType} loading={loading} handleFileUpload={handleFileUpload} />
+          </div>
+
+          <div style={{ display: activeTabId === 'series' ? 'block' : 'none' }}>
+            <SeriesForm 
+              isOpen={isSeriesModalOpen}
+              onClose={() => setIsSeriesModalOpen(false)}
+              onSubmit={handleSubmitSeries}
+              formData={seriesFormData}
+              setFormData={setSeriesFormData}
+              loading={loading}
+              warehouses={warehouses}
+            />
+          </div>
+
+          </div> {/* Cierre del contenedor Content Area */}
         </main>
       </div>
     </div>
   );
 }
+

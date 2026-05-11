@@ -14,6 +14,7 @@ interface Product {
   images?: string[];
   category?: { name: string };
   unit?: { symbol: string };
+  isActive: boolean;
 }
 
 interface InventoryModuleProps {
@@ -110,7 +111,7 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filteredProducts.map((prod) => (
-                <tr key={prod.id} className="hover:bg-slate-50/80 transition-colors group">
+                <tr key={prod.id} className={`hover:bg-slate-50/80 transition-colors group ${!prod.isActive ? 'opacity-60 bg-slate-50/30' : ''}`}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-slate-100 rounded-xl overflow-hidden flex items-center justify-center">
@@ -121,7 +122,12 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
                         )}
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-bold text-slate-900">{prod.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900">{prod.name}</span>
+                          {!prod.isActive && (
+                            <span className="bg-red-100 text-red-700 px-1.5 py-0.5 rounded text-[8px] font-black uppercase">Descontinuado</span>
+                          )}
+                        </div>
                         <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{prod.code || 'SIN CODIGO'}</span>
                       </div>
                     </div>

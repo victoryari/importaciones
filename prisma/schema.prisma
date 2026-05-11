@@ -81,7 +81,18 @@ model Product {
   movements        StockMovement[]
   brand            Brand?          @relation(fields: [brandId], references: [id])
   category         Category        @relation(fields: [categoryId], references: [id])
-  unit             Unit?           @relation(fields: [unitId], references: [id])
+  unit                   Unit?           @relation("BaseUnit", fields: [unitId], references: [id])
+  packageId              Int?
+  package                Unit?           @relation("PackageUnit", fields: [packageId], references: [id])
+  quantityPerPackage     Int             @default(1)
+  subPackageId           Int?
+  subPackage             Unit?           @relation("SubPackageUnit", fields: [subPackageId], references: [id])
+  quantityPerSubPackage  Int             @default(1)
+  
+  // New Visibility and Control Fields
+  showInWeb              Boolean         @default(true)
+  manageLots             Boolean         @default(false)
+  useExpiryDate          Boolean         @default(false)
 
   @@index([brandId])
   @@index([categoryId])
@@ -182,7 +193,9 @@ model Unit {
   id       Int       @id @default(autoincrement())
   name     String
   symbol   String
-  products Product[]
+  products           Product[] @relation("BaseUnit")
+  packageProducts    Product[] @relation("PackageUnit")
+  subPackageProducts Product[] @relation("SubPackageUnit")
 
   @@map("unit")
 }
