@@ -9,6 +9,7 @@ import {
   PlusCircle,
   Settings as SettingsIcon
 } from 'lucide-react';
+import { formatNumber, formatCurrency } from '../../lib/utils';
 
 interface DashboardModuleProps {
   stats: any;
@@ -29,7 +30,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ stats, onNavig
           <div className="absolute -right-4 -top-4 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
           <BarChart3 className="w-10 h-10 mb-4 opacity-50" />
           <p className="text-xs font-black uppercase tracking-widest text-blue-100 mb-1">Ventas Totales</p>
-          <p className="text-4xl font-black">S/ {stats?.totalRevenue?.toFixed(2) || '0.00'}</p>
+          <p className="text-4xl font-black">{formatCurrency(stats?.totalRevenue || 0)}</p>
         </div>
         
         <div className="bg-white p-8 rounded-4xl border border-slate-200 shadow-sm hover:shadow-xl transition-all">
@@ -58,7 +59,7 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ stats, onNavig
           </div>
           <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-1">Ticket Promedio</p>
           <p className="text-3xl font-black text-slate-900">
-            S/ {stats?.totalOrders > 0 ? (stats.totalRevenue / stats.totalOrders).toFixed(2) : '0.00'}
+            {formatCurrency(stats?.totalOrders > 0 ? (stats.totalRevenue / stats.totalOrders) : 0)}
           </p>
         </div>
       </div>
@@ -85,8 +86,8 @@ export const DashboardModule: React.FC<DashboardModuleProps> = ({ stats, onNavig
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-black text-slate-900">{prod.quantity} <span className="text-[10px] text-slate-400 uppercase">un.</span></p>
-                  <p className="text-[10px] font-bold text-blue-600 uppercase">S/ {prod.total.toFixed(2)}</p>
+                  <p className="font-black text-slate-900">{formatNumber(prod.quantity, 0)} <span className="text-[10px] text-slate-400 uppercase">un.</span></p>
+                  <p className="text-[10px] font-bold text-blue-600 uppercase">{formatCurrency(prod.total)}</p>
                 </div>
               </div>
             ))}

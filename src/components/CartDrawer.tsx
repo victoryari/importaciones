@@ -8,6 +8,8 @@ export default function CartDrawer() {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [whatsappNumber, setWhatsappNumber] = useState("51987654321");
   const [formData, setFormData] = useState({
+    docType: 'DNI',
+    docNumber: '',
     name: '',
     phone: '',
     city: '',
@@ -15,6 +17,7 @@ export default function CartDrawer() {
     notes: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFetchingInfo, setIsFetchingInfo] = useState(false);
 
   useEffect(() => {
     fetch('/api/settings')
@@ -24,8 +27,33 @@ export default function CartDrawer() {
       });
   }, []);
 
+  const fetchCustomerInfo = async () => {
+    if (!formData.docNumber || formData.docNumber.length < 8) return;
+    setIsFetchingInfo(true);
+    try {
+      const type = formData.docType.toLowerCase();
+      const response = await fetch(`/api/web/consult/${type}/${formData.docNumber}`);
+      const data = await response.json();
+      
+      if (data.nombre || data.razonSocial) {
+        setFormData(prev => ({
+          ...prev,
+          name: data.razonSocial || data.nombre || data.nombreCompleto || ''
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching customer info:', error);
+    } finally {
+      setIsFetchingInfo(false);
+    }
+  };
+
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.name) {
+      alert('Por favor, ingresa un DNI/RUC válido para obtener tu nombre/razón social.');
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -34,10 +62,13 @@ export default function CartDrawer() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerName: formData.name,
+          customerDocType: formData.docType,
+          customerDocNumber: formData.docNumber,
           customerPhone: formData.phone,
           customerCity: formData.city,
           customerAddress: formData.address,
           notes: formData.notes,
+          origin: 'WEB',
           items: items.map(item => ({
             productId: parseInt(item.id.toString()),
             quantity: item.quantity,
@@ -56,6 +87,7 @@ export default function CartDrawer() {
         `¡Hola Carmelita del Norte! 👋\n\n` +
         `He realizado un nuevo pedido *#${order.id}* desde la web:\n\n` +
         `👤 *Cliente:* ${formData.name}\n` +
+        `🆔 *${formData.docType}:* ${formData.docNumber}\n` +
         `📞 *Teléfono:* ${formData.phone}\n` +
         `📍 *Ciudad:* ${formData.city}\n\n` +
         `📦 *Detalle del Pedido:*\n` +
@@ -68,7 +100,7 @@ export default function CartDrawer() {
       // Reset cart and close drawer
       setIsOpen(false);
       setIsCheckingOut(false);
-      setFormData({ name: '', phone: '', city: '', address: '', notes: '' });
+      setFormData({ docType: 'DNI', docNumber: '', name: '', phone: '', city: '', address: '', notes: '' });
       clearCart();
       
     } catch (error) {
@@ -145,22 +177,60 @@ export default function CartDrawer() {
                   >
                     ← Volver al carrito
                   </button>
-                  <form id="checkout-form" onSubmit={handleCheckout} className="space-y-4">
-                    <h3 className="text-xl font-black text-slate-900">Datos de Contacto</h3>
-                    <div className="space-y-4">
+                  <form id="checkout-form" onSubmit={handleCheckout} className="space-y-4 pb-10">
+                    <h3 className="text-xl font-black text-slate-900">Finalizar Pedido</h3>
+                    
+                    <div className="space-y-4 bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="col-span-1">
+                          <label className="block text-[10px] font-black text-blue-900 uppercase tracking-widest mb-1">Tipo</label>
+                          <select 
+                            value={formData.docType}
+                            onChange={e => setFormData({...formData, docType: e.target.value})}
+                            className="w-full bg-white border border-blue-200 rounded-xl px-3 py-3 text-sm outline-none focus:border-blue-500"
+                          >
+                            <option value="DNI">DNI</option>
+                            <option value="RUC">RUC</option>
+                          </select>
+                        </div>
+                        <div className="col-span-2">
+                          <label className="block text-[10px] font-black text-blue-900 uppercase tracking-widest mb-1">Documento</label>
+                          <div className="relative">
+                            <input 
+                              required
+                              type="text"
+                              value={formData.docNumber}
+                              onChange={e => setFormData({...formData, docNumber: e.target.value})}
+                              onBlur={fetchCustomerInfo}
+                              className="w-full bg-white border border-blue-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-blue-500"
+                              placeholder="Número..."
+                            />
+                            {isFetchingInfo && (
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
                       <div>
-                        <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Nombre Completo</label>
+                        <label className="block text-[10px] font-black text-blue-900 uppercase tracking-widest mb-1">Nombre / Razón Social</label>
                         <input 
+                          readOnly
                           required
                           type="text"
                           value={formData.name}
-                          onChange={e => setFormData({...formData, name: e.target.value})}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 transition-colors"
-                          placeholder="Juan Pérez"
+                          className="w-full bg-slate-100 border border-blue-100 rounded-xl px-4 py-3 text-sm outline-none text-slate-600 font-bold"
+                          placeholder="Se autocompletará..."
                         />
                       </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest pt-2">Datos de Entrega</h4>
                       <div>
-                        <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Teléfono / WhatsApp</label>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Teléfono / WhatsApp</label>
                         <input 
                           required
                           type="tel"
@@ -170,34 +240,37 @@ export default function CartDrawer() {
                           placeholder="987654321"
                         />
                       </div>
-                      <div>
-                        <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Ciudad</label>
-                        <input 
-                          required
-                          type="text"
-                          value={formData.city}
-                          onChange={e => setFormData({...formData, city: e.target.value})}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 transition-colors"
-                          placeholder="Chiclayo"
-                        />
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Ciudad</label>
+                          <input 
+                            required
+                            type="text"
+                            value={formData.city}
+                            onChange={e => setFormData({...formData, city: e.target.value})}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 transition-colors"
+                            placeholder="Chiclayo"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Dirección</label>
+                          <input 
+                            required
+                            type="text"
+                            value={formData.address}
+                            onChange={e => setFormData({...formData, address: e.target.value})}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 transition-colors"
+                            placeholder="Calle..."
+                          />
+                        </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Dirección (Opcional)</label>
-                        <input 
-                          type="text"
-                          value={formData.address}
-                          onChange={e => setFormData({...formData, address: e.target.value})}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 transition-colors"
-                          placeholder="Av. Las Américas 123"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-1">Notas Adicionales</label>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Notas (Opcional)</label>
                         <textarea 
                           value={formData.notes}
                           onChange={e => setFormData({...formData, notes: e.target.value})}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 transition-colors h-24 resize-none"
-                          placeholder="Ej: Tocar el timbre fuerte"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-blue-500 transition-colors h-20 resize-none text-sm"
+                          placeholder="Ej: Frente al parque..."
                         />
                       </div>
                     </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, Package, Save, Image as ImageIcon, Settings as SettingsIcon, LogOut, Trash2, X, CheckCircle, FileText, BarChart3, Star, ShoppingCart, Truck, DollarSign, User, MapPin, Hash } from 'lucide-react';
+import { LayoutDashboard, Package, Save, Image as ImageIcon, Settings as SettingsIcon, LogOut, Trash2, X, CheckCircle, FileText, BarChart3, Star, ShoppingCart, Truck, DollarSign, User, MapPin, Hash, ArrowRightLeft, Building2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { SettingsModule } from './admin/SettingsModule';
 import { ExchangeRateModule } from './admin/ExchangeRateModule';
@@ -14,14 +14,25 @@ import { DashboardModule } from './admin/DashboardModule';
 import { SellerModule } from './admin/SellerModule';
 import { WarehouseModule } from './admin/WarehouseModule';
 import { SeriesModule } from './admin/SeriesModule';
-import { CustomerForm } from './admin/forms/CustomerForm';
-import { ProductForm } from './admin/forms/ProductForm';
+import { PurchaseModule } from './admin/PurchaseModule';
+import { TransferModule } from './admin/TransferModule';
+import { SupplierModule } from './admin/SupplierModule';
+
+// Formularios
 import { QuotationForm } from './admin/forms/QuotationForm';
+import { ProductForm } from './admin/forms/ProductForm';
 import { SimpleForm } from './admin/forms/SimpleForm';
+import { WarehouseForm } from './admin/forms/WarehouseForm';
+import { CustomerForm } from './admin/forms/CustomerForm';
 import { SellerForm } from './admin/forms/SellerForm';
 import { AgencyForm } from './admin/forms/AgencyForm';
 import { SeriesForm } from './admin/forms/SeriesForm';
-import { WarehouseForm } from './admin/forms/WarehouseForm';
+import { PurchaseEntryForm } from './admin/forms/PurchaseEntryForm';
+import { SupplierForm } from './admin/forms/SupplierForm';
+import { TransferForm } from './admin/forms/TransferForm';
+import { MovementAssistantForm } from './admin/forms/MovementAssistantForm';
+import PaymentForm from './admin/forms/PaymentForm';
+
 import axios from 'axios';
 import { getDeptId, getProvId, getDistId } from '../lib/ubigeoData';
 
@@ -58,6 +69,10 @@ export default function Admin() {
   const [sunatDocTypes, setSunatDocTypes] = useState<any[]>([]);
   const [series, setSeries] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
+  const [purchases, setPurchases] = useState<any[]>([]);
+  const [movements, setMovements] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [stockDetails, setStockDetails] = useState<any[]>([]);
 
   // Estados de UI
   const [openTabs, setOpenTabs] = useState<{id: string, label: string}[]>([{ id: 'dashboard', label: 'Resumen' }]);
@@ -91,12 +106,18 @@ export default function Admin() {
   const [isSimpleModalOpen, setIsSimpleModalOpen] = useState(false);
   const [isAgencyModalOpen, setIsAgencyModalOpen] = useState(false);
   const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false);
+  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
+  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [isMovementAssistantOpen, setIsMovementAssistantOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<any>(null);
   const [simpleModalType, setSimpleModalType] = useState<'categories' | 'brands' | 'units' | 'warehouses'>('categories');
   const [logisticsTab, setLogisticsTab] = useState<'agencies' | 'zones'>('agencies');
 
   // Formularios iniciales
   const initialSellerData = { name: '', dni: '', phone: '', email: '', isActive: true };
-  const initialProductData = { code: '', name: '', slug: '', weight: '', description: '', features: '', sanitaryRegister: '', certificate: '', igv: 18, costPrice: 0, salePrice: 0, minSalePrice: 0, maxSalePrice: 0, stock: 0, categoryId: '', brandId: '', unitId: '', packageId: '', quantityPerPackage: 1, subPackageId: '', quantityPerSubPackage: 1, images: [], isActive: true, isFeatured: false, showInWeb: true, manageLots: false, useExpiryDate: false };
+  const initialProductData = { code: '', name: '', slug: '', weight: '', description: '', features: '', sanitaryRegister: '', certificate: '', igv: 18, costPrice: 0, salePrice: 0, profitMargin: 30, minSalePrice: 0, maxSalePrice: 0, stock: 0, categoryId: '', brandId: '', unitId: '', packageId: '', quantityPerPackage: 1, subPackageId: '', quantityPerSubPackage: 1, images: [], isActive: true, isFeatured: false, showInWeb: true, manageLots: false, useExpiryDate: false };
   const initialQuotationData = { 
     igvPercent: 18,
     docType: 'COT',
@@ -140,6 +161,18 @@ export default function Admin() {
   const [productFormData, setProductFormData] = useState(initialProductData);
   const [customerFormData, setCustomerFormData] = useState(initialCustomerData);
   const [seriesFormData, setSeriesFormData] = useState(initialSeriesData);
+  const [purchaseFormData, setPurchaseFormData] = useState({
+    supplierId: '', supplierName: '', docType: 'FACTURA', docSeries: '', docNumber: '',
+    date: new Date().toISOString().split('T')[0], currency: 'PEN', exchangeRate: '1.00',
+    warehouseId: '', observation: '', items: [] as any[]
+  });
+  const [supplierFormData, setSupplierFormData] = useState({
+    name: '', docType: 'RUC', docNumber: '', address: '', phone: '', email: '', contact: ''
+  });
+  const [transferFormData, setTransferFormData] = useState({
+    fromWarehouseId: '', toWarehouseId: '', docNumber: '', date: new Date().toISOString().split('T')[0], observation: '',
+    items: [] as any[]
+  });
   const [quotationFormData, setQuotationFormData] = useState<any>(initialQuotationData);
   const [simpleFormData, setSimpleFormData] = useState(initialSimpleData);
   const [quotationItems, setQuotationItems] = useState<any[]>([]);
@@ -156,10 +189,14 @@ export default function Admin() {
     if (view === 'quotations' && isQuotationModalOpen && quotationFormData.date) {
       axios.get(`/api/exchange-rates/fetch-by-date/${quotationFormData.date}`, { headers: { Authorization: `Bearer ${token}` } })
         .then(res => {
-          if (res.data) setQuotationFormData((prev: any) => ({ ...prev, exchangeRate: res.data.sell_rate }));
+          if (res.data) {
+            const isSoles = quotationFormData.currency === '1' || quotationFormData.currency === 'PEN';
+            const rate = isSoles ? res.data.buy_rate : res.data.sell_rate;
+            setQuotationFormData((prev: any) => ({ ...prev, exchangeRate: rate }));
+          }
         }).catch(err => console.error("TC by date error:", err));
     }
-  }, [quotationFormData.date, isQuotationModalOpen, view]);
+  }, [quotationFormData.date, isQuotationModalOpen, view, quotationFormData.currency]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -169,7 +206,7 @@ export default function Admin() {
         '/api/orders', '/api/quotations', '/api/customers', '/api/shipping-agencies', 
         '/api/shipping-zones', '/api/sunat/document_type', '/api/stats', '/api/exchange-rates',
         '/api/sellers', '/api/warehouses', '/api/sunat/currency', 
-        '/api/sunat/payment_condition', '/api/sunat/operation_type', '/api/sunat/igv_affectation_type', '/api/sunat/doc_type', '/api/series'
+        '/api/sunat/payment_condition', '/api/sunat/operation_type', '/api/sunat/igv_affectation_type', '/api/sunat/doc_type', '/api/series', '/api/purchases', '/api/movements', '/api/suppliers', '/api/stock'
       ];
       const responses = await Promise.all(endpoints.map(url => axios.get(url, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] }))));
       setCategories(responses[0].data); 
@@ -200,11 +237,20 @@ export default function Admin() {
       setSunatIgvAffectations(responses[17].data);
       setSunatDocTypes(responses[18].data);
       setSeries(responses[19].data);
+      setPurchases(responses[20].data);
+      setMovements(responses[21].data);
+      setSuppliers(responses[22].data);
+      setStockDetails(responses[23].data);
       
       const todayRate = responses[11].data[0]?.sell_rate;
       if (todayRate) setQuotationFormData((prev: any) => ({ ...prev, exchangeRate: todayRate }));
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
+
+  useEffect(() => {
+    window.addEventListener('refreshData', fetchData);
+    return () => window.removeEventListener('refreshData', fetchData);
+  }, []);
 
   const showSuccess = (msg: string) => { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(''), 3000); };
   const handleFileUpload = async (file: File) => {
@@ -214,6 +260,7 @@ export default function Admin() {
   };
 
   const openForm = (type: string, item: any = null) => {
+    console.log(`[FRONTEND] openForm called for type: ${type}`, item);
     setEditingItem(item);
     if (type === 'products') { setProductFormData(item || initialProductData); setIsProductModalOpen(true); }
     else if (['categories', 'brands', 'units'].includes(type)) { 
@@ -238,22 +285,77 @@ export default function Admin() {
       setSeriesFormData(item || initialSeriesData);
       setIsSeriesModalOpen(true);
     }
-    else if (type === 'quotations') { 
+    else if (type === 'purchases') {
       if (item) {
-        setQuotationFormData({
+        setPurchaseFormData({
           ...item,
-          docType: type === 'quotations' ? 'COT' : (type === 'orders' ? 'PED' : item.docType),
-          date: item.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0],
-          expiryDate: item.dueDate?.split('T')[0] || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          date: item.date?.split('T')[0] || new Date().toISOString().split('T')[0],
+          items: item.items?.map((i: any) => ({
+            productId: i.productId,
+            name: i.product?.name || 'Producto',
+            code: i.product?.code || '',
+            unitSymbol: i.product?.unit?.symbol || 'UND',
+            availableUnits: [
+              i.product?.unit ? { id: i.product.unit.id, symbol: i.product.unit.symbol, name: i.product.unit.name, factor: 1 } : null,
+              i.product?.package ? { id: i.product.package.id, symbol: i.product.package.symbol, name: i.product.package.name, factor: i.product.quantityPerPackage } : null,
+              i.product?.subPackage ? { id: i.product.subPackage.id, symbol: i.product.subPackage.symbol, name: i.product.subPackage.name, factor: i.product.quantityPerSubPackage } : null
+            ].filter(Boolean),
+            quantity: i.quantity,
+            price: i.price,
+            lotNumber: i.lotNumber || ''
+          })) || []
         });
+      } else {
+        setPurchaseFormData({
+          supplierId: '', supplierName: '', docType: 'FACTURA', docSeries: '', docNumber: '',
+          date: new Date().toISOString().split('T')[0], currency: 'PEN', exchangeRate: '1.00',
+          warehouseId: '', observation: '', items: []
+        });
+      }
+      setIsPurchaseModalOpen(true);
+    }
+    else if (type === 'suppliers') {
+      setSupplierFormData(item || { name: '', docType: 'RUC', docNumber: '', address: '', phone: '', email: '', contact: '' });
+      setIsSupplierModalOpen(true);
+    }
+    else if (type === 'transfers') {
+      setTransferFormData(item || {
+        fromWarehouseId: '', toWarehouseId: '', docNumber: '', date: new Date().toISOString().split('T')[0], observation: '',
+        items: []
+      });
+      setIsTransferModalOpen(true);
+    }
+    else if (type === 'quotations' || type === 'orders') { 
+      if (item) {
+        // Mapeo explícito para asegurar que los campos coincidan con lo que QuotationForm espera
+        setQuotationFormData({
+          ...initialQuotationData,
+          ...item,
+          id: item.id,
+          ruc: item.customerDocNumber || item.ruc || '',
+          razonSocial: item.customerName || item.razonSocial || '',
+          address: item.customerAddress || item.address || '',
+          observation: item.notes || item.observation || '',
+          flete: item.shippingCost || item.flete || 0,
+          igvPercent: item.igvPercent || 18,
+          pickupPlace: item.pickupPlace?.toString() || '',
+          currency: item.currency || '1',
+          sellerId: item.sellerId?.toString() || '',
+          customerId: item.customerId?.toString() || '',
+          agencyId: item.agencyId?.toString() || '',
+          docType: type === 'quotations' ? 'COT' : (type === 'orders' ? 'PED' : (item.docType || 'COT')),
+          date: item.createdAt?.split('T')[0] || item.date || new Date().toISOString().split('T')[0],
+          expiryDate: item.dueDate?.split('T')[0] || item.expiryDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        });
+        
         setQuotationItems(item.items?.map((i: any) => ({
           productId: i.productId,
-          name: i.product?.name || 'Producto',
-          code: i.product?.code || '',
-          price: i.price,
-          quantity: i.quantity,
-          discount: i.discount || 0,
-          unit: i.product?.unit
+          name: i.product?.name || i.name || 'Producto',
+          code: i.product?.code || i.code || '',
+          price: Number(i.price || 0),
+          quantity: Number(i.quantity || 0),
+          discount: Number(i.discount || 0),
+          unit: i.product?.unit?.symbol || i.unit || 'UND'
         })) || []);
       } else {
         setQuotationFormData({
@@ -269,11 +371,15 @@ export default function Admin() {
   const handleDelete = async (type: string, id: number | string) => {
     if (!confirm('¿Seguro que desea eliminar?')) return;
     try { 
-      await axios.delete(`/api/${type}/${id}`, { headers: { Authorization: `Bearer ${token}` } }); 
+      console.log(`[FRONTEND] Deleting ${type} with ID:`, id);
+      const res = await axios.delete(`/api/${type}/${id}`, { headers: { Authorization: `Bearer ${token}` } }); 
+      console.log(`[FRONTEND] Delete response:`, res.data);
       showSuccess('Eliminado'); 
       fetchData(); 
     } catch (err: any) { 
-      alert(err.response?.data?.error || 'Error al eliminar'); 
+      console.error(`[FRONTEND] Delete error for ${type}/${id}:`, err);
+      const msg = err.response?.data?.error || err.message || 'Error al eliminar';
+      alert(msg); 
     }
   };
 
@@ -358,8 +464,32 @@ export default function Admin() {
         totalAmount: quotationTotal 
       };
       const isOrder = quotationFormData.docType === 'PED';
-      const url = isOrder ? '/api/orders' : (editingItem ? `/api/quotations/${editingItem.id}` : '/api/quotations');
-      const method = (editingItem && !isOrder) ? 'PUT' : 'POST';
+      const isConversion = isOrder && editingItem && !editingItem.docNumber?.startsWith('PED');
+      
+      let url = '';
+      let method = 'POST';
+      
+      if (isOrder) {
+        if (isConversion) {
+          url = '/api/orders';
+          payload.quotationId = editingItem.id;
+          method = 'POST'; // Conversion is a new order
+        } else if (editingItem) {
+          url = `/api/orders/${editingItem.id}`;
+          method = 'PUT';
+        } else {
+          url = '/api/orders';
+          method = 'POST';
+        }
+      } else {
+        if (editingItem) {
+          url = `/api/quotations/${editingItem.id}`;
+          method = 'PUT';
+        } else {
+          url = '/api/quotations';
+          method = 'POST';
+        }
+      }
       
       const res = await axios({ method, url, data: payload, headers: { Authorization: `Bearer ${token}` } });
       showSuccess(isOrder ? 'Pedido generado' : 'Cotización guardada'); 
@@ -374,16 +504,103 @@ export default function Admin() {
     } finally { setLoading(false); }
   };
 
-  const handleSubmitSeries = async (e: any) => {
-    e.preventDefault(); setLoading(true);
+  const handleSubmitSeries = async (data: any) => {
+    setLoading(true);
     try {
-      const url = editingItem ? `/api/series/${editingItem.id}` : '/api/series';
-      await axios({ method: editingItem ? 'PUT' : 'POST', url, data: seriesFormData, headers: { Authorization: `Bearer ${token}` } });
-      showSuccess('Serie guardada'); setIsSeriesModalOpen(false); fetchData();
-    } catch (err: any) { 
-      console.error(err);
-      alert(err.response?.data?.error || 'Error al guardar la serie'); 
-    } finally { setLoading(false); }
+      if (editingItem) await axios.put(`/api/series/${editingItem.id}`, data, { headers: { Authorization: `Bearer ${token}` } });
+      else await axios.post('/api/series', data, { headers: { Authorization: `Bearer ${token}` } });
+      setIsSeriesModalOpen(false);
+      await fetchData();
+      showSuccess('Serie guardada');
+    } catch (err) { alert('Error al guardar'); } finally { setLoading(false); }
+  };
+
+  const handleSubmitSupplier = async (data: any) => {
+    setLoading(true);
+    try {
+      if (editingItem) await axios.put(`/api/suppliers/${editingItem.id}`, data, { headers: { Authorization: `Bearer ${token}` } });
+      else await axios.post('/api/suppliers', data, { headers: { Authorization: `Bearer ${token}` } });
+      setIsSupplierModalOpen(false);
+      await fetchData();
+      showSuccess('Proveedor guardado');
+    } catch (err) { alert('Error al guardar'); } finally { setLoading(false); }
+  };
+
+  const handleOpenPayment = (order: any) => {
+    setSelectedOrderForPayment(order);
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleSubmitPayment = async (data: any) => {
+    setLoading(true);
+    try {
+      await axios.post('/api/payments', data, { headers: { Authorization: `Bearer ${token}` } });
+      showSuccess('Pago registrado');
+      
+      // Actualizar el pedido seleccionado para reflejar el nuevo pago
+      const res = await axios.get(`/api/orders/${data.orderId}`, { headers: { Authorization: `Bearer ${token}` } });
+      setSelectedOrderForPayment(res.data);
+      
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Error al registrar pago');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: number) => {
+    if (!confirm('¿Seguro que desea eliminar este cobro?')) return;
+    setLoading(true);
+    try {
+      await axios.delete(`/api/payments/${paymentId}`, { headers: { Authorization: `Bearer ${token}` } });
+      showSuccess('Cobro eliminado');
+      
+      if (selectedOrderForPayment) {
+        const res = await axios.get(`/api/orders/${selectedOrderForPayment.id}`, { headers: { Authorization: `Bearer ${token}` } });
+        setSelectedOrderForPayment(res.data);
+      }
+      
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Error al eliminar pago');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetQuotation = async (id: number) => {
+    if (!confirm('¿Seguro que desea desbloquear esta cotización y volverla a estado PENDIENTE?')) return;
+    setLoading(true);
+    try {
+      await axios.put(`/api/quotations/${id}/reset`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      showSuccess('Cotización desbloqueada');
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Error al resetear cotización');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmitTransfer = async (data: any) => {
+    setLoading(true);
+    try {
+      await axios.post('/api/transfers', data, { headers: { Authorization: `Bearer ${token}` } });
+      setIsTransferModalOpen(false);
+      await fetchData();
+      showSuccess('Transferencia procesada');
+    } catch (err) { alert('Error al procesar transferencia'); } finally { setLoading(false); }
+  };
+
+  const handleSubmitMovement = async (data: any) => {
+    setLoading(true);
+    try {
+      await axios.post('/api/movements', data, { headers: { Authorization: `Bearer ${token}` } });
+      setIsMovementAssistantOpen(false);
+      await fetchData();
+      showSuccess('Movimiento procesado correctamente');
+    } catch (err) { alert('Error al procesar movimiento'); } finally { setLoading(false); }
   };
 
   const handleSubmitCustomer = async (e: any) => {
@@ -515,10 +732,12 @@ export default function Admin() {
             { id: 'products', icon: Package, label: 'Productos' }, 
             { id: 'quotations', icon: FileText, label: 'Cotizaciones' }, 
             { id: 'orders', icon: ShoppingCart, label: 'Pedidos' }, 
-            { id: 'inventory', icon: BarChart3, label: 'Almacén' }, 
+            { id: 'inventory', icon: BarChart3, label: 'Inventario / Stock' }, 
+            { id: 'purchases', icon: ShoppingCart, label: 'Compras' },
             { id: 'logistics', icon: Truck, label: 'Logística' },
-            { id: 'warehouses', icon: MapPin, label: 'Puntos Recojo' },
+            { id: 'warehouses', icon: MapPin, label: 'Almacenes / Sedes' },
             { id: 'customers', icon: Star, label: 'Clientes' }, 
+            { id: 'suppliers', icon: Building2, label: 'Proveedores' },
             { id: 'sellers', icon: User, label: 'Vendedores' },
             { id: 'exchange-rates', icon: DollarSign, label: 'T. Cambio' }, 
             { id: 'series', icon: Hash, label: 'Series' }, 
@@ -591,16 +810,27 @@ export default function Admin() {
                           })) || []);
                           setIsQuotationModalOpen(true);
                         }} 
+                        onReset={handleResetQuotation}
                       />
                     )}
-                    {currentTab === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => {}} onEdit={(o) => openForm('orders', o)} />}
-                    {currentTab === 'inventory' && <InventoryModule products={products} onUpdateStock={(pid, s) => axios.put(`/api/products/${pid}/stock`, {stock:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onEdit={(p) => openForm('products', p)} />}
+                    {currentTab === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => {}} onEdit={(o) => openForm('orders', o)} onOpenPayment={handleOpenPayment} />}
+                    {currentTab === 'inventory' && <InventoryModule products={products} stockDetails={stockDetails} movements={movements} onUpdateStock={(pid, s) => axios.put(`/api/products/${pid}/stock`, {stock:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onEdit={(p) => openForm('products', p)} onOpenAssistant={() => setIsMovementAssistantOpen(true)} />}
                     {currentTab === 'customers' && <CustomerModule customers={customers} onEdit={(c) => openForm('customers', c)} onNew={() => openForm('customers')} onDelete={(id) => handleDelete('customers', id)} departments={[]} />}
                     {currentTab === 'exchange-rates' && <ExchangeRateModule token={token} exchangeRates={exchangeRates} onDelete={(id) => handleDelete('exchange-rates', id)} onSave={(d) => axios.post('/api/exchange-rates', d, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} loading={loading} />}
                     {currentTab === 'logistics' && <LogisticsModule logisticsTab={logisticsTab} setLogisticsTab={setLogisticsTab} shippingAgencies={shippingAgencies} shippingZones={shippingZones} openEditModal={(item) => openForm(logisticsTab === 'agencies' ? 'shipping-agencies' : 'shipping-zones', item)} handleDelete={(t,id) => handleDelete(t,id)} />}
                     {currentTab === 'sellers' && <SellerModule sellers={sellers} onEdit={(s) => openForm('sellers', s)} onNew={() => openForm('sellers')} onDelete={(id) => handleDelete('sellers', id)} />}
                     {currentTab === 'warehouses' && <WarehouseModule warehouses={warehouses} onEdit={(w) => openForm('warehouses', w)} onNew={() => openForm('warehouses')} onDelete={(id) => handleDelete('warehouses', id)} />}
                     {currentTab === 'series' && <SeriesModule series={series} warehouses={warehouses} onEdit={(s) => openForm('series', s)} onNew={() => openForm('series')} onDelete={(id) => handleDelete('series', id)} />}
+                    {currentTab === 'purchases' && (
+                      <PurchaseModule 
+                        token={token || undefined} 
+                        onNew={() => openForm('purchases')} 
+                        onEdit={(p) => openForm('purchases', p)}
+                        onDelete={(id) => handleDelete('purchases', id)}
+                        purchases={purchases} 
+                      />
+                    )}
+                    {currentTab === 'suppliers' && <SupplierModule token={token} onNew={() => openForm('suppliers')} onEdit={(s) => openForm('suppliers', s)} suppliers={suppliers} />}
                     {currentTab === 'settings' && <SettingsModule token={token} />}
                   </div>
                 </div>
@@ -608,7 +838,7 @@ export default function Admin() {
             })}
 
           {/* Modals localized to their respective tabs */}
-          <div style={{ display: activeTabId === 'quotations' ? 'block' : 'none' }}>
+          <div style={{ display: (activeTabId === 'quotations' || activeTabId === 'orders') ? 'block' : 'none' }}>
             <QuotationForm 
               isOpen={isQuotationModalOpen} 
               onClose={() => setIsQuotationModalOpen(false)} 
@@ -629,7 +859,13 @@ export default function Admin() {
               quotationItems={quotationItems} 
               addQuotationItem={(p) => { if(!quotationItems.find(i=>i.productId===p.id)) setQuotationItems([...quotationItems, {productId:p.id, name:p.name, code:p.code, price:p.salePrice, quantity:1, discount:0, unit:p.unit}]); setSearchResults([]); }} 
               updateQuotationItem={(id, f, v) => setQuotationItems(quotationItems.map(i=>i.productId===id?{...i,[f]:v}:i))} 
-              removeQuotationItem={(id) => setQuotationItems(quotationItems.filter(i=>i.productId!==id))} 
+              removeQuotationItem={(id) => {
+                if (id === -1) {
+                  setQuotationItems(prev => prev.slice(0, -1));
+                } else {
+                  setQuotationItems(prev => prev.filter(i => i.productId !== id));
+                }
+              }} 
               quotationTotal={quotationTotal} 
               handleConsultCustomer={handleConsultForQuotation}
               handleQuickRegister={handleQuickRegisterCustomer}
@@ -649,7 +885,7 @@ export default function Admin() {
           </div>
 
           <div style={{ display: ['products', 'categories', 'brands', 'units'].includes(activeTabId) ? 'block' : 'none' }}>
-            <ProductForm isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)} onSubmit={handleSubmitProduct} formData={productFormData} setFormData={setProductFormData} editingItem={editingItem} loading={loading} categories={categories} brands={brands} units={units} handleFileUpload={handleFileUpload} setLoading={setLoading} />
+            <ProductForm isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)} onSubmit={handleSubmitProduct} formData={productFormData} setFormData={setProductFormData} editingItem={editingItem} loading={loading} categories={categories} brands={brands} units={units} handleFileUpload={handleFileUpload} setLoading={setLoading} token={token || undefined} />
           </div>
 
           <div style={{ display: activeTabId === 'logistics' ? 'block' : 'none' }}>
@@ -684,7 +920,66 @@ export default function Admin() {
             />
           </div>
 
+          <div style={{ display: activeTabId === 'purchases' ? 'block' : 'none' }}>
+            <PurchaseEntryForm 
+              isOpen={isPurchaseModalOpen}
+              onClose={() => setIsPurchaseModalOpen(false)}
+              onSuccess={() => { setIsPurchaseModalOpen(false); fetchData(); showSuccess('Compra registrada'); }}
+              token={token}
+              formData={purchaseFormData}
+              setFormData={setPurchaseFormData}
+            />
+          </div>
+
+          <div style={{ display: activeTabId === 'suppliers' ? 'block' : 'none' }}>
+            <SupplierForm 
+              isOpen={isSupplierModalOpen}
+              onClose={() => setIsSupplierModalOpen(false)}
+              onSubmit={handleSubmitSupplier}
+              formData={supplierFormData}
+              setFormData={setSupplierFormData}
+              editingItem={editingItem}
+              loading={loading}
+              token={token}
+            />
+          </div>
+
+          <div style={{ display: activeTabId === 'transfers' ? 'block' : 'none' }}>
+            <TransferForm 
+              isOpen={isTransferModalOpen}
+              onClose={() => setIsTransferModalOpen(false)}
+              onSubmit={handleSubmitTransfer}
+              formData={transferFormData}
+              setFormData={setTransferFormData}
+              loading={loading}
+              warehouses={warehouses}
+              products={products}
+            />
+          </div>
+
+          <MovementAssistantForm 
+            isOpen={isMovementAssistantOpen}
+            onClose={() => setIsMovementAssistantOpen(false)}
+            onSubmit={handleSubmitMovement}
+            warehouses={warehouses}
+            customers={[
+              ...customers.map(c => ({ ...c, type: 'CUSTOMER' })),
+              ...suppliers.map(s => ({ ...s, type: 'SUPPLIER' }))
+            ]}
+            products={products}
+            token={token}
+          />
+
           </div> {/* Cierre del contenedor Content Area */}
+
+          <PaymentForm 
+            isOpen={isPaymentModalOpen}
+            onClose={() => setIsPaymentModalOpen(false)}
+            order={selectedOrderForPayment}
+            onSubmit={handleSubmitPayment}
+            onDeletePayment={handleDeletePayment}
+            loading={loading}
+          />
         </main>
       </div>
     </div>

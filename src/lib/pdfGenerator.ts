@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import axios from 'axios';
+import { formatNumber } from './utils';
 
 export const generateQuotationPDF = async (quotation: any, items: any[], action: 'save' | 'print' = 'save') => {
   console.log(`Iniciando generación de PDF Profesional (${action})...`);
@@ -99,8 +100,8 @@ export const generateQuotationPDF = async (quotation: any, items: any[], action:
       item.product?.name || item.name || '-',
       item.quantity || 0,
       item.product?.unit?.symbol || item.unit?.symbol || 'UND',
-      Number(item.price || 0).toFixed(2),
-      (Number(item.quantity || 0) * Number(item.price || 0)).toFixed(2)
+      formatNumber(item.price || 0),
+      formatNumber(Number(item.quantity || 0) * Number(item.price || 0))
     ]);
 
     autoTable(doc, {
@@ -141,10 +142,10 @@ export const generateQuotationPDF = async (quotation: any, items: any[], action:
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     doc.text("SUBTOTAL:", totalsX, finalY + 10);
-    doc.text(subtotal.toFixed(2), pageWidth - margin, finalY + 10, { align: 'right' });
+    doc.text(formatNumber(subtotal), pageWidth - margin, finalY + 10, { align: 'right' });
 
     doc.text("I.G.V. (18%):", totalsX, finalY + 17);
-    doc.text(igv.toFixed(2), pageWidth - margin, finalY + 17, { align: 'right' });
+    doc.text(formatNumber(igv), pageWidth - margin, finalY + 17, { align: 'right' });
 
     doc.setDrawColor(200);
     doc.line(totalsX, finalY + 20, pageWidth - margin, finalY + 20);
@@ -152,7 +153,7 @@ export const generateQuotationPDF = async (quotation: any, items: any[], action:
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
     doc.text("TOTAL:", totalsX, finalY + 27);
-    doc.text(`${quotation.currency === 'USD' ? '$' : 'S/'} ${total.toFixed(2)}`, pageWidth - margin, finalY + 27, { align: 'right' });
+    doc.text(`${quotation.currency === 'USD' ? '$' : 'S/'} ${formatNumber(total)}`, pageWidth - margin, finalY + 27, { align: 'right' });
 
     // --- FOOTER ---
     doc.setFontSize(8);

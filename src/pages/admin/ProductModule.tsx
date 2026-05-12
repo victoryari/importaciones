@@ -5,6 +5,7 @@ import {
   Edit2, Trash2, Eye, Filter, ChevronRight, LayoutGrid, 
   List, MoreVertical, Image as ImageIcon, Globe, Calendar, Power
 } from 'lucide-react';
+import { formatNumber } from '../../lib/utils';
 
 interface Category {
   id: number;
@@ -221,7 +222,13 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <span className="font-black text-slate-900 text-lg">S/ {Number(item.salePrice).toFixed(2)}</span>
+                        <div className="flex flex-col items-end">
+                          <span className="font-black text-slate-900 text-lg">S/ {formatNumber(item.salePrice)}</span>
+                          <div className="flex items-center gap-2 text-[9px] font-bold">
+                            <span className="text-slate-400">Costo: S/ {formatNumber(item.costPrice || 0)}</span>
+                            <span className="text-blue-500">({item.profitMargin || 0}%)</span>
+                          </div>
+                        </div>
                       </td>
                     </>
                   ) : (

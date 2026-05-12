@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { PlusCircle, Trash2, Save, Building2, Calendar, RefreshCw, FileSpreadsheet } from 'lucide-react';
+import { formatNumber } from '../../lib/utils';
 
 interface ExchangeRate {
   id: string;
@@ -48,8 +49,8 @@ export const ExchangeRateModule: React.FC<ExchangeRateModuleProps> = ({
     const d = new Date(rate.date + (String(rate.date).includes('T') ? '' : 'T12:00:00'));
     setFormData({
       date: d.toISOString().split('T')[0],
-      buy: Number(rate.buy_rate).toFixed(3),
-      sell: Number(rate.sell_rate).toFixed(3)
+      buy: formatNumber(rate.buy_rate, 3),
+      sell: formatNumber(rate.sell_rate, 3)
     });
   };
 
@@ -138,8 +139,8 @@ export const ExchangeRateModule: React.FC<ExchangeRateModuleProps> = ({
                 {filteredRates.map((ex) => (
                   <tr key={ex.id} onClick={() => handleRowClick(ex)} className={`cursor-pointer transition-colors ${selectedRateId === ex.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'hover:bg-slate-50 border-l-4 border-l-transparent'}`}>
                     <td className="px-6 py-3 font-bold text-slate-700 border-r border-slate-100">{new Date(ex.date + (String(ex.date).includes('T') ? '' : 'T12:00:00')).toLocaleDateString()}</td>
-                    <td className="px-6 py-3 text-center font-black text-emerald-600 border-r border-slate-100">{Number(ex.buy_rate).toFixed(4)}</td>
-                    <td className="px-6 py-3 text-center font-black text-blue-600 border-r border-slate-100">{Number(ex.sell_rate).toFixed(4)}</td>
+                    <td className="px-6 py-3 text-center font-black text-emerald-600 border-r border-slate-100">{formatNumber(ex.buy_rate, 4)}</td>
+                    <td className="px-6 py-3 text-center font-black text-blue-600 border-r border-slate-100">{formatNumber(ex.sell_rate, 4)}</td>
                     <td className="px-6 py-3 text-[10px] font-bold text-slate-400 uppercase">Admin</td>
                   </tr>
                 ))}

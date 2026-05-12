@@ -7,15 +7,15 @@ datasource db {
 }
 
 model Advertisement {
-  id        Int      @id @default(autoincrement())
-  title     String
+  id             Int      @id @default(autoincrement())
+  title          String
   imageUrl       String
-  mobileImageUrl String?
   link           String?
   isActive       Boolean  @default(true)
   position       String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  mobileImageUrl String?
 
   @@map("advertisement")
 }
@@ -52,75 +52,80 @@ model GlobalSetting {
 }
 
 model Product {
-  id               Int             @id @default(autoincrement())
-  name             String
-  slug             String          @unique
-  description      String?         @db.Text
-  stock            Int             @default(0)
-  images           Json?
-  categoryId       Int
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  brandId          Int?
-  certificate      String?
-  code             String?         @unique
-  costPrice        Decimal         @default(0.00) @db.Decimal(10, 2)
-  features         String?         @db.Text
-  igv              Decimal         @default(18.00) @db.Decimal(5, 2)
-  isActive         Boolean         @default(true)
-  maxSalePrice     Decimal?        @db.Decimal(10, 2)
-  minSalePrice     Decimal?        @db.Decimal(10, 2)
-  salePrice        Decimal         @default(0.00) @db.Decimal(10, 2)
-  sanitaryRegister String?
-  unitId           Int?
-  weight           Decimal?        @db.Decimal(10, 3)
-  volume           Decimal?        @db.Decimal(10, 3)
-  orderItems       OrderItem[]
-  quotationItems   QuotationItem[]
-  stockRecords     Stock[]
-  movements        StockMovement[]
-  brand            Brand?          @relation(fields: [brandId], references: [id])
-  category         Category        @relation(fields: [categoryId], references: [id])
-  unit                   Unit?           @relation("BaseUnit", fields: [unitId], references: [id])
-  packageId              Int?
-  package                Unit?           @relation("PackageUnit", fields: [packageId], references: [id])
-  quantityPerPackage     Int             @default(1)
-  subPackageId           Int?
-  subPackage             Unit?           @relation("SubPackageUnit", fields: [subPackageId], references: [id])
-  quantityPerSubPackage  Int             @default(1)
-  
-  // New Visibility and Control Fields
-  showInWeb              Boolean         @default(true)
-  manageLots             Boolean         @default(false)
-  useExpiryDate          Boolean         @default(false)
+  id                    Int             @id @default(autoincrement())
+  name                  String
+  slug                  String          @unique
+  description           String?         @db.Text
+  stock                 Int             @default(0)
+  images                Json?
+  categoryId            Int
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  brandId               Int?
+  certificate           String?
+  code                  String?         @unique
+  costPrice             Decimal         @default(0.00) @db.Decimal(10, 2)
+  features              String?         @db.Text
+  igv                   Decimal         @default(18.00) @db.Decimal(5, 2)
+  isActive              Boolean         @default(true)
+  maxSalePrice          Decimal?        @db.Decimal(10, 2)
+  minSalePrice          Decimal?        @db.Decimal(10, 2)
+  salePrice             Decimal         @default(0.00) @db.Decimal(10, 2)
+  sanitaryRegister      String?
+  unitId                Int?
+  weight                Decimal?        @db.Decimal(10, 3)
+  volume                Decimal?        @db.Decimal(10, 3)
+  packageId             Int?
+  quantityPerPackage    Int             @default(1)
+  quantityPerSubPackage Int             @default(1)
+  subPackageId          Int?
+  manageLots            Boolean         @default(false)
+  showInWeb             Boolean         @default(true)
+  useExpiryDate         Boolean         @default(false)
+  profitMargin          Decimal         @default(0.00) @db.Decimal(10, 2)
+  existenceTypeCode     String?         @default("01")
+  valuationMethodCode   String?         @default("1")
+  orderItems            OrderItem[]
+  brand                 Brand?          @relation(fields: [brandId], references: [id])
+  category              Category        @relation(fields: [categoryId], references: [id])
+  package               Unit?           @relation("PackageUnit", fields: [packageId], references: [id])
+  subPackage            Unit?           @relation("SubPackageUnit", fields: [subPackageId], references: [id])
+  unit                  Unit?           @relation("BaseUnit", fields: [unitId], references: [id])
+  purchaseItems         PurchaseItem[]
+  quotationItems        QuotationItem[]
+  stockRecords          Stock[]
+  movements             StockMovement[]
 
   @@index([brandId])
   @@index([categoryId])
   @@index([unitId])
+  @@index([packageId], map: "product_packageId_fkey")
+  @@index([subPackageId], map: "product_subPackageId_fkey")
   @@map("product")
 }
 
 model Warehouse {
-  id              Int              @id @default(autoincrement())
-  code            String?          @unique
-  name            String           @unique // Existencias, Comprobante, Despacho
-  commercialName  String?
-  address         String?
-  ruc             String?
-  ubigeo          String?
-  observation     String?          @db.Text
-  phones          String?
-  type            String?          // PRINCIPAL, DESPACHO, COMPROBANTES, etc.
-  validateStock   Boolean          @default(true)
-  isActive        Boolean          @default(true)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @default(now()) @updatedAt
-
-  stock           Stock[]
-  fromMoves       StockMovement[]  @relation("FromWarehouse")
-  toMoves         StockMovement[]  @relation("ToWarehouse")
-  series          DocumentSeries[]
-  floors          WarehouseFloor[]
+  id             Int              @id @default(autoincrement())
+  name           String           @unique
+  address        String?
+  code           String?          @unique
+  commercialName String?
+  createdAt      DateTime         @default(now())
+  isActive       Boolean          @default(true)
+  observation    String?          @db.Text
+  phones         String?
+  ruc            String?
+  type           String?
+  ubigeo         String?
+  updatedAt      DateTime         @default(now()) @updatedAt
+  validateStock  Boolean          @default(true)
+  series         DocumentSeries[]
+  stock          Stock[]
+  fromMoves      StockMovement[]  @relation("FromWarehouse")
+  toMoves        StockMovement[]  @relation("ToWarehouse")
+  fromTransfers  Transfer[]       @relation("FromTransfer")
+  toTransfers    Transfer[]       @relation("ToTransfer")
+  floors         WarehouseFloor[]
 
   @@map("warehouse")
 }
@@ -139,14 +144,14 @@ model WarehouseFloor {
 }
 
 model WarehouseZone {
-  id          Int             @id @default(autoincrement())
-  code        String?
-  name        String
-  floorId     Int
-  floor       WarehouseFloor  @relation(fields: [floorId], references: [id], onDelete: Cascade)
-  stock       Stock[]
-  fromMoves   StockMovement[] @relation("FromZone")
-  toMoves     StockMovement[] @relation("ToZone")
+  id        Int             @id @default(autoincrement())
+  code      String?
+  name      String
+  floorId   Int
+  stock     Stock[]
+  fromMoves StockMovement[] @relation("FromZone")
+  toMoves   StockMovement[] @relation("ToZone")
+  floor     WarehouseFloor  @relation(fields: [floorId], references: [id], onDelete: Cascade)
 
   @@unique([floorId, name])
   @@unique([floorId, code])
@@ -157,14 +162,18 @@ model Stock {
   id          Int            @id @default(autoincrement())
   productId   Int
   warehouseId Int
-  floorId     Int?           // Referencial
-  zoneId      Int?           // Ubicación específica
   quantity    Int            @default(0)
+  floorId     Int?
+  zoneId      Int?
+  expiryDate  DateTime?
+  lotNumber   String?
   product     Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
   warehouse   Warehouse      @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
   zone        WarehouseZone? @relation(fields: [zoneId], references: [id], onDelete: Cascade)
 
-  @@unique([productId, warehouseId, zoneId])
+  @@unique([productId, warehouseId, zoneId, lotNumber])
+  @@index([warehouseId], map: "stock_warehouseId_fkey")
+  @@index([zoneId], map: "stock_zoneId_fkey")
   @@map("stock")
 }
 
@@ -173,29 +182,41 @@ model StockMovement {
   productId       Int
   fromWarehouseId Int?
   toWarehouseId   Int?
-  fromZoneId      Int?
-  toZoneId        Int?
   quantity        Int
   orderId         Int?
-  type            String         // TRANSFER, ADJUSTMENT, INITIAL
+  purchaseId      Int?
+  transferId      Int?
+  type            String
   createdAt       DateTime       @default(now())
-  product         Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
-  fromWarehouse   Warehouse?     @relation("FromWarehouse", fields: [fromWarehouseId], references: [id], onDelete: SetNull)
-  toWarehouse     Warehouse?     @relation("ToWarehouse", fields: [toWarehouseId], references: [id], onDelete: SetNull)
-  fromZone        WarehouseZone? @relation("FromZone", fields: [fromZoneId], references: [id], onDelete: SetNull)
-  toZone          WarehouseZone? @relation("ToZone", fields: [toZoneId], references: [id], onDelete: SetNull)
+  fromZoneId      Int?
+  toZoneId        Int?
+  observation     String?        @db.Text
+  lotNumber       String?
+  fromWarehouse   Warehouse?     @relation("FromWarehouse", fields: [fromWarehouseId], references: [id])
+  fromZone        WarehouseZone? @relation("FromZone", fields: [fromZoneId], references: [id])
   order           Order?         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  purchase        Purchase?      @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  transfer        Transfer?      @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product         Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  toWarehouse     Warehouse?     @relation("ToWarehouse", fields: [toWarehouseId], references: [id])
+  toZone          WarehouseZone? @relation("ToZone", fields: [toZoneId], references: [id])
 
+  @@index([fromWarehouseId], map: "stock_movement_fromWarehouseId_fkey")
+  @@index([fromZoneId], map: "stock_movement_fromZoneId_fkey")
+  @@index([orderId], map: "stock_movement_orderId_fkey")
+  @@index([productId], map: "stock_movement_productId_fkey")
+  @@index([toWarehouseId], map: "stock_movement_toWarehouseId_fkey")
+  @@index([toZoneId], map: "stock_movement_toZoneId_fkey")
   @@map("stock_movement")
 }
 
 model Unit {
-  id       Int       @id @default(autoincrement())
-  name     String
-  symbol   String
-  products           Product[] @relation("BaseUnit")
+  id                 Int       @id @default(autoincrement())
+  name               String
+  symbol             String
   packageProducts    Product[] @relation("PackageUnit")
   subPackageProducts Product[] @relation("SubPackageUnit")
+  products           Product[] @relation("BaseUnit")
 
   @@map("unit")
 }
@@ -203,9 +224,9 @@ model Unit {
 model ExchangeRate {
   id        Int      @id @default(autoincrement())
   date      DateTime @unique @default(now())
+  createdAt DateTime @default(now())
   buy_rate  Decimal  @default(1.0000) @db.Decimal(10, 4)
   sell_rate Decimal  @default(1.0000) @db.Decimal(10, 4)
-  createdAt DateTime @default(now())
 
   @@map("exchange_rate")
 }
@@ -215,122 +236,135 @@ model User {
   email     String   @unique
   password  String
   name      String?
-  series    String?  @default("F001")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  series    String?  @default("F001")
 
   @@map("user")
 }
 
 model SunatTable {
-  id          Int      @id @default(autoincrement())
-  tableName   String   // document_type, currency, payment_condition, etc.
-  code        String   
-  name        String   
-  description String?  @db.Text
-  isActive    Boolean  @default(true)
+  id          Int     @id @default(autoincrement())
+  tableName   String
+  code        String
+  name        String
+  description String? @db.Text
+  isActive    Boolean @default(true)
 
   @@unique([tableName, code])
   @@map("sunat_table")
 }
 
 model DocumentType {
-  id    Int    @id @default(autoincrement())
-  name  String @unique // DNI, RUC, Pasaporte, etc.
-  code  String @unique // 01, 06, etc. (SUNAT codes)
+  id   Int    @id @default(autoincrement())
+  name String @unique
+  code String @unique
 
   @@map("document_type")
 }
 
 model Customer {
-  id          Int         @id @default(autoincrement())
-  code        String?     @unique
-  name        String      // Razón Social / Nombre Completo
-  personType  String      @default("NATURAL") // NATURAL, JURIDICA
-  docType     String      @default("DNI")
-  docNumber   String      @unique
-  
-  firstName   String?
-  secondName  String?
-  lastName    String?     // Apellido Paterno
-  surname     String?     // Apellido Materno
-  
-  address     String?     @db.Text
-  phone       String?
-  email       String?
-  contact     String?
-  
-  country     String?     @default("PERU")
-  department  String?     // Departamento
-  province    String?     // Provincia
-  district    String?     // Distrito
-  
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  quotations  Quotation[]
-  orders      Order[]
+  id         Int         @id @default(autoincrement())
+  code       String?     @unique
+  name       String
+  docType    String      @default("DNI")
+  docNumber  String      @unique
+  address    String?     @db.Text
+  phone      String?
+  email      String?
+  contact    String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  country    String?     @default("PERU")
+  department String?
+  district   String?
+  firstName  String?
+  lastName   String?
+  personType String      @default("NATURAL")
+  province   String?
+  secondName String?
+  surname    String?
+  orders     Order[]
+  quotations Quotation[]
 
   @@map("customer")
 }
 
-model Seller {
-  id        Int         @id @default(autoincrement())
-  name      String      
-  dni       String?     @unique
+model Supplier {
+  id        Int        @id @default(autoincrement())
+  code      String?    @unique
+  name      String
+  docType   String     @default("RUC")
+  docNumber String     @unique
+  address   String?    @db.Text
   phone     String?
   email     String?
-  isActive  Boolean     @default(true)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  quotations Quotation[]
+  contact   String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  purchases Purchase[]
+
+  @@map("supplier")
+}
+
+model Seller {
+  id         Int         @id @default(autoincrement())
+  name       String
+  dni        String?     @unique
+  phone      String?
+  email      String?
+  isActive   Boolean     @default(true)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
   orders     Order[]
+  quotations Quotation[]
 
   @@map("seller")
 }
 
 model Quotation {
   id                Int             @id @default(autoincrement())
-  customerId        Int?
   customerName      String
   customerPhone     String
   customerEmail     String?
-  customerDocType   String?
-  customerDocNumber String?
-  customerAddress   String?
-  
-  docType           String          @default("COT")
-  docSeries         String?
-  docNumber         String?
-  internalCode      String?         // Código correlativo interno
-  igvPercent        Decimal         @default(18.00) @db.Decimal(5, 2)
-  exchangeRate      Decimal         @default(1.00) @db.Decimal(10, 3)
-  dueDate           DateTime?
-  sellerId          Int?
-  sellerName        String?
-  includeIgv        Boolean         @default(true)
-  priceIncludesIgv  Boolean         @default(true)
-  operationType     String?         @default("10") // 10 | Gravado
-  
-  paymentCondition  String?         @default("CONTADO")
-  currency          String?         @default("PEN")
   totalAmount       Decimal         @default(0.00) @db.Decimal(10, 2)
-  globalDiscount    Decimal         @default(0.00) @db.Decimal(10, 2)
-  flete             Decimal         @default(0.00) @db.Decimal(10, 2)
   status            String          @default("PENDING")
-  billingStatus     String?         @default("SIN FACTURAR")
-  pickupPlace       String?
-  observation       String?         @db.Text
   notes             String?         @db.Text
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
-  
+  currency          String?         @default("PEN")
+  customerAddress   String?
+  customerDocNumber String?
+  customerDocType   String?
+  paymentCondition  String?         @default("CONTADO")
+  customerId        Int?
+  docNumber         String?
+  docSeries         String?
+  docType           String          @default("COT")
+  dueDate           DateTime?
+  exchangeRate      Decimal         @default(1.000) @db.Decimal(10, 3)
+  includeIgv        Boolean         @default(true)
+  operationType     String?         @default("10")
+  sellerName        String?
+  agencyId          Int?
+  billingStatus     String?         @default("SIN FACTURAR")
+  flete             Decimal         @default(0.00) @db.Decimal(10, 2)
+  globalDiscount    Decimal         @default(0.00) @db.Decimal(10, 2)
+  igvPercent        Decimal         @default(18.00) @db.Decimal(5, 2)
+  internalCode      String?
+  observation       String?         @db.Text
+  pickupPlace       String?
+  priceIncludesIgv  Boolean         @default(true)
+  sellerId          Int?
+  orders            Order[]
+  agency            ShippingAgency? @relation(fields: [agencyId], references: [id])
   customer          Customer?       @relation(fields: [customerId], references: [id])
   seller            Seller?         @relation(fields: [sellerId], references: [id])
   items             QuotationItem[]
-  orders            Order[]
-  agency            ShippingAgency? @relation(fields: [agencyId], references: [id])
-  agencyId          Int?
 
+  @@index([agencyId], map: "quotation_agencyId_fkey")
+  @@index([customerId], map: "quotation_customerId_fkey")
+  @@index([sellerId], map: "quotation_sellerId_fkey")
   @@map("quotation")
 }
 
@@ -341,64 +375,66 @@ model QuotationItem {
   quantity    Int
   price       Decimal   @db.Decimal(10, 2)
   discount    Decimal   @default(0.00) @db.Decimal(10, 2)
-  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   product     Product   @relation(fields: [productId], references: [id], map: "quotation_item_product_id_fkey_new")
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
+  @@index([productId], map: "quotation_item_product_id_fkey_new")
+  @@index([quotationId], map: "quotation_item_quotationId_fkey")
   @@map("quotation_item")
 }
 
 model Order {
-  id                Int             @id @default(autoincrement())
-  quotationId       Int?
-  customerId        Int?
-  customerName      String
-  customerEmail     String?
-  customerPhone     String
-  customerDocType   String?
-  customerDocNumber String?
-  customerCity      String?
-  customerAddress   String?         @db.Text
-  
-  docType           String          @default("COT")
-  docSeries         String?
-  docNumber         String?
-  exchangeRate      Decimal         @default(1.00) @db.Decimal(10, 3)
-  dueDate           DateTime?
-  sellerId          Int?
-  sellerName        String?
-  includeIgv        Boolean         @default(true)
-  purchaseOrder     String?         // Orden de Compra
-  requirementNumber String?         // Nro Requerimiento
-  
-  consigneeName     String?         // Consignatario
-  consigneePhone    String?
+  id                 Int             @id @default(autoincrement())
+  customerName       String
+  customerEmail      String?
+  customerPhone      String
+  customerCity       String?
+  customerAddress    String?         @db.Text
+  totalAmount        Decimal         @default(0.00) @db.Decimal(10, 2)
+  status             String          @default("PENDING")
+  notes              String?         @db.Text
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  agencyId           Int?
+  carrierGuide       String?
+  paymentStatus      String          @default("UNPAID")
+  quotationId        Int?
+  referralGuide      String?
+  shippingCost       Decimal         @default(0.00) @db.Decimal(10, 2)
+  voucherNumber      String?
+  currency           String?         @default("PEN")
+  customerDocNumber  String?
+  customerDocType    String?
+  paymentCondition   String?         @default("CONTADO")
+  consigneeAddress   String?
   consigneeDocNumber String?
-  consigneeAddress  String?
-  
-  paymentCondition  String?         @default("CONTADO")
-  currency          String?         @default("PEN")
-  totalAmount       Decimal         @default(0.00) @db.Decimal(10, 2)
-  status            String          @default("PENDING")
-  paymentStatus     String          @default("UNPAID")
-  shippingCost      Decimal         @default(0.00) @db.Decimal(10, 2)
-  agencyId          Int?
-  voucherNumber     String?
-  referralGuide     String?
-  carrierGuide      String?
-  pickupPlace       String?
-  
-  notes             String?         @db.Text
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  
-  customer          Customer?       @relation(fields: [customerId], references: [id])
-  seller            Seller?         @relation(fields: [sellerId], references: [id])
-  items             OrderItem[]
-  payments          Payment[]
-  movements         StockMovement[]
-  quotation         Quotation?      @relation(fields: [quotationId], references: [id])
-  agency            ShippingAgency? @relation(fields: [agencyId], references: [id])
+  consigneeName      String?
+  consigneePhone     String?
+  customerId         Int?
+  docNumber          String?
+  docSeries          String?
+  docType            String          @default("COT")
+  dueDate            DateTime?
+  exchangeRate       Decimal         @default(1.000) @db.Decimal(10, 3)
+  includeIgv         Boolean         @default(true)
+  pickupPlace        String?
+  purchaseOrder      String?
+  requirementNumber  String?
+  sellerName         String?
+  sellerId           Int?
+  agency             ShippingAgency? @relation(fields: [agencyId], references: [id], map: "order_agency_fkey_manual")
+  customer           Customer?       @relation(fields: [customerId], references: [id])
+  quotation          Quotation?      @relation(fields: [quotationId], references: [id], map: "order_quotation_fkey_manual")
+  seller             Seller?         @relation(fields: [sellerId], references: [id])
+  items              OrderItem[]
+  payments           Payment[]
+  movements          StockMovement[]
+  origin             String          @default("ADMIN")
 
+  @@index([agencyId], map: "order_agency_fkey_manual")
+  @@index([customerId], map: "order_customerId_fkey")
+  @@index([quotationId], map: "order_quotation_fkey_manual")
+  @@index([sellerId], map: "order_sellerId_fkey")
   @@map("order")
 }
 
@@ -411,6 +447,7 @@ model Payment {
   date          DateTime @default(now())
   order         Order    @relation(fields: [orderId], references: [id])
 
+  @@index([orderId], map: "payment_orderId_fkey")
   @@map("payment")
 }
 
@@ -424,28 +461,27 @@ model ShippingZone {
 }
 
 model ShippingAgency {
-  id          Int          @id @default(autoincrement())
-  name        String
-  ruc         String?
-  address     String?
-  legalAddress String?    @db.Text
-  phone       String?
-  email       String?
-  contact     String?
-  
-  country     String?      @default("PERU")
-  department  String?      // Departamento
-  province    String?      // Provincia
-  district    String?      // Distrito
-  ubigeo      String?      // Ubigeo
-  
-  isActive    Boolean      @default(true)
-  zoneId      Int
-  orders      Order[]
-  quotations  Quotation[]
-  branches    AgencyBranch[]
-  zone        ShippingZone @relation(fields: [zoneId], references: [id])
+  id           Int            @id @default(autoincrement())
+  name         String
+  address      String?
+  zoneId       Int
+  contact      String?
+  country      String?        @default("PERU")
+  department   String?
+  district     String?
+  email        String?
+  isActive     Boolean        @default(true)
+  phone        String?
+  province     String?
+  ruc          String?
+  ubigeo       String?
+  legalAddress String?        @db.Text
+  branches     AgencyBranch[]
+  orders       Order[]
+  quotations   Quotation[]
+  zone         ShippingZone   @relation(fields: [zoneId], references: [id])
 
+  @@index([zoneId], map: "shipping_agency_zoneId_fkey")
   @@map("shipping_agency")
 }
 
@@ -465,32 +501,106 @@ model OrderItem {
 }
 
 model AgencyBranch {
-  id          Int            @id @default(autoincrement())
-  agencyId    Int
-  address     String         @db.Text
-  department  String?
-  province    String?
-  district    String?
-  ubigeo      String?
-  contact     String?
-  phone       String?
-  isMain      Boolean        @default(false)
-  agency      ShippingAgency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  id         Int            @id @default(autoincrement())
+  agencyId   Int
+  address    String         @db.Text
+  department String?
+  province   String?
+  district   String?
+  ubigeo     String?
+  contact    String?
+  phone      String?
+  isMain     Boolean        @default(false)
+  agency     ShippingAgency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
 
+  @@index([agencyId], map: "agency_branch_agencyId_fkey")
   @@map("agency_branch")
 }
 
 model DocumentSeries {
-  id           Int        @id @default(autoincrement())
-  documentType String     // COT, PED, FACT, BOOL
-  series       String     // 001, 002, F001
+  id            Int       @id @default(autoincrement())
+  documentType  String
+  series        String
   currentNumber Int       @default(0)
-  warehouseId  Int
-  isActive     Boolean    @default(true)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  warehouse    Warehouse  @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  warehouseId   Int
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
 
   @@unique([documentType, series, warehouseId])
+  @@index([warehouseId], map: "document_series_warehouseId_fkey")
   @@map("document_series")
+}
+
+model Purchase {
+  id           Int            @id @default(autoincrement())
+  supplierId   Int
+  supplierName String
+  docType      String         @default("FACTURA")
+  docSeries    String?
+  docNumber    String?
+  date         DateTime       @default(now())
+  currency     String         @default("PEN")
+  exchangeRate Decimal        @default(1.000) @db.Decimal(10, 3)
+  totalAmount  Decimal        @default(0.00) @db.Decimal(10, 2)
+  status       String         @default("COMPLETED")
+  warehouseId  Int?
+  observation  String?        @db.Text
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime        @updatedAt
+  supplier     Supplier        @relation(fields: [supplierId], references: [id])
+  items        PurchaseItem[]
+  movements    StockMovement[]
+
+  @@index([supplierId], map: "purchase_supplierId_fkey")
+  @@map("purchase")
+}
+
+model PurchaseItem {
+  id         Int       @id @default(autoincrement())
+  purchaseId Int
+  productId  Int
+  quantity   Int
+  price      Decimal   @db.Decimal(10, 2)
+  expiryDate DateTime?
+  lotNumber  String?
+  unitSymbol String?   @db.VarChar(20)
+  product    Product   @relation(fields: [productId], references: [id])
+  purchase   Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@index([productId], map: "purchase_item_productId_fkey")
+  @@index([purchaseId], map: "purchase_item_purchaseId_fkey")
+  @@map("purchase_item")
+}
+
+model Transfer {
+  id              Int            @id @default(autoincrement())
+  fromWarehouseId Int
+  toWarehouseId   Int
+  docNumber       String?
+  date            DateTime       @default(now())
+  observation     String?        @db.Text
+  status          String         @default("COMPLETED")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  fromWarehouse   Warehouse      @relation("FromTransfer", fields: [fromWarehouseId], references: [id])
+  toWarehouse     Warehouse      @relation("ToTransfer", fields: [toWarehouseId], references: [id])
+  items           TransferItem[]
+  movements       StockMovement[]
+
+  @@index([fromWarehouseId], map: "transfer_fromWarehouseId_fkey")
+  @@index([toWarehouseId], map: "transfer_toWarehouseId_fkey")
+  @@map("transfer")
+}
+
+model TransferItem {
+  id         Int      @id @default(autoincrement())
+  transferId Int
+  productId  Int
+  quantity   Int
+  transfer   Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  @@index([transferId], map: "transfer_item_transferId_fkey")
+  @@map("transfer_item")
 }

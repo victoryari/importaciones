@@ -3,8 +3,9 @@ import { motion } from 'motion/react';
 import { 
   ShoppingCart, Search, Filter, Edit2, Trash2, Phone, 
   MessageCircle, Truck, CreditCard, Clock, CheckCircle, 
-  XCircle, FileText, MoreVertical, Eye
+  XCircle, FileText, MoreVertical, Eye, DollarSign
 } from 'lucide-react';
+import { formatNumber, formatCurrency } from '../../lib/utils';
 
 interface OrderItem {
   id: number;
@@ -37,6 +38,7 @@ interface OrderModuleProps {
   onDelete: (id: number) => void;
   onViewGuide: (order: Order) => void;
   onEdit: (order: Order) => void;
+  onOpenPayment: (order: Order) => void;
 }
 
 export const OrderModule: React.FC<OrderModuleProps> = ({
@@ -44,7 +46,8 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
   onUpdateStatus,
   onDelete,
   onViewGuide,
-  onEdit
+  onEdit,
+  onOpenPayment
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -96,7 +99,16 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
                       <span className="font-black text-slate-900">#PED-{order.id}</span>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase">{new Date(order.createdAt).toLocaleDateString()}</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">{new Date(order.createdAt).toLocaleDateString()}</span>
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter ${
+                          (order as any).origin === 'WEB' 
+                            ? 'bg-blue-100 text-blue-700 border border-blue-200' 
+                            : 'bg-slate-100 text-slate-600 border border-slate-200'
+                        }`}>
+                          {(order as any).origin || 'ADMIN'}
+                        </span>
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -125,7 +137,7 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <span className="font-black text-slate-900">S/ {Number(order.totalAmount).toFixed(2)}</span>
+                    <span className="font-black text-slate-900">{formatCurrency(order.totalAmount)}</span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -135,6 +147,13 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
                         title="Contactar WhatsApp"
                       >
                         <MessageCircle className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => onOpenPayment(order)}
+                        className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-600 hover:text-white transition-all shadow-sm"
+                        title="Registrar Cobro"
+                      >
+                        <DollarSign className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => onViewGuide(order)}

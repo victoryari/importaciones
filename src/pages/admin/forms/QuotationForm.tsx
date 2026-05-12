@@ -9,6 +9,7 @@ import {
 import { ProductSearchModal } from './ProductSearchModal';
 import axios from 'axios';
 import { generateQuotationPDF } from '../../../lib/pdfGenerator';
+import { formatNumber } from '../../../lib/utils';
 
 interface QuotationFormProps {
   isOpen: boolean;
@@ -54,6 +55,27 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
   const [customerSearchResults, setCustomerSearchResults] = useState<any[]>([]);
   const [rucSearchResults, setRucSearchResults] = useState<any[]>([]);
   const [isProductSearchModalOpen, setIsProductSearchModalOpen] = useState(false);
+
+  const handleRefreshTC = async () => {
+    if (!formData.date) return;
+    try {
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      const res = await axios.get(`/api/exchange-rates/fetch-by-date/${formData.date}`, config);
+      if (res.data) {
+        const isSoles = formData.currency === '1' || formData.currency === 'PEN';
+        const rate = isSoles ? res.data.buy_rate : res.data.sell_rate;
+        setFormData((prev: any) => ({ ...prev, exchangeRate: rate }));
+      }
+    } catch (err) {
+      console.error('Error refreshing TC:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && formData.date) {
+      handleRefreshTC();
+    }
+  }, [isOpen, formData.date, formData.currency]);
 
   // Auto-correlativo
   useEffect(() => {
@@ -240,7 +262,17 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
 
                   <div className="md:col-span-3 flex items-center gap-2">
                     <span className="text-[11px] font-bold text-slate-600 whitespace-nowrap">Tipo Cambio</span>
-                    <input type="number" step="0.001" value={formData.exchangeRate} onChange={e => setFormData({...formData, exchangeRate: e.target.value})} className="h-8 border border-slate-300 rounded px-2 text-xs font-bold w-24 text-right bg-yellow-50" />
+                    <div className="flex items-center gap-1">
+                      <input type="number" step="0.001" value={formData.exchangeRate} onChange={e => setFormData({...formData, exchangeRate: e.target.value})} className="h-8 border border-slate-300 rounded px-2 text-xs font-bold w-24 text-right bg-yellow-50" />
+                      <button 
+                        type="button" 
+                        onClick={handleRefreshTC}
+                        className="p-1.5 bg-slate-100 hover:bg-blue-100 text-slate-400 hover:text-blue-600 rounded transition-colors"
+                        title="Refrescar TC"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -476,9 +508,10 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-24">Precio Venta</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-24">Valor Venta</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-20">Igv</th>
-                          <th className="px-2 py-1 font-bold w-20 text-center">Nro. Lote</th>
+                          <th className="px-2 py-1 font-bold border-r border-slate-300 w-20 text-center">Nro. Lote</th>
+                          <th className="px-2 py-1 font-bold w-10 text-center">Acción</th>
                         </tr>
-                      </thead>
+</thead>
                       <tbody>
                         {quotationItems.map((item, index) => {
                           const subtotal = item.price * item.quantity;
@@ -497,16 +530,21 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                               <td className="px-2 py-1 border-r border-slate-200 text-center text-slate-400">--Seleccionar--</td>
                               <td className="px-2 py-1 border-r border-slate-200"><input type="number" step="0.000001" value={item.price} onChange={e => updateQuotationItem(item.productId, 'price', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white font-bold" /></td>
                               <td className="px-2 py-1 border-r border-slate-200"><input type="number" value={item.discount} onChange={e => updateQuotationItem(item.productId, 'discount', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white" /></td>
-                              <td className="px-2 py-1 border-r border-slate-200 text-right">{dsctoLine.toFixed(2)}</td>
-                              <td className="px-2 py-1 border-r border-slate-200 text-right font-bold">{totalLine.toFixed(2)}</td>
-                              <td className="px-2 py-1 border-r border-slate-200 text-right">{valorLine.toFixed(2)}</td>
-                              <td className="px-2 py-1 border-r border-slate-200 text-right">{igvLine.toFixed(2)}</td>
-                              <td className="px-2 py-1 text-center text-slate-300">---</td>
+                              <td className="px-2 py-1 border-r border-slate-200 text-right">{formatNumber(dsctoLine)}</td>
+                              <td className="px-2 py-1 border-r border-slate-200 text-right font-bold">{formatNumber(totalLine)}</td>
+                              <td className="px-2 py-1 border-r border-slate-200 text-right">{formatNumber(valorLine)}</td>
+                              <td className="px-2 py-1 border-r border-slate-200 text-right">{formatNumber(igvLine)}</td>
+                              <td className="px-2 py-1 border-r border-slate-200 text-center text-slate-300">---</td>
+                              <td className="px-2 py-1 text-center">
+                                <button type="button" onClick={() => removeQuotationItem(item.productId)} className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
                             </tr>
                           );
                         })}
                         {quotationItems.length === 0 && (
-                          <tr><td colSpan={14} className="h-64 text-center text-slate-300 italic">No hay productos en el detalle</td></tr>
+                          <tr><td colSpan={15} className="h-64 text-center text-slate-300 italic">No hay productos en el detalle</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -549,11 +587,11 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
 
                   <div className="grid grid-cols-6 gap-x-2 gap-y-1">
                     <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">Flete:</p><input type="number" value={formData.flete} onChange={e => setFormData({...formData, flete: e.target.value})} className="w-20 h-8 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
-                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">Dscto. :</p><input type="text" readOnly value={dsctoTotal.toFixed(2)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
-                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">Valor:</p><input type="text" readOnly value={valorVenta.toFixed(2)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
-                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">Valor Venta:</p><input type="text" readOnly value={valorVenta.toFixed(2)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
-                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">I.G.V. :</p><input type="text" readOnly value={igvTotal.toFixed(2)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
-                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">P. Venta:</p><input type="text" readOnly value={quotationTotal.toFixed(2)} className="w-24 h-8 bg-[#D9E9FF] border border-[#004A99] text-right px-2 text-sm font-black text-[#004A99] rounded" /></div>
+                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">Dscto. :</p><input type="text" readOnly value={formatNumber(dsctoTotal)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
+                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">Valor:</p><input type="text" readOnly value={formatNumber(valorVenta)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
+                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">Valor Venta:</p><input type="text" readOnly value={formatNumber(valorVenta)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
+                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">I.G.V. :</p><input type="text" readOnly value={formatNumber(igvTotal)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
+                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">P. Venta:</p><input type="text" readOnly value={formatNumber(quotationTotal)} className="w-24 h-8 bg-[#D9E9FF] border border-[#004A99] text-right px-2 text-sm font-black text-[#004A99] rounded" /></div>
                   </div>
                 </div>
               </div>

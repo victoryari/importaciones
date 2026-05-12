@@ -3,9 +3,10 @@ import { motion } from 'motion/react';
 import { 
   FileText, PlusCircle, Search, Edit2, Trash2, Phone, 
   ShoppingCart, Filter, Eye, Download, MessageCircle,
-  Calendar, User, CreditCard, DollarSign
+  Calendar, User, CreditCard, DollarSign, RefreshCcw
 } from 'lucide-react';
 import { generateQuotationPDF } from '../../lib/pdfGenerator';
+import { formatNumber } from '../../lib/utils';
 
 interface Customer {
   id: number;
@@ -52,6 +53,7 @@ interface QuotationModuleProps {
   onEdit: (quot: Quotation) => void;
   onConvertToOrder: (quot: Quotation) => void;
   onNew: () => void;
+  onReset: (id: number) => void;
 }
 
 export const QuotationModule: React.FC<QuotationModuleProps> = ({
@@ -59,7 +61,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   onDelete,
   onEdit,
   onConvertToOrder,
-  onNew
+  onNew,
+  onReset
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -142,7 +145,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     <td className="px-6 py-4 text-right">
                       <div className="flex flex-col items-end">
                         <span className="font-black text-slate-900">
-                          {quot.currency === 'PEN' ? 'S/' : '$'} {Number(quot.totalAmount).toFixed(2)}
+                          {quot.currency === 'PEN' ? 'S/' : '$'} {formatNumber(quot.totalAmount)}
                         </span>
                         {quot.currency === 'USD' && (
                           <span className="text-[10px] text-slate-400 font-bold italic">TC: {quot.exchangeRate}</span>
@@ -174,20 +177,33 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                         >
                           <MessageCircle className="w-4 h-4" />
                         </button>
-                        <button 
-                          onClick={() => onEdit(quot)}
-                          className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                          title="Editar"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => onDelete(quot.id)}
-                          className="p-2.5 text-slate-300 hover:text-red-500 transition-colors"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {quot.status === 'ACCEPTED' && (
+                          <button 
+                            onClick={() => onReset && onReset(quot.id)}
+                            className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-600 hover:text-white transition-all shadow-sm"
+                            title="Desbloquear / Volver a Pendiente"
+                          >
+                            <RefreshCcw className="w-4 h-4" />
+                          </button>
+                        )}
+                        {quot.status === 'PENDING' && (
+                          <>
+                            <button 
+                              onClick={() => onEdit(quot)}
+                              className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                              title="Editar"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              onClick={() => onDelete(quot.id)}
+                              className="p-2.5 text-slate-300 hover:text-red-500 transition-colors"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
