@@ -274,7 +274,15 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({ isOpen, onClose
             <button onClick={onClose} className="text-white hover:text-red-200 transition-colors"><X className="w-4 h-4" /></button>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col p-3 gap-3">
+          <form 
+            onSubmit={handleSubmit} 
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+                e.preventDefault();
+              }
+            }}
+            className="flex-1 overflow-hidden flex flex-col p-3 gap-3"
+          >
             
             <div className="bg-white p-4 border border-[#B0BCCB] rounded shadow-sm flex flex-col gap-4 text-[11px]">
               

@@ -39,6 +39,7 @@ interface OrderModuleProps {
   onViewGuide: (order: Order) => void;
   onEdit: (order: Order) => void;
   onOpenPayment: (order: Order) => void;
+  onNewDirectOrder: () => void;
 }
 
 export const OrderModule: React.FC<OrderModuleProps> = ({
@@ -47,7 +48,8 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
   onDelete,
   onViewGuide,
   onEdit,
-  onOpenPayment
+  onOpenPayment,
+  onNewDirectOrder
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -74,9 +76,18 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
             className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all outline-none"
           />
         </div>
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
-          <Clock className="w-4 h-4" />
-          Últimos 30 días
+        <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
+            <Clock className="w-4 h-4" />
+            Últimos 30 días
+          </div>
+          <button 
+            onClick={onNewDirectOrder}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-blue-100 active:scale-95 whitespace-nowrap"
+          >
+            <ShoppingCart className="w-5 h-5" />
+            Nuevo Pedido Directo
+          </button>
         </div>
       </div>
 

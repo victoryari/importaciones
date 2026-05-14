@@ -10,7 +10,7 @@ import { DEPARTMENTS, PROVINCES, DISTRICTS } from '../../../lib/ubigeoData';
 interface SupplierFormProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (formData: any) => Promise<void>;
+  onSubmit: (e: React.FormEvent) => void;
   formData: any;
   setFormData: (data: any) => void;
   editingItem: any;
@@ -68,10 +68,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({
     } finally { setConsultLoading(false); }
   };
 
-  const internalSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await onSubmit(formData);
-  };
+
 
   if (!isOpen) return null;
 
@@ -110,7 +107,15 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({
             </button>
           </div>
 
-          <form onSubmit={internalSubmit} className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50">
+          <form 
+            onSubmit={onSubmit} 
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+                e.preventDefault();
+              }
+            }}
+            className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50"
+          >
             
             {/* Section 1: Identidad */}
             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
@@ -320,8 +325,8 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({
               Cancelar
             </button>
             <button 
-              type="submit" 
-              onClick={internalSubmit}
+              type="button" 
+              onClick={onSubmit}
               disabled={loading}
               className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 flex items-center gap-2 transition-all disabled:opacity-50"
             >

@@ -5,6 +5,8 @@ interface User {
   email: string;
   name: string;
   series?: string;
+  role?: string;
+  permissions?: string[];
 }
 
 interface AuthContextType {
@@ -13,6 +15,7 @@ interface AuthContextType {
   login: (token: string, user: User) => void;
   logout: () => void;
   isLoading: boolean;
+  hasPermission: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,8 +63,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  const hasPermission = (permission: string) => {
+    if (!user || !user.permissions) return false;
+    if (user.permissions.includes('ALL')) return true;
+    return user.permissions.includes(permission);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, isLoading, hasPermission }}>
       {children}
     </AuthContext.Provider>
   );

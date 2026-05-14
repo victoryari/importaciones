@@ -148,9 +148,16 @@ export const PurchaseModule: React.FC<PurchaseModuleProps> = ({ token, onNew, on
                   </td>
                 )}
                 <td className="px-6 py-4">
-                  <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${p.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-                    {p.status}
-                  </span>
+                  {(() => {
+                    const statusToShow = (p as any).computedStatus || p.status;
+                    const isPending = statusToShow === 'EN TRÁNSITO' || statusToShow === 'PENDING';
+                    const bgColor = isPending ? 'bg-amber-50 text-amber-600 border border-amber-200/50' : 'bg-emerald-50 text-emerald-600 border border-emerald-200/50';
+                    return (
+                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${bgColor}`}>
+                        {statusToShow}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td className="px-6 py-4 text-center">
                   <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

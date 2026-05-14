@@ -135,41 +135,57 @@ export const ExtractionModal: React.FC<ExtractionModalProps> = ({ isOpen, onClos
                       <tr className="bg-slate-100 border-b-2 border-slate-200">
                         <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Tipo Doc</th>
                         <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Nro. Documento</th>
-                        <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Fecha</th>
+                        <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Fecha</th>
                         <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Proveedor / Cliente</th>
-                        <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">Total</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                          {sourceType === 'COMPRA' ? 'Total' : 'Cant. Total'}
+                        </th>
                         <th className="px-4 py-3 text-center text-[10px] font-black text-slate-500 uppercase tracking-widest w-40">Acción</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {results.map((item) => (
-                        <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
-                          <td className="px-4 py-4">
-                            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-[10px] font-black uppercase">
-                              {item.docType}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 font-bold text-slate-700">{item.docSeries}-{item.docNumber}</td>
-                          <td className="px-4 py-4 text-xs font-medium text-slate-500">
-                            {new Date(item.date).toLocaleDateString()}
-                          </td>
-                          <td className="px-4 py-4">
-                            <div className="text-xs font-bold text-slate-700 uppercase">{item.supplierName || item.customerName}</div>
-                            <div className="text-[10px] text-slate-400 font-medium">RUC: {item.supplier?.docNumber || item.customer?.docNumber}</div>
-                          </td>
-                          <td className="px-4 py-4 text-right font-black text-slate-900">
-                            {item.currency === 'USD' ? '$' : 'S/'} {formatNumber(item.totalAmount)}
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            <button 
-                              onClick={() => handleSelect(item)}
-                              className="bg-white border-2 border-emerald-500 text-emerald-600 hover:bg-emerald-500 hover:text-white px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 w-full shadow-sm"
-                            >
-                              <CheckCircle2 className="w-4 h-4" /> EXTRAER
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {results.map((item) => {
+                        const totalQty = item.items?.reduce((acc: number, it: any) => acc + (it.quantity || 0), 0);
+                        const uniqueUnits = [...new Set(item.items?.map((it: any) => it.product?.unit?.symbol || 'UND'))];
+                        const displayUnit = (uniqueUnits.length === 1 ? uniqueUnits[0] : 'ÍTEMS') as string;
+                        
+                        return (
+                          <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
+                            <td className="px-4 py-4">
+                              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-[10px] font-black uppercase">
+                                {item.docType}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 font-bold text-slate-700">{item.docSeries}-{item.docNumber}</td>
+                            <td className="px-4 py-4 text-xs font-medium text-slate-500 text-center">
+                              {new Date(item.date).toLocaleDateString()}
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="text-xs font-bold text-slate-700 uppercase">{item.supplierName || item.customerName}</div>
+                              <div className="text-[10px] text-slate-400 font-medium">RUC: {item.supplier?.docNumber || item.customer?.docNumber}</div>
+                            </td>
+                            <td className="px-4 py-4 text-right font-black text-slate-900">
+                              {sourceType === 'COMPRA' ? (
+                                <>
+                                  {item.currency === 'USD' ? '$' : 'S/'} {formatNumber(item.totalAmount)}
+                                </>
+                              ) : (
+                                <span className="text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
+                                  {formatNumber(totalQty, 0)} <span className="text-[9px] text-blue-400 uppercase">{displayUnit}</span>
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <button 
+                                onClick={() => handleSelect(item)}
+                                className="bg-white border-2 border-emerald-500 text-emerald-600 hover:bg-emerald-500 hover:text-white px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 w-full shadow-sm"
+                              >
+                                <CheckCircle2 className="w-4 h-4" /> EXTRAER
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

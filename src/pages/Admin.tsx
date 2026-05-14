@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, Package, Save, Image as ImageIcon, Settings as SettingsIcon, LogOut, Trash2, X, CheckCircle, FileText, BarChart3, Star, ShoppingCart, Truck, DollarSign, User, MapPin, Hash, ArrowRightLeft, Building2 } from 'lucide-react';
+import { LayoutDashboard, Package, Save, Image as ImageIcon, Settings as SettingsIcon, LogOut, Trash2, X, CheckCircle, FileText, BarChart3, Star, ShoppingCart, Truck, DollarSign, User, MapPin, Hash, ArrowRightLeft, Building2, Users, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { SettingsModule } from './admin/SettingsModule';
 import { ExchangeRateModule } from './admin/ExchangeRateModule';
@@ -17,9 +17,12 @@ import { SeriesModule } from './admin/SeriesModule';
 import { PurchaseModule } from './admin/PurchaseModule';
 import { TransferModule } from './admin/TransferModule';
 import { SupplierModule } from './admin/SupplierModule';
+import { RoleModule } from './admin/RoleModule';
+import { UserModule } from './admin/UserModule';
 
 // Formularios
 import { QuotationForm } from './admin/forms/QuotationForm';
+import { OrderForm } from './admin/forms/OrderForm';
 import { ProductForm } from './admin/forms/ProductForm';
 import { SimpleForm } from './admin/forms/SimpleForm';
 import { WarehouseForm } from './admin/forms/WarehouseForm';
@@ -47,7 +50,7 @@ interface Customer { id: number; code?: string; name: string; personType: string
 interface Quotation { id: number; customerName: string; totalAmount: number; status: string; createdAt: string; items: any[]; exchangeRate: number; docSeries?: string; docNumber?: string; customerDocNumber?: string; customerPhone?: string; customerAddress?: string; currency?: string; pickupPlace?: string; sellerId?: number; customerId?: number; }
 
 export default function Admin() {
-  const { token, logout, user } = useAuth();
+  const { token, logout, user, hasPermission } = useAuth();
   
   // Estados de Datos
   const [categories, setCategories] = useState<Category[]>([]);
@@ -103,6 +106,7 @@ export default function Admin() {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [isSellerModalOpen, setIsSellerModalOpen] = useState(false);
   const [isSimpleModalOpen, setIsSimpleModalOpen] = useState(false);
   const [isAgencyModalOpen, setIsAgencyModalOpen] = useState(false);
@@ -199,6 +203,55 @@ export default function Admin() {
     }
   }, [quotationFormData.date, isQuotationModalOpen, view, quotationFormData.currency]);
 
+  const showSuccess = (msg: string) => { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(''), 3000); };
+
+  const handleResetQuotationForm = () => {
+    setQuotationFormData(initialQuotationData);
+    setQuotationItems([]);
+    setSearchResults([]);
+    setEditingItem(null);
+  };
+
+  const handleSearchProduct = (q: string) => {
+    if (q.length > 1) {
+      axios.get(`/api/products/search?q=${q}`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => setSearchResults(r.data));
+    }
+  };
+
+  const addQuotationItem = (p: any) => {
+    if (!quotationItems.find(i => i.productId === p.id)) {
+      const warehouseId = parseInt(quotationFormData.pickupPlace);
+      const validRecords = (p.stockRecords || []).filter((sr: any) => sr.warehouseId === warehouseId && sr.quantity > 0);
+      const oldestLot = validRecords.sort((a: any, b: any) => a.id - b.id)[0];
+
+      setQuotationItems([...quotationItems, {
+        productId: p.id,
+        name: p.name,
+        code: p.code,
+        price: p.salePrice,
+        quantity: 1,
+        discount: 0,
+        unit: p.unit,
+        lot: oldestLot?.lot || null,
+        stockRecords: p.stockRecords || []
+      }]);
+    }
+    setSearchResults([]);
+  };
+
+  const updateQuotationItem = (id: number, f: string, v: any) => {
+    setQuotationItems(quotationItems.map(i => i.productId === id ? { ...i, [f]: v } : i));
+  };
+
+  const removeQuotationItem = (id: number) => {
+    if (id === -1) {
+      setQuotationItems(prev => prev.slice(0, -1));
+    } else {
+      setQuotationItems(prev => prev.filter(i => i.productId !== id));
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -248,15 +301,18 @@ export default function Admin() {
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    window.addEventListener('refreshData', fetchData);
-    return () => window.removeEventListener('refreshData', fetchData);
-  }, []);
+  const getMediaUrl = (path: string) => {
+    if (!path) return '';
+    if (path.startsWith('http')) return path;
+    return `${axios.defaults.baseURL || ''}${path}`;
+  };
 
-  const showSuccess = (msg: string) => { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(''), 3000); };
   const handleFileUpload = async (file: File) => {
-    const fd = new FormData(); fd.append('image', file);
-    const res = await axios.post('/api/upload', fd, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' } });
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await axios.post('/api/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${token}` }
+    });
     return res.data.url;
   };
 
@@ -522,22 +578,24 @@ export default function Admin() {
     } finally { setLoading(false); }
   };
 
-  const handleSubmitSeries = async (data: any) => {
+  const handleSubmitSeries = async (e: any) => {
+    e.preventDefault();
     setLoading(true);
     try {
-      if (editingItem) await axios.put(`/api/series/${editingItem.id}`, data, { headers: { Authorization: `Bearer ${token}` } });
-      else await axios.post('/api/series', data, { headers: { Authorization: `Bearer ${token}` } });
+      if (editingItem) await axios.put(`/api/series/${editingItem.id}`, seriesFormData, { headers: { Authorization: `Bearer ${token}` } });
+      else await axios.post('/api/series', seriesFormData, { headers: { Authorization: `Bearer ${token}` } });
       setIsSeriesModalOpen(false);
       await fetchData();
       showSuccess('Serie guardada');
     } catch (err) { alert('Error al guardar'); } finally { setLoading(false); }
   };
 
-  const handleSubmitSupplier = async (data: any) => {
+  const handleSubmitSupplier = async (e: any) => {
+    e.preventDefault();
     setLoading(true);
     try {
       // Sincronizar el código con el número de documento
-      const payload = { ...data, code: data.docNumber };
+      const payload = { ...supplierFormData, code: supplierFormData.docNumber };
       
       if (editingItem) await axios.put(`/api/suppliers/${editingItem.id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
       else await axios.post('/api/suppliers', payload, { headers: { Authorization: `Bearer ${token}` } });
@@ -753,23 +811,29 @@ export default function Admin() {
         <aside className="w-full lg:w-64 shrink-0 space-y-2 h-full overflow-y-auto custom-scrollbar pr-2">
           <div className="px-4 py-4 mb-4 bg-blue-900 text-white rounded-3xl shadow-lg shadow-blue-100"><div className="flex items-center gap-3 mb-1"><div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold">C</div><span className="font-bold text-lg">Panel Admin</span></div><p className="text-[10px] text-blue-300 font-bold uppercase tracking-widest pl-11">{user?.name || 'Administrador'}</p></div>
           {[
-            { id: 'dashboard', icon: LayoutDashboard, label: 'Resumen' }, 
-            { id: 'products', icon: Package, label: 'Productos' }, 
-            { id: 'quotations', icon: FileText, label: 'Cotizaciones' }, 
-            { id: 'orders', icon: ShoppingCart, label: 'Pedidos' }, 
-            { id: 'inventory', icon: BarChart3, label: 'Inventario / Stock' }, 
-            { id: 'purchases', icon: ShoppingCart, label: 'Compras' },
-            { id: 'logistics', icon: Truck, label: 'Logística' },
-            { id: 'warehouses', icon: MapPin, label: 'Almacenes / Sedes' },
-            { id: 'customers', icon: Star, label: 'Clientes' }, 
-            { id: 'suppliers', icon: Building2, label: 'Proveedores' },
-            { id: 'sellers', icon: User, label: 'Vendedores' },
-            { id: 'exchange-rates', icon: DollarSign, label: 'T. Cambio' }, 
-            { id: 'series', icon: Hash, label: 'Series' }, 
-            { id: 'settings', icon: SettingsIcon, label: 'Ajustes' },
-          ].map(item => (
-            <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl transition-all ${activeTabId === item.id || (item.id === 'products' && ['categories', 'brands', 'units'].includes(activeTabId)) ? 'bg-blue-100 text-blue-900 font-bold scale-105 shadow-sm' : 'hover:bg-slate-100'}`}><item.icon className="w-5 h-5" /> {item.label}</button>
-          ))}
+            { id: 'dashboard', icon: LayoutDashboard, label: 'Resumen', permission: 'VIEW_DASHBOARD' }, 
+            { id: 'products', icon: Package, label: 'Productos', permission: 'VIEW_PRODUCTS' }, 
+            { id: 'quotations', icon: FileText, label: 'Cotizaciones', permission: 'VIEW_QUOTATIONS' }, 
+            { id: 'orders', icon: ShoppingCart, label: 'Pedidos', permission: 'VIEW_ORDERS' }, 
+            { id: 'inventory', icon: BarChart3, label: 'Inventario / Stock', permission: 'VIEW_INVENTORY' }, 
+            { id: 'purchases', icon: ShoppingCart, label: 'Compras', permission: 'VIEW_PURCHASES' },
+            { id: 'logistics', icon: Truck, label: 'Logística', permission: 'VIEW_LOGISTICS' },
+            { id: 'warehouses', icon: MapPin, label: 'Almacenes / Sedes', permission: 'VIEW_WAREHOUSES' },
+            { id: 'customers', icon: Star, label: 'Clientes', permission: 'VIEW_CUSTOMERS' }, 
+            { id: 'suppliers', icon: Building2, label: 'Proveedores', permission: 'VIEW_SUPPLIERS' },
+            { id: 'sellers', icon: User, label: 'Vendedores', permission: 'VIEW_SELLERS' },
+            { id: 'exchange-rates', icon: DollarSign, label: 'T. Cambio', permission: 'VIEW_EXCHANGE_RATES' }, 
+            { id: 'series', icon: Hash, label: 'Series', permission: 'VIEW_SERIES' }, 
+            { id: 'settings', icon: SettingsIcon, label: 'Ajustes', permission: 'VIEW_SETTINGS' },
+            { id: 'users', icon: Users, label: 'Usuarios', permission: 'ALL' },
+            { id: 'roles', icon: ShieldCheck, label: 'Roles', permission: 'ALL' },
+          ].map(item => {
+            const hasAccess = item.permission ? hasPermission?.(item.permission) : true;
+            if (!hasAccess) return null;
+            return (
+              <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl transition-all ${activeTabId === item.id || (item.id === 'products' && ['categories', 'brands', 'units'].includes(activeTabId)) ? 'bg-blue-100 text-blue-900 font-bold scale-105 shadow-sm' : 'hover:bg-slate-100'}`}><item.icon className="w-5 h-5" /> {item.label}</button>
+            );
+          })}
           <div className="pt-8 mt-8 border-t border-slate-100"><button onClick={logout} className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl text-red-600 hover:bg-red-50 transition-colors"><LogOut className="w-5 h-5" />Cerrar Sesión</button></div>
         </aside>
 
@@ -838,7 +902,7 @@ export default function Admin() {
                         onReset={handleResetQuotation}
                       />
                     )}
-                    {currentTab === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => {}} onEdit={(o) => openForm('orders', o)} onOpenPayment={handleOpenPayment} />}
+                    {currentTab === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => {}} onEdit={(o) => openForm('orders', o)} onOpenPayment={handleOpenPayment} onNewDirectOrder={() => { handleResetQuotationForm(); setQuotationFormData(prev => ({...prev, docType: 'PED'})); setIsOrderModalOpen(true); }} />}
                     {currentTab === 'inventory' && <InventoryModule products={products} stockDetails={stockDetails} movements={movements} onUpdateStock={(pid, s) => axios.put(`/api/products/${pid}/stock`, {stock:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onEdit={(p) => openForm('products', p)} onOpenAssistant={() => setIsMovementAssistantOpen(true)} token={token} onRefresh={fetchData} />}
                     {currentTab === 'customers' && <CustomerModule customers={customers} onEdit={(c) => openForm('customers', c)} onNew={() => openForm('customers')} onDelete={(id) => handleDelete('customers', id)} departments={[]} />}
                     {currentTab === 'exchange-rates' && <ExchangeRateModule token={token} exchangeRates={exchangeRates} onDelete={(id) => handleDelete('exchange-rates', id)} onSave={(d) => axios.post('/api/exchange-rates', d, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} loading={loading} />}
@@ -857,6 +921,8 @@ export default function Admin() {
                     )}
                     {currentTab === 'suppliers' && <SupplierModule token={token} onNew={() => openForm('suppliers')} onEdit={(s) => openForm('suppliers', s)} suppliers={suppliers} />}
                     {currentTab === 'settings' && <SettingsModule token={token} />}
+                    {currentTab === 'users' && <UserModule />}
+                    {currentTab === 'roles' && <RoleModule />}
                   </div>
                 </div>
               );
@@ -927,6 +993,7 @@ export default function Admin() {
               token={token}
               sunatIgvAffectations={sunatIgvAffectations}
               sunatDocTypes={sunatDocTypes}
+              series={series}
             />
           </div>
 
@@ -1029,6 +1096,37 @@ export default function Admin() {
           />
 
           </div> {/* Cierre del contenedor Content Area */}
+
+          <OrderForm 
+            isOpen={isOrderModalOpen}
+            onClose={() => setIsOrderModalOpen(false)}
+            onSubmit={handleSubmitQuotation}
+            formData={quotationFormData}
+            setFormData={setQuotationFormData}
+            editingItem={editingItem}
+            loading={loading}
+            customers={customers}
+            sellers={sellers}
+            warehouses={warehouses}
+            shippingAgencies={shippingAgencies}
+            sunatCurrencies={sunatCurrencies}
+            sunatPaymentConditions={sunatPaymentConditions}
+            sunatOperationTypes={sunatOperationTypes}
+            searchResults={searchResults}
+            handleSearchProduct={handleSearchProduct}
+            quotationItems={quotationItems}
+            addQuotationItem={addQuotationItem}
+            updateQuotationItem={updateQuotationItem}
+            removeQuotationItem={removeQuotationItem}
+            quotationTotal={quotationTotal}
+            handleConsultCustomer={handleConsultForQuotation}
+            handleQuickRegister={handleQuickRegisterCustomer}
+            onOpenCustomerForm={(doc) => { setCustomerFormData({ ...initialCustomerData, docNumber: doc }); setIsCustomerModalOpen(true); }}
+            token={token || ''}
+            sunatIgvAffectations={sunatIgvAffectations}
+            sunatDocTypes={sunatDocTypes}
+            series={series}
+          />
 
           <PaymentForm 
             isOpen={isPaymentModalOpen}

@@ -106,7 +106,15 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
             </button>
           </div>
 
-          <form onSubmit={onSubmit} className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50">
+          <form 
+            onSubmit={onSubmit} 
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+                e.preventDefault();
+              }
+            }}
+            className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50"
+          >
             
             {/* Section 1: Identidad */}
             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">

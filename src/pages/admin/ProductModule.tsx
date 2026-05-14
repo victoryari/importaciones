@@ -213,13 +213,21 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
                         </div>
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-black border ${
-                          item.stock <= 0 ? 'bg-red-50 text-red-600 border-red-100' :
-                          item.stock <= 10 ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                          'bg-emerald-50 text-emerald-600 border-emerald-100'
-                        }`}>
-                          {item.stock} {item.unit?.symbol || 'un.'}
-                        </span>
+                        {(() => {
+                          const totalStock = (item.stockRecords || []).reduce((acc: number, s: any) => {
+                            if (s.warehouseId === 6 || s.warehouse?.type?.toUpperCase() === 'TRANSITORIO') return acc;
+                            return acc + s.quantity;
+                          }, 0);
+                          return (
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black border ${
+                              totalStock <= 0 ? 'bg-red-50 text-red-600 border-red-100' :
+                              totalStock <= 10 ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                              'bg-emerald-50 text-emerald-600 border-emerald-100'
+                            }`}>
+                              {totalStock} {item.unit?.symbol || 'un.'}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex flex-col items-end">

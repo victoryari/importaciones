@@ -9,6 +9,8 @@ import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
 import axios from 'axios';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 const app = express();
 const port = 3001;
@@ -33,8 +35,19 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+app.use(helmet({ crossOriginResourcePolicy: false })); // Permite cargar imágenes desde /uploads
 app.use(cors());
 app.use(express.json());
+
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 1000, // Límite de 1000 peticiones por ventana por IP
+  message: { error: 'Demasiadas peticiones desde esta IP, por favor intenta más tarde.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', globalLimiter);
+
 app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
 
 // Middleware
@@ -270,7 +283,7 @@ app.get('/api/products', async (req, res) => {
 app.post('/api/products', authenticateToken, async (req, res) => {
   try {
     const { 
-      name, slug, stock, categoryId, images, code, weight, 
+      name, slug, categoryId, images, code, weight, 
       description, features, sanitaryRegister, certificate,
       igv, costPrice, salePrice, minSalePrice, maxSalePrice,
       brandId, unitId, isActive,
@@ -290,7 +303,7 @@ app.post('/api/products', authenticateToken, async (req, res) => {
     const product = await prisma.product.create({
       data: { 
         name, slug, 
-        stock: (stock && !isNaN(parseInt(stock))) ? parseInt(stock) : 0, 
+        stock: 0, 
         categoryId: parsedCategoryId, 
         images,
         code, 
@@ -327,7 +340,7 @@ app.put('/api/products/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { 
-      name, slug, stock, categoryId, images, code, weight, 
+      name, slug, categoryId, images, code, weight, 
       description, features, sanitaryRegister, certificate,
       igv, costPrice, salePrice, minSalePrice, maxSalePrice,
       brandId, unitId, isActive,
@@ -348,7 +361,7 @@ app.put('/api/products/:id', authenticateToken, async (req, res) => {
       where: { id: parseInt(id) },
       data: { 
         name, slug, 
-        stock: (stock && !isNaN(parseInt(stock))) ? parseInt(stock) : 0, 
+        // stock managed by movements
         categoryId: parsedCategoryId, 
         images,
         code, 
@@ -551,17 +564,46 @@ app.post('/api/settings', authenticateToken, async (req, res) => {
 });
 
 // --- API AUTH ---
-app.post('/api/auth/login', async (req, res) => {
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Demasiados intentos de inicio de sesión, por favor intenta más tarde.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({ 
+      where: { email },
+      include: { role: true }
+    });
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
+    if (!user.isActive) {
+      return res.status(401).json({ error: 'Cuenta inactiva. Contacte al administrador.' });
+    }
 
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '24h' });
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name, series: (user as any).series } });
+    let permissions = [];
+    if (user.role && user.role.permissions) {
+      try { permissions = JSON.parse(user.role.permissions); } catch (e) {}
+    }
+    
+    res.json({ 
+      token, 
+      user: { 
+        id: user.id, 
+        email: user.email, 
+        name: user.name, 
+        series: (user as any).series,
+        role: user.role?.name,
+        permissions
+      } 
+    });
   } catch (error) {
     res.status(500).json({ error: 'Error en el inicio de sesión' });
   }
@@ -571,9 +613,25 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ 
       where: { id: (req as any).user.userId },
-      select: { id: true, email: true, name: true, series: true }
+      select: { id: true, email: true, name: true, series: true, isActive: true, role: true }
     });
-    res.json(user);
+    
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (!user.isActive) return res.status(401).json({ error: 'Cuenta inactiva' });
+
+    let permissions = [];
+    if (user.role && user.role.permissions) {
+      try { permissions = JSON.parse(user.role.permissions); } catch (e) {}
+    }
+
+    res.json({ 
+      id: user.id, 
+      email: user.email, 
+      name: user.name, 
+      series: user.series,
+      role: user.role?.name,
+      permissions
+    });
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener usuario' });
   }
@@ -757,6 +815,20 @@ app.post('/api/customers', authenticateToken, async (req, res) => {
       country, department, province, district 
     } = req.body;
 
+    // --- VALIDACIONES DE INTEGRIDAD ---
+    if (!docNumber) {
+      return res.status(400).json({ error: 'El número de documento es obligatorio.' });
+    }
+    if (docNumber.length !== 8 && docNumber.length !== 11) {
+      return res.status(400).json({ error: 'El número de documento debe tener 8 dígitos (DNI) u 11 dígitos (RUC).' });
+    }
+    if (personType === 'NATURAL' && !firstName && !lastName && !name) {
+      return res.status(400).json({ error: 'Debe proporcionar al menos el nombre o apellidos del cliente.' });
+    }
+    if (personType === 'JURIDICA' && !name) {
+      return res.status(400).json({ error: 'La razón social es obligatoria para personas jurídicas.' });
+    }
+
     // Si es persona natural, construimos el nombre completo si no viene
     if (personType === 'NATURAL' && !name) {
       name = [firstName, secondName, lastName, surname].filter(Boolean).join(' ');
@@ -857,7 +929,9 @@ app.get('/api/products/search', authenticateToken, async (req, res) => {
         category: true,
         brand: true,
         unit: true,
-        stockRecords: true
+        stockRecords: {
+          include: { warehouse: true }
+        }
       },
       take: 20
     });
@@ -894,6 +968,22 @@ app.post('/api/quotations', authenticateToken, async (req, res) => {
       totalAmount, globalDiscount, flete, billingStatus, purchaseOrder, 
       requirementNumber, pickupPlace, observation, notes, agencyId 
     } = req.body;
+
+    // --- VALIDACIONES DE INTEGRIDAD ---
+    if (!customerName && !customerId) {
+      return res.status(400).json({ error: 'Debe proporcionar un nombre de cliente o ID de cliente.' });
+    }
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: 'La cotización debe tener al menos un producto.' });
+    }
+    if (parseFloat(totalAmount as any) <= 0) {
+      return res.status(400).json({ error: 'El monto total de la cotización debe ser mayor a cero.' });
+    }
+    // Validar formato básico de documento si viene
+    if (customerDocNumber && (customerDocNumber.length !== 8 && customerDocNumber.length !== 11)) {
+       // Omitimos bloqueo estricto si es un cliente antiguo o extranjero, pero advertimos en log
+       console.warn(`[VALIDATION] Document number ${customerDocNumber} has unusual length.`);
+    }
 
     let finalCustomerId = customerId ? parseInt(customerId) : null;
 
@@ -1215,6 +1305,19 @@ app.get('/api/suppliers', authenticateToken, async (req, res) => {
 
 app.post('/api/suppliers', authenticateToken, async (req, res) => {
   try {
+    const { name, docType, docNumber, address, phone, email, contact, department, province, district } = req.body;
+
+    // --- VALIDACIONES DE INTEGRIDAD ---
+    if (!docNumber) {
+      return res.status(400).json({ error: 'El número de documento es obligatorio.' });
+    }
+    if (docNumber.length !== 8 && docNumber.length !== 11) {
+      return res.status(400).json({ error: 'El número de documento debe tener 8 dígitos (DNI) u 11 dígitos (RUC).' });
+    }
+    if (!name) {
+      return res.status(400).json({ error: 'El nombre o razón social del proveedor es obligatorio.' });
+    }
+
     const supplier = await (prisma as any).supplier.create({ data: req.body });
     res.json(supplier);
   } catch (error: any) {
@@ -1260,7 +1363,38 @@ app.get('/api/purchases', authenticateToken, async (req, res) => {
       },
       orderBy: { date: 'desc' }
     });
-    res.json(purchases);
+
+    // --- CÁLCULO DE ESTADO DINÁMICO PARA GUÍAS ---
+    const finalPurchases = [];
+    for (const purchase of purchases) {
+      let computedStatus = purchase.status; // Default to DB status
+      
+      const isGuide = ['09', 'GRM', 'GUIA'].includes(purchase.docType);
+      if (isGuide) {
+        let hasStockInTransit = false;
+        for (const item of purchase.items) {
+          const stockRecord = await (prisma as any).stock.findFirst({
+            where: {
+              productId: item.productId,
+              warehouseId: 6, // Tránsito
+              lotNumber: item.lotNumber || null
+            }
+          });
+          if (stockRecord && stockRecord.quantity > 0) {
+            hasStockInTransit = true;
+            break;
+          }
+        }
+        computedStatus = hasStockInTransit ? 'EN TRÁNSITO' : 'TRANSFERIDO';
+      }
+      
+      finalPurchases.push({
+        ...purchase,
+        computedStatus
+      });
+    }
+
+    res.json(finalPurchases);
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener compras' });
   }
@@ -1306,6 +1440,24 @@ app.get('/api/purchases/search', authenticateToken, async (req, res) => {
 app.post('/api/purchases', authenticateToken, async (req, res) => {
   try {
     const { supplierId, supplierName, docType, docSeries, docNumber, date, currency, exchangeRate, warehouseId, items, observation, referenceId, purchaseType, totalAmount: bodyTotal } = req.body;
+
+    // --- VALIDACIONES DE INTEGRIDAD ---
+    if (!supplierId) {
+      return res.status(400).json({ error: 'Debe seleccionar un proveedor.' });
+    }
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: 'La compra debe tener al menos un producto.' });
+    }
+    
+    // Validar ítems
+    for (const item of items) {
+      if (parseInt(item.quantity) <= 0) {
+        return res.status(400).json({ error: `La cantidad para el producto ${item.productId} debe ser mayor a cero.` });
+      }
+      if (parseFloat(item.price) < 0) {
+        return res.status(400).json({ error: `El precio para el producto ${item.productId} no puede ser negativo.` });
+      }
+    }
     
     const purchase = await prisma.$transaction(async (tx) => {
       // 1. Create Purchase
@@ -1432,14 +1584,35 @@ app.put('/api/purchases/:id', authenticateToken, async (req, res) => {
       // 1. Get old purchase to reverse stock
       const oldPurchase = await (tx as any).purchase.findUnique({
         where: { id: purchaseId },
-        include: { items: true }
+        include: { items: { include: { product: true } } }
       });
 
       if (!oldPurchase) throw new Error('Compra no encontrada');
 
-      // 2. Reverse old stock
+      // --- VALIDACIÓN DE INTEGRIDAD: REFERENCIAS ---
+      const referenced = await (tx as any).purchase.findFirst({
+        where: { referenceId: purchaseId }
+      });
+      if (referenced) {
+        throw new Error(`Esta guía no puede ser modificada porque ya tiene una factura asociada (${referenced.docSeries}-${referenced.docNumber}).`);
+      }
+
+      // 2. Reverse old stock (Checking availability first to avoid negative stock)
       for (const oldItem of oldPurchase.items) {
         if (oldPurchase.warehouseId) {
+          const currentStock = await (tx as any).stock.findFirst({
+            where: { 
+              productId: oldItem.productId, 
+              warehouseId: oldPurchase.warehouseId,
+              lotNumber: oldItem.lotNumber || null 
+            }
+          });
+
+          const availableQty = currentStock ? currentStock.quantity : 0;
+          if (availableQty < oldItem.quantity) {
+            throw new Error(`No se puede modificar la guía: El stock del producto "${oldItem.product?.name}" (Lote: ${oldItem.lotNumber || 'SIN LOTE'}) ya fue movido o transferido del almacén de recepción.`);
+          }
+
           await (tx as any).stock.updateMany({
             where: { 
               productId: oldItem.productId, 
@@ -1560,14 +1733,35 @@ app.delete('/api/purchases/:id', authenticateToken, async (req, res) => {
     await prisma.$transaction(async (tx) => {
       const purchase = await (tx as any).purchase.findUnique({
         where: { id: purchaseId },
-        include: { items: true }
+        include: { items: { include: { product: true } } }
       });
 
       if (!purchase) throw new Error('Compra no encontrada');
 
-      // 1. Reverse stock
+      // --- VALIDACIÓN DE INTEGRIDAD: REFERENCIAS ---
+      const referenced = await (tx as any).purchase.findFirst({
+        where: { referenceId: purchaseId }
+      });
+      if (referenced) {
+        throw new Error(`Esta guía no puede ser eliminada porque ya tiene una factura asociada (${referenced.docSeries}-${referenced.docNumber}).`);
+      }
+
+      // 1. Reverse stock (Checking availability first)
       for (const item of purchase.items) {
         if (purchase.warehouseId) {
+          const currentStock = await (tx as any).stock.findFirst({
+            where: { 
+              productId: item.productId, 
+              warehouseId: purchase.warehouseId,
+              lotNumber: item.lotNumber || null 
+            }
+          });
+
+          const availableQty = currentStock ? currentStock.quantity : 0;
+          if (availableQty < item.quantity) {
+            throw new Error(`No se puede eliminar la guía: El stock del producto "${item.product?.name}" (Lote: ${item.lotNumber || 'SIN LOTE'}) ya fue movido o transferido del almacén de recepción.`);
+          }
+
           await (tx as any).stock.updateMany({
             where: { 
               productId: item.productId, 
@@ -1744,7 +1938,34 @@ app.get('/api/movements/sources', authenticateToken, async (req, res) => {
       },
       orderBy: { date: 'desc' }
     });
-    res.json(purchases);
+
+    // --- FILTRO INTELIGENTE DE GUÍAS EN TRÁNSITO ---
+    let finalPurchases = purchases;
+    if (type === 'GUIA') {
+      const validPurchases = [];
+      for (const purchase of purchases) {
+        let hasStockInTransit = false;
+        for (const item of purchase.items) {
+          const stockRecord = await (prisma as any).stock.findFirst({
+            where: {
+              productId: item.productId,
+              warehouseId: 6, // ID Fijo del Almacén de Tránsito
+              lotNumber: item.lotNumber || null
+            }
+          });
+          if (stockRecord && stockRecord.quantity > 0) {
+            hasStockInTransit = true;
+            break; // Con un solo ítem que tenga stock, la guía debe aparecer
+          }
+        }
+        if (hasStockInTransit) {
+          validPurchases.push(purchase);
+        }
+      }
+      finalPurchases = validPurchases;
+    }
+
+    res.json(finalPurchases);
   } catch (error) {
     res.status(500).json({ error: 'Error al buscar fuentes' });
   }
@@ -1753,6 +1974,21 @@ app.get('/api/movements/sources', authenticateToken, async (req, res) => {
 app.post('/api/movements', authenticateToken, async (req, res) => {
   try {
     const { type, reason, date, observation, items } = req.body;
+
+    // --- VALIDACIONES DE INTEGRIDAD ---
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: 'El movimiento debe tener al menos un producto.' });
+    }
+    
+    // Validar cantidades y transferencias circulares
+    for (const item of items) {
+      if (parseInt(item.quantity) <= 0) {
+        return res.status(400).json({ error: `La cantidad para el producto ${item.productId} debe ser mayor a cero.` });
+      }
+      if (type === 'TRANSFERENCIA' && item.fromWarehouseId === item.toWarehouseId) {
+        return res.status(400).json({ error: 'En una transferencia, el almacén de origen y destino deben ser diferentes.' });
+      }
+    }
     
     await prisma.$transaction(async (tx) => {
       for (const item of items) {
@@ -1776,23 +2012,27 @@ app.post('/api/movements', authenticateToken, async (req, res) => {
         const shouldDecrement = (type === 'SALIDA' || type === 'TRANSFERENCIA' || (type === 'INGRESO' && item.fromWarehouseId === 'TRANSIT'));
         
         if (shouldDecrement && finalFromWhId) {
-          await (tx as any).stock.updateMany({
+          // --- VALIDACIÓN ESTRICTA DE STOCK ---
+          const currentStock = await (tx as any).stock.findFirst({
             where: { 
               productId: pId, 
               warehouseId: finalFromWhId, 
               zoneId: fromZoneId || null,
               lotNumber: item.lotNumber || null 
-            },
+            }
+          });
+
+          if (!currentStock || currentStock.quantity < qty) {
+            throw new Error(`Stock insuficiente para el producto ID ${pId}${item.lotNumber ? ` (Lote: ${item.lotNumber})` : ''} en el almacén de origen.`);
+          }
+
+          await (tx as any).stock.update({
+            where: { id: currentStock.id },
             data: { quantity: { decrement: qty } }
           });
 
           // Only decrement global stock if it's a real exit, not a transfer/internal move
-          if (type === 'SALIDA') {
-            await tx.product.update({
-              where: { id: pId },
-              data: { stock: { decrement: qty } }
-            });
-          }
+          // (Product.stock field is deprecated, using Stock table aggregate)
         }
 
         // 2. Increment To (if Ingreso or Transferencia)
@@ -1809,7 +2049,10 @@ app.post('/api/movements', authenticateToken, async (req, res) => {
           if (stockRec) {
             await (tx as any).stock.update({
               where: { id: stockRec.id },
-              data: { quantity: { increment: qty } }
+              data: { 
+                quantity: { increment: qty },
+                ...(item.expiryDate ? { expiryDate: new Date(item.expiryDate) } : {})
+              }
             });
           } else {
             await (tx as any).stock.create({
@@ -1818,17 +2061,13 @@ app.post('/api/movements', authenticateToken, async (req, res) => {
                 warehouseId: toWhId,
                 zoneId: toZoneId || null,
                 quantity: qty,
-                lotNumber: item.lotNumber || null
+                lotNumber: item.lotNumber || null,
+                expiryDate: item.expiryDate ? new Date(item.expiryDate) : null
               }
             });
           }
 
-          if (type === 'INGRESO' && item.fromWarehouseId !== 'TRANSIT') {
-            await tx.product.update({
-              where: { id: pId },
-              data: { stock: { increment: qty } }
-            });
-          }
+          // (Product.stock field is deprecated, using Stock table aggregate)
         }
 
         // 3. Record Movement
@@ -1900,12 +2139,7 @@ app.post('/api/movements/:id/annul', authenticateToken, async (req, res) => {
           });
         }
 
-        if (movement.type === 'OUTPUT') {
-          await tx.product.update({
-            where: { id: pId },
-            data: { stock: { increment: qty } }
-          });
-        }
+        // (Product.stock field is deprecated, using Stock table aggregate)
       }
 
       // 2. Subtract from TO (if it was an input or transfer)
@@ -1920,12 +2154,7 @@ app.post('/api/movements/:id/annul', authenticateToken, async (req, res) => {
           data: { quantity: { decrement: qty } }
         });
 
-        if (movement.type === 'INPUT') {
-          await tx.product.update({
-            where: { id: pId },
-            data: { stock: { decrement: qty } }
-          });
-        }
+        // (Product.stock field is deprecated, using Stock table aggregate)
       }
 
       // 3. Mark as Annulled
@@ -1971,6 +2200,17 @@ app.post('/api/orders', async (req, res) => {
       notes, items, totalAmount, quotationId, paymentStatus, shippingCost, agencyId,
       currency, paymentCondition, pickupPlace, origin
     } = req.body;
+
+    // --- VALIDACIONES DE INTEGRIDAD ---
+    if (!customerName && !customerId) {
+      return res.status(400).json({ error: 'Debe proporcionar un nombre de cliente o ID de cliente.' });
+    }
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: 'El pedido debe tener al menos un producto.' });
+    }
+    if (parseFloat(totalAmount as any) <= 0) {
+      return res.status(400).json({ error: 'El monto total del pedido debe ser mayor a cero.' });
+    }
     
     // Validate stock for all items
     for (const item of items) {
@@ -2105,15 +2345,11 @@ async function moveStockToTemp(tx: any, orderId: number, items: any[]) {
         productId: item.productId, 
         quantity: { gte: item.quantity },
         warehouse: {
-          name: { 
-            notIn: [
-              'COMPRAS NAC./IMP.', 
-              'Existencias', 
-              'Comprobante', 
-              'Despacho',
-              DESPACHO_NAME,
-              COMPROBANTE_NAME
-            ] 
+          type: { 
+            notIn: ['TRANSITORIO', 'DESPACHO', 'COMPROBANTES', 'SISTEMA'] 
+          },
+          name: {
+            notIn: ['Existencias', 'Comprobante', 'Despacho']
           }
         }
       },
@@ -2420,7 +2656,28 @@ app.post('/api/payments', authenticateToken, async (req, res) => {
   try {
     const { orderId, amount, method, voucherNumber, date } = req.body;
     
+    // --- VALIDACIONES DE INTEGRIDAD ---
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: 'El monto del pago debe ser un número positivo.' });
+    }
+
     const payment = await prisma.$transaction(async (tx) => {
+      // Verificar si el pago excede el saldo
+      const order = await tx.order.findUnique({
+        where: { id: parseInt(orderId) },
+        include: { payments: true }
+      });
+      
+      if (!order) throw new Error('Pedido no encontrado');
+      
+      const totalPaid = order.payments.reduce((acc, p) => acc + Number(p.amount), 0);
+      const remaining = Number(order.totalAmount) - totalPaid;
+      
+      if (parsedAmount > remaining + 0.01) { // 0.01 tolerance for rounding
+        throw new Error(`El pago excede el saldo pendiente. Saldo actual: ${remaining.toFixed(2)}`);
+      }
+
       const newPayment = await tx.payment.create({
         data: {
           orderId: parseInt(orderId),
@@ -2431,23 +2688,23 @@ app.post('/api/payments', authenticateToken, async (req, res) => {
         }
       });
 
-      // Recalcular estado del pedido
-      const order = await tx.order.findUnique({
+      // Recalcular estado del pedido (obtener datos actualizados tras el pago)
+      const updatedOrder = await tx.order.findUnique({
         where: { id: parseInt(orderId) },
         include: { payments: true }
       });
 
-      if (order) {
-        const totalPaid = order.payments.reduce((acc, p) => acc + Number(p.amount), 0);
-        if (totalPaid >= Number(order.totalAmount)) {
+      if (updatedOrder) {
+        const totalPaidAfter = updatedOrder.payments.reduce((acc, p) => acc + Number(p.amount), 0);
+        if (totalPaidAfter >= Number(updatedOrder.totalAmount) - 0.01) {
           await tx.order.update({
-            where: { id: order.id },
+            where: { id: updatedOrder.id },
             data: { paymentStatus: 'PAID' }
           });
         } else {
           await tx.order.update({
-            where: { id: order.id },
-            data: { paymentStatus: 'PENDING' }
+            where: { id: updatedOrder.id },
+            data: { paymentStatus: 'PARTIAL' }
           });
         }
       }
@@ -2872,6 +3129,89 @@ app.get('/api/consult/:type/:number', authenticateToken, async (req, res) => {
   } catch (error: any) {
     console.error('APIPeru Error:', error.message);
     res.status(error.response?.status || 500).json({ error: 'Error en servicio de consulta' });
+  }
+});
+
+// --- API ROLES ---
+app.get('/api/roles', authenticateToken, async (req, res) => {
+  try {
+    const roles = await prisma.role.findMany({
+      include: { _count: { select: { users: true } } }
+    });
+    res.json(roles);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Error al obtener roles' });
+  }
+});
+
+app.post('/api/roles', authenticateToken, async (req, res) => {
+  try {
+    const { name, permissions, isActive } = req.body;
+    const role = await prisma.role.create({
+      data: { name, permissions, isActive }
+    });
+    res.json(role);
+  } catch (error: any) {
+    if (error.code === 'P2002') return res.status(400).json({ error: 'El nombre del rol ya existe' });
+    res.status(500).json({ error: 'Error al crear rol' });
+  }
+});
+
+app.put('/api/roles/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, permissions, isActive } = req.body;
+    const role = await prisma.role.update({
+      where: { id: parseInt(id) },
+      data: { name, permissions, isActive }
+    });
+    res.json(role);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Error al actualizar rol' });
+  }
+});
+
+// --- API USERS (ADMIN) ---
+app.get('/api/users', authenticateToken, async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: { id: true, email: true, name: true, isActive: true, roleId: true, role: { select: { name: true } }, createdAt: true }
+    });
+    res.json(users);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Error al obtener usuarios' });
+  }
+});
+
+app.post('/api/users', authenticateToken, async (req, res) => {
+  try {
+    const { email, password, name, roleId, isActive } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: { email, password: hashedPassword, name, roleId: roleId ? parseInt(roleId) : null, isActive }
+    });
+    res.json({ id: user.id, email: user.email, name: user.name });
+  } catch (error: any) {
+    if (error.code === 'P2002') return res.status(400).json({ error: 'El email ya está registrado' });
+    res.status(500).json({ error: 'Error al crear usuario' });
+  }
+});
+
+app.put('/api/users/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, password, name, roleId, isActive } = req.body;
+    const data: any = { email, name, roleId: roleId ? parseInt(roleId) : null, isActive };
+    if (password) {
+      data.password = await bcrypt.hash(password, 10);
+    }
+    const user = await prisma.user.update({
+      where: { id: parseInt(id) },
+      data
+    });
+    res.json({ id: user.id, email: user.email, name: user.name });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Error al actualizar usuario' });
   }
 });
 

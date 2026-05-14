@@ -58,9 +58,10 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
   );
 
   const filteredMovements = movements.filter(m => 
-    m.product?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (m.product?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     m.observation?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.lotNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+    m.lotNumber?.toLowerCase().includes(searchTerm.toLowerCase())) &&
+    m.status !== 'ANNULLED'
   );
 
   const handleAnnul = async (movementId: number) => {

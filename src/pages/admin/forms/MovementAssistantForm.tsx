@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Save, ArrowRightLeft, Plus, Trash2, Download, Package, Tag, FileText, User } from 'lucide-react';
 import axios from 'axios';
 import { ExtractionModal } from './ExtractionModal';
+import { ProductSearchModal } from './ProductSearchModal';
 
 interface MovementAssistantFormProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
   const [isExtractionModalOpen, setIsExtractionModalOpen] = useState(false);
   const [sunatOperations, setSunatOperations] = useState<any[]>([]);
   const [showCustomerResults, setShowCustomerResults] = useState(false);
+  const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
   
   // Reset form when opening/closing
   useEffect(() => {
@@ -54,22 +56,7 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
     }
   }, [date, isOpen, token]);
 
-  const handleAddRow = () => {
-    setItems([...items, { 
-      productId: '', 
-      productName: '', 
-      productCode: '',
-      fromWarehouseId: '', 
-      fromZoneId: '', 
-      toWarehouseId: '', 
-      toZoneId: '', 
-      quantity: 1, 
-      guideNumber: '',
-      docType: '50',
-      docNumber: '',
-      unit: 'UN.'
-    }]);
-  };
+  // Function removed as manual rows are now added via ProductSearchModal
 
   const handleRemoveRow = (index: number) => {
     setItems(items.filter((_, i) => i !== index));
@@ -123,11 +110,31 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
         toZoneId: '', 
         quantity: 1, 
         guideNumber: '',
-        docType: '50',
+        docType: '',
         docNumber: '' 
       }]);
       setQuickProductCode('');
     }
+  };
+
+  const handleProductSelect = (product: any) => {
+    setItems([...items, { 
+      productId: product.id, 
+      productName: product.name || 'Producto Sin Nombre', 
+      productCode: product.code || '',
+      fromWarehouseId: '', 
+      fromZoneId: '', 
+      toWarehouseId: '', 
+      toZoneId: '', 
+      quantity: 1, 
+      guideNumber: '',
+      docType: '',
+      docNumber: '',
+      unit: product.unit?.symbol || 'UN.',
+      lotNumber: '',
+      expiryDate: ''
+    }]);
+    setIsProductSearchOpen(false);
   };
 
   const handleExtract = (sourceItems: any[], sourceInfo: any) => {
@@ -148,7 +155,6 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
     }));
     setItems([...items, ...extractedItems]);
     setObservation(`Extracción de ${sourceInfo.docType} ${sourceInfo.docSeries}-${sourceInfo.docNumber}`);
-    setType('INGRESO');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -165,6 +171,14 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
 
     if (invalidItem) return alert('Por favor seleccione Almacén y Zona para todos los ítems');
 
+    const isManualEntryCheck = type === 'INGRESO' && (reason === 'SALDO INICIAL' || reason === 'AJUSTE POR DIFERENCIA DE INVENTARIO');
+    if (isManualEntryCheck) {
+      const missingStrictFields = items.find(item => !item.lotNumber || !item.expiryDate);
+      if (missingStrictFields) {
+        return alert('ERROR: Para Saldos Iniciales o Ajustes, es OBLIGATORIO ingresar el Lote y Fecha de Vencimiento en todos los productos.');
+      }
+    }
+
     onSubmit({ 
       type, 
       reason, 
@@ -176,6 +190,8 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
       items 
     });
   };
+
+  const isManualEntry = type === 'INGRESO' && (reason === 'SALDO INICIAL' || reason === 'AJUSTE POR DIFERENCIA DE INVENTARIO');
 
   return (
     <AnimatePresence>
@@ -362,11 +378,13 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
                     />
                   </div>
                   <div className="flex gap-2 ml-4">
-                    <button type="button" onClick={() => setIsExtractionModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-[10px] font-black hover:bg-emerald-500 transition-all active:scale-95 shadow-lg shadow-emerald-900/20">
-                      <Download className="w-4 h-4" /> EXTRAER DOCUMENTO
-                    </button>
-                    <button type="button" onClick={handleAddRow} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-[10px] font-black hover:bg-blue-500 transition-all active:scale-95 shadow-lg shadow-blue-900/20">
-                      <Plus className="w-4 h-4" /> AGREGAR MANUAL
+                    {!isManualEntry && (
+                      <button type="button" onClick={() => setIsExtractionModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-[10px] font-black hover:bg-emerald-500 transition-all active:scale-95 shadow-lg shadow-emerald-900/20">
+                        <Download className="w-4 h-4" /> EXTRAER DOCUMENTO
+                      </button>
+                    )}
+                    <button type="button" onClick={() => setIsProductSearchOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-[10px] font-black hover:bg-blue-500 transition-all active:scale-95 shadow-lg shadow-blue-900/20">
+                      <Plus className="w-4 h-4" /> BUSCAR PRODUCTO
                     </button>
                   </div>
                 </div>
@@ -386,6 +404,7 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
                           <th className="px-2 py-3 border-r border-slate-200 w-16 text-center">T.Doc</th>
                           <th className="px-2 py-3 border-r border-slate-200 w-32 text-center">Nro Doc</th>
                           <th className="px-2 py-3 border-r border-slate-200 w-32 text-center bg-blue-50/50 text-blue-700">Lote</th>
+                          <th className="px-2 py-3 border-r border-slate-200 w-28 text-center bg-blue-50/50 text-blue-700">Venc.</th>
                           <th className="px-2 py-3 border-r border-slate-200 w-24 text-center">Cantidad</th>
                           <th className="px-2 py-3 border-r border-slate-200 w-16 text-center">U.M.</th>
                           <th className="px-2 py-3 text-center w-12"></th>
@@ -462,13 +481,16 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
                               <input type="text" value={item.guideNumber || ''} onChange={(e) => handleItemChange(idx, 'guideNumber', e.target.value)} className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-bold text-center" />
                             </td>
                             <td className="px-2 py-2 border-r border-slate-50">
-                              <input type="text" value={item.docType || '50'} onChange={(e) => handleItemChange(idx, 'docType', e.target.value)} className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-black text-center text-slate-400" />
+                              <input type="text" value={item.docType || ''} onChange={(e) => handleItemChange(idx, 'docType', e.target.value)} className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-[10px] font-black text-center text-slate-400" />
                             </td>
                             <td className="px-2 py-2 border-r border-slate-50">
                               <input type="text" value={item.docNumber || ''} onChange={(e) => handleItemChange(idx, 'docNumber', e.target.value)} className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-[10px] font-black text-blue-800 text-center" />
                             </td>
                             <td className="px-2 py-2 border-r border-slate-50 bg-blue-50/20">
-                              <input type="text" value={item.lotNumber || ''} onChange={(e) => handleItemChange(idx, 'lotNumber', e.target.value.toUpperCase())} className="w-full bg-white border border-blue-200 rounded px-2 py-1 text-[10px] font-black text-center text-blue-600" placeholder="SIN LOTE" />
+                              <input type="text" value={item.lotNumber || ''} onChange={(e) => handleItemChange(idx, 'lotNumber', e.target.value.toUpperCase())} className="w-full bg-white border border-blue-200 rounded px-2 py-1 text-[10px] font-black text-center text-blue-600 outline-none focus:border-blue-500" placeholder="SIN LOTE" />
+                            </td>
+                            <td className="px-2 py-2 border-r border-slate-50 bg-blue-50/20">
+                              <input type="date" value={item.expiryDate || ''} onChange={(e) => handleItemChange(idx, 'expiryDate', e.target.value)} className="w-full bg-white border border-blue-200 rounded px-2 py-1 text-[10px] font-black text-center text-blue-600 outline-none focus:border-blue-500" />
                             </td>
                             <td className="px-2 py-2 border-r border-slate-50">
                               <input type="number" value={item.quantity} onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)} className="w-full bg-blue-50 border border-blue-200 rounded px-2 py-1 text-[11px] text-right font-black text-blue-700 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20" />
@@ -485,7 +507,7 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
                         ))}
                         {items.length === 0 && (
                           <tr>
-                            <td colSpan={11} className="py-32 text-center">
+                            <td colSpan={12} className="py-32 text-center">
                               <div className="flex flex-col items-center opacity-20 grayscale">
                                 <Package className="w-24 h-24 text-slate-400 mb-4 stroke-1" />
                                 <p className="text-slate-600 font-black uppercase tracking-[0.3em] text-sm">Sin Detalle de Movimiento</p>
@@ -552,6 +574,16 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
               onExtract={handleExtract}
               token={token}
             />
+
+            {isProductSearchOpen && (
+              <ProductSearchModal
+                isOpen={isProductSearchOpen}
+                onClose={() => setIsProductSearchOpen(false)}
+                onSelect={handleProductSelect}
+                token={token}
+                allowZeroStock={true}
+              />
+            )}
           </motion.div>
         </div>
       )}

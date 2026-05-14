@@ -8,9 +8,10 @@ interface ProductSearchModalProps {
   onClose: () => void;
   onSelect: (product: any) => void;
   token: string;
+  allowZeroStock?: boolean;
 }
 
-export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({ isOpen, onClose, onSelect, token }) => {
+export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({ isOpen, onClose, onSelect, token, allowZeroStock = false }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -36,7 +37,14 @@ export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({ isOpen, 
 
   const calculateTotalStock = (product: any) => {
     if (!product.stockRecords) return product.stock || 0;
-    return product.stockRecords.reduce((acc: number, record: any) => acc + record.quantity, 0);
+    return product.stockRecords.reduce((acc: number, record: any) => {
+      // Excluir almacenes de tránsito por ID o por tipo
+      const whType = record.warehouse?.type?.toUpperCase() || '';
+      if (record.warehouseId === 6 || whType === 'TRANSITORIO') {
+        return acc;
+      }
+      return acc + record.quantity;
+    }, 0);
   };
 
   return (
@@ -100,7 +108,7 @@ export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({ isOpen, 
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
-                      {results.map((product) => {
+                      {results.filter(p => allowZeroStock ? true : calculateTotalStock(p) > 0).map((product) => {
                         const totalStock = calculateTotalStock(product);
                         const productImages = Array.isArray(product.images) ? product.images : [];
                         const firstImage = productImages[0] || '';

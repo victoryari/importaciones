@@ -39,6 +39,7 @@ interface QuotationFormProps {
   token: string;
   sunatIgvAffectations: any[];
   sunatDocTypes: any[];
+  series: any[];
 }
 
 export const QuotationForm: React.FC<QuotationFormProps> = ({
@@ -48,7 +49,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
   searchResults, handleSearchProduct,
   quotationItems, addQuotationItem, updateQuotationItem,
   removeQuotationItem, quotationTotal, handleConsultCustomer, handleQuickRegister,
-  onOpenCustomerForm, token, sunatIgvAffectations, sunatDocTypes
+  onOpenCustomerForm, token, sunatIgvAffectations, sunatDocTypes, series
 }) => {
   const [isConsulting, setIsConsulting] = useState(false);
   const [consultedData, setConsultedData] = useState<any>(null);
@@ -77,26 +78,32 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
     }
   }, [isOpen, formData.date, formData.currency]);
 
-  // Auto-correlativo
   useEffect(() => {
-    if (isOpen && !editingItem && formData.pickupPlace && formData.docType) {
-      // Intentar encontrar por ID primero (que es lo que guarda el select)
-      const warehouse = warehouses.find(w => w.id === parseInt(formData.pickupPlace) || w.name === formData.pickupPlace);
-      if (warehouse) {
-        axios.get(`/api/series/next/${warehouse.id}/${formData.docType}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }).then(res => {
-          setFormData((prev: any) => ({
-            ...prev,
-            docSeries: res.data.series,
-            docNumber: res.data.nextNumber
-          }));
-        }).catch(err => {
-          console.error('Error al obtener correlativo:', err);
-        });
-      }
+    if (isOpen && !editingItem) {
+      setFormData((prev: any) => ({ ...prev, docType: 'COT' }));
     }
-  }, [formData.pickupPlace, formData.docType, isOpen, editingItem, warehouses, token]);
+  }, [isOpen, editingItem]);
+
+  const handleSeriesChange = (seriesId: string) => {
+    const selected = series.find(s => s.id === parseInt(seriesId));
+    if (selected) {
+      const warehouse = warehouses.find(w => w.id === selected.warehouseId);
+
+      axios.get(`/api/series/next/${selected.warehouseId}/${formData.docType || 'COT'}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => {
+        setFormData((prev: any) => ({
+          ...prev,
+          pickupPlace: warehouse?.name || '',
+          docSeries: selected.series,
+          docNumber: res.data.nextNumber,
+          seriesId: selected.id
+        }));
+      }).catch(err => {
+        console.error('Error al obtener correlativo:', err);
+      });
+    }
+  };
 
   // Totales detallados
   const dsctoTotal = formData.flete * 0; // Placeholder
@@ -150,7 +157,12 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
   const handleRucPredictiveSearch = (q: string) => {
     setFormData({...formData, ruc: q});
     if (q.length > 2) {
-      const filtered = customers.filter(c => c.docNumber.includes(q));
+      const filtered = customers.filter(c => 
+        c.docNumber.includes(q) ||
+        (c.name && c.name.toLowerCase().includes(q.toLowerCase())) ||
+        (c.firstName && c.firstName.toLowerCase().includes(q.toLowerCase())) ||
+        (c.lastName && c.lastName.toLowerCase().includes(q.toLowerCase()))
+      );
       setRucSearchResults(filtered);
     } else {
       setRucSearchResults([]);
@@ -163,7 +175,8 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
       const filtered = customers.filter(c => 
         (c.name && c.name.toLowerCase().includes(q.toLowerCase())) ||
         (c.firstName && c.firstName.toLowerCase().includes(q.toLowerCase())) ||
-        (c.lastName && c.lastName.toLowerCase().includes(q.toLowerCase()))
+        (c.lastName && c.lastName.toLowerCase().includes(q.toLowerCase())) ||
+        c.docNumber.includes(q)
       );
       setCustomerSearchResults(filtered);
     } else {
@@ -220,34 +233,40 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
               </div>
             </div>
 
-            <form onSubmit={onSubmit} className="flex-1 overflow-hidden flex flex-col bg-[#F0F4F8]">
+            <form 
+              onSubmit={onSubmit} 
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+                  e.preventDefault();
+                }
+              }}
+              className="flex-1 overflow-hidden flex flex-col bg-[#F0F4F8]"
+            >
               <div className="flex-1 overflow-y-auto p-3 space-y-3">
                 
                 {/* --- SECCIÓN 1: CABECERA --- */}
                 <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                  <div className="md:col-span-3 flex items-center gap-1">
+                  <div className="md:col-span-5 flex items-center gap-1">
                     <span className="text-[11px] font-bold text-slate-600 shrink-0">Documento</span>
-                    <select value={formData.docType || 'COT'} onChange={e => setFormData({...formData, docType: e.target.value})} className="h-8 border border-slate-300 rounded px-1 text-xs font-bold bg-white w-32">
-                      {formData.docType === 'COT' || !formData.docType ? (
-                        <option value="COT">COTIZACIÓN</option>
-                      ) : (
-                        <option value="PED">PEDIDO</option>
-                      )}
+                    <div className="h-8 border border-slate-300 rounded px-2 text-[10px] font-black bg-slate-100 w-24 flex items-center text-blue-700 uppercase">Cotización</div>
+
+                    <span className="text-[11px] font-bold text-slate-600 shrink-0 ml-2">Serie</span>
+                    <select 
+                      value={series.find(s => s.series === formData.docSeries && s.documentType === (formData.docType || 'COT'))?.id || ''} 
+                      onChange={e => handleSeriesChange(e.target.value)}
+                      className="h-8 border border-slate-300 rounded px-1 text-xs font-bold bg-blue-50 w-28"
+                    >
+                      <option value="">--SERIE--</option>
+                      {series.filter(s => s.documentType === (formData.docType || 'COT')).map(s => (
+                        <option key={s.id} value={s.id}>{s.series} ({s.warehouse?.name || 'S/A'})</option>
+                      ))}
                     </select>
-                    <input 
-                      type="text" 
-                      value={formData.docSeries} 
-                      onChange={e => setFormData({...formData, docSeries: e.target.value})} 
-                      className="h-8 border border-slate-300 rounded px-2 text-xs font-bold w-16" 
-                      placeholder="0001" 
-                    />
                     <span className="text-slate-400">-</span>
                     <div className="relative flex-1">
                       <input 
                         type="text" 
                         readOnly
                         value={formData.docNumber} 
-                        onChange={e => setFormData({...formData, docNumber: e.target.value})} 
                         className="h-8 border border-slate-300 rounded pl-7 pr-2 text-xs font-bold w-full bg-slate-100 text-blue-700" 
                         placeholder="00000001" 
                       />
@@ -498,6 +517,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-center w-8">Item</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 w-24">Almacén</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 w-24">Código</th>
+                          <th className="px-2 py-1 font-bold border-r border-slate-300 w-24 text-center">Lote</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 min-w-50">Descripción Producto</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-16">Cantidad</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-center w-20">U.M.</th>
@@ -508,7 +528,6 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-24">Precio Venta</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-24">Valor Venta</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-20">Igv</th>
-                          <th className="px-2 py-1 font-bold border-r border-slate-300 w-20 text-center">Nro. Lote</th>
                           <th className="px-2 py-1 font-bold w-10 text-center">Acción</th>
                         </tr>
 </thead>
@@ -524,6 +543,9 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                               <td className="px-2 py-1 text-center font-bold text-slate-500 border-r border-slate-200">{index + 1}</td>
                               <td className="px-2 py-1 border-r border-slate-200 text-blue-600 font-bold">T1.P1.DP1</td>
                               <td className="px-2 py-1 border-r border-slate-200 font-bold">{item.code || 'S/C'}</td>
+                              <td className="px-2 py-1 border-r border-slate-200 text-center font-bold text-[9px] text-emerald-700 bg-emerald-50/30 uppercase">
+                                {item.lot || '---'}
+                              </td>
                               <td className="px-2 py-1 border-r border-slate-200 font-bold truncate max-w-62.5">{item.name}</td>
                               <td className="px-2 py-1 border-r border-slate-200"><input type="number" value={item.quantity} onChange={e => updateQuotationItem(item.productId, 'quantity', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white" /></td>
                               <td className="px-2 py-1 border-r border-slate-200 text-center">{item.unit?.symbol || 'UND'}</td>
@@ -534,9 +556,6 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                               <td className="px-2 py-1 border-r border-slate-200 text-right font-bold">{formatNumber(totalLine)}</td>
                               <td className="px-2 py-1 border-r border-slate-200 text-right">{formatNumber(valorLine)}</td>
                               <td className="px-2 py-1 border-r border-slate-200 text-right">{formatNumber(igvLine)}</td>
-                              <td className="px-2 py-1 border-r border-slate-200 text-center font-bold text-[9px] text-slate-500 uppercase">
-                                {item.lot || <span className="text-slate-300 italic">SIN LOTE</span>}
-                              </td>
                               <td className="px-2 py-1 text-center">
                                 <button type="button" onClick={() => removeQuotationItem(item.productId)} className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors">
                                   <Trash2 className="w-3.5 h-3.5" />
@@ -557,16 +576,22 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                       <div className="flex items-center gap-1">
                         <div className="w-6 h-6 bg-amber-500 rounded flex items-center justify-center"><Tag className="w-3.5 h-3.5 text-white" /></div>
                         <span className="text-[11px] font-bold text-slate-600">Lugar recojo:</span>
-                        <select value={formData.pickupPlace} onChange={e => setFormData({...formData, pickupPlace: e.target.value})} className="h-7 border border-slate-300 rounded px-1 text-xs bg-white w-48">
-                          <option value="">--Seleccionar Almacén--</option>
-                          {warehouses.map(w => (
-                            <option key={w.id} value={w.id}>{w.name}</option>
-                          ))}
+                        <select 
+                          value={formData.pickupPlace} 
+                          onChange={e => setFormData({...formData, pickupPlace: e.target.value})}
+                          className="h-7 border border-slate-300 rounded px-2 text-[10px] bg-white w-64 font-bold"
+                        >
+                          <option value="">--Seleccionar--</option>
+                          {warehouses
+                            .filter(w => !w.name.toUpperCase().includes('COMPRAS') && !w.name.toUpperCase().includes('TRANSITO'))
+                            .map(w => (
+                              <option key={w.id} value={w.id}>{w.name.toUpperCase()}</option>
+                            ))}
                         </select>
                         <RefreshCw className="w-4 h-4 text-emerald-500 cursor-pointer" />
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-bold text-slate-600 ml-8">Cant. Total:</span>
+                        <span className="text-[11px] font-bold text-slate-600 ml-2">Cant. Total:</span>
                         <input type="text" readOnly value={quotationItems.length} className="h-7 w-20 bg-blue-50 border border-slate-300 text-center text-xs font-black text-blue-900 rounded" />
                       </div>
                     </div>
