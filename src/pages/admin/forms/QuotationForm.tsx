@@ -534,7 +534,9 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                               <td className="px-2 py-1 border-r border-slate-200 text-right font-bold">{formatNumber(totalLine)}</td>
                               <td className="px-2 py-1 border-r border-slate-200 text-right">{formatNumber(valorLine)}</td>
                               <td className="px-2 py-1 border-r border-slate-200 text-right">{formatNumber(igvLine)}</td>
-                              <td className="px-2 py-1 border-r border-slate-200 text-center text-slate-300">---</td>
+                              <td className="px-2 py-1 border-r border-slate-200 text-center font-bold text-[9px] text-slate-500 uppercase">
+                                {item.lot || <span className="text-slate-300 italic">SIN LOTE</span>}
+                              </td>
                               <td className="px-2 py-1 text-center">
                                 <button type="button" onClick={() => removeQuotationItem(item.productId)} className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors">
                                   <Trash2 className="w-3.5 h-3.5" />

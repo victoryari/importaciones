@@ -2,11 +2,8 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  const s = await (prisma as any).stock.findMany({ 
-    where: { product: { code: 'PJ01-Z001.A' } }, 
-    include: { warehouse: true } 
-  });
-  console.log('STOCK DETALLADO:', JSON.stringify(s, null, 2));
+  const w = await (prisma as any).warehouse.findMany();
+  console.log('ALMACENES_DB:', JSON.stringify(w, null, 2));
 }
 
 main()

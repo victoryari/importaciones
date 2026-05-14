@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { PlusCircle, Edit2, Save, X, Search } from 'lucide-react';
-import { UbigeoSelector } from '../../../components/UbigeoSelector';
+import { 
+  User, Mail, Phone, MapPin, X, Save, Search, 
+  Building2, UserCheck, Globe, CreditCard, RefreshCw 
+} from 'lucide-react';
+import { DEPARTMENTS, PROVINCES, DISTRICTS } from '../../../lib/ubigeoData';
 
 interface CustomerFormProps {
   isOpen: boolean;
@@ -12,192 +15,319 @@ interface CustomerFormProps {
   editingItem: any;
   loading: boolean;
   documentTypes: any[];
-  handleConsultDocument: () => void;
+  handleConsultDocument: (type: string, number: string) => Promise<any>;
 }
 
 export const CustomerForm: React.FC<CustomerFormProps> = ({
-  isOpen,
-  onClose,
-  onSubmit,
-  formData,
-  setFormData,
-  editingItem,
-  loading,
-  documentTypes,
-  handleConsultDocument
+  isOpen, onClose, onSubmit, formData, setFormData, editingItem,
+  loading, documentTypes, handleConsultDocument
 }) => {
+  const [isConsulting, setIsConsulting] = useState(false);
+
+  const onConsult = async () => {
+    if (!formData.docNumber) return;
+    setIsConsulting(true);
+    try {
+      const data = await handleConsultDocument(formData.docType, formData.docNumber);
+      if (data) {
+        if (formData.docType === 'RUC') {
+          setFormData({
+            ...formData,
+            name: data.razonSocial || data.nombre_o_razon_social || '',
+            address: data.direccion || data.direccion_completa || '',
+            department: data.departamento || '',
+            province: data.provincia || '',
+            district: data.distrito || ''
+          });
+        } else {
+          setFormData({
+            ...formData,
+            firstName: data.nombres || '',
+            lastName: `${data.apellidoPaterno || data.apellido_paterno || ''} ${data.apellidoMaterno || data.apellido_materno || ''}`.trim(),
+            name: `${data.nombres || ''} ${data.apellidoPaterno || data.apellido_paterno || ''} ${data.apellidoMaterno || data.apellido_materno || ''}`.trim()
+          });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsConsulting(false);
+    }
+  };
+
+  // Lógica de Auto-detección inteligente
+  useEffect(() => {
+    const num = formData.docNumber || '';
+    if (num.length === 11) {
+      if (num.startsWith('20')) {
+        setFormData((prev: any) => ({ ...prev, personType: 'JURIDICA', docType: 'RUC' }));
+      } else if (num.startsWith('10')) {
+        setFormData((prev: any) => ({ ...prev, personType: 'NATURAL', docType: 'RUC' }));
+      }
+    } else if (num.length === 8) {
+      setFormData((prev: any) => ({ ...prev, personType: 'NATURAL', docType: 'DNI' }));
+    }
+  }, [formData.docNumber]);
+
+  if (!isOpen) return null;
+
   return (
     <AnimatePresence>
-      {isOpen && (
-        <div className="absolute inset-0 z-110 flex items-center justify-center p-0 overflow-hidden">
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.98, y: 20 }} 
-            animate={{ opacity: 1, scale: 1, y: 0 }} 
-            exit={{ opacity: 0, scale: 0.98, y: 20 }} 
-            className="relative w-full h-full max-w-[98%] max-h-[98vh] bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-300"
-          >
-            {/* --- BARRA DE TITULO ESTILO ERP --- */}
-            <div className="bg-slate-100 px-4 py-2 border-b border-slate-300 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <PlusCircle className="w-4 h-4 text-emerald-800" />
-                <h2 className="text-sm font-bold text-slate-700 tracking-tight">{editingItem ? 'Editar' : 'Nuevo'} Cliente</h2>
+      <div className="fixed inset-0 z-200 flex items-center justify-center p-4 sm:p-6 overflow-hidden">
+        <motion.div 
+          initial={{ opacity: 0 }} 
+          animate={{ opacity: 1 }} 
+          exit={{ opacity: 0 }} 
+          onClick={onClose} 
+          className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" 
+        />
+        
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95, y: 10 }} 
+          animate={{ opacity: 1, scale: 1, y: 0 }} 
+          exit={{ opacity: 0, scale: 0.95, y: 10 }} 
+          className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-200"
+        >
+          {/* Header - Premium Style */}
+          <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-4 flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-500/20 rounded-lg border border-blue-500/30">
+                <UserCheck className="w-5 h-5 text-blue-400" />
               </div>
-              <button onClick={onClose} className="hover:bg-red-500 hover:text-white p-1 rounded transition-colors">
-                <X className="w-4 h-4" />
-              </button>
+              <div>
+                <h2 className="text-sm font-black text-white uppercase tracking-wider">
+                  {editingItem ? 'Editar Cliente' : 'Registro de Nuevo Cliente'}
+                </h2>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Módulo de Administración de Terceros</p>
+              </div>
             </div>
+            <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-all">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <form onSubmit={onSubmit} className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50">
             
-            <form onSubmit={onSubmit} className="flex-1 overflow-hidden flex flex-col bg-[#F0F4F8]">
-              <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                
-                {/* --- SECCIÓN 1: IDENTIFICACIÓN --- */}
-                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                  <div className="md:col-span-3 flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-slate-600 shrink-0 w-16">Persona</span>
-                    <select 
-                      value={formData.personType} 
-                      onChange={e => setFormData({...formData, personType: e.target.value})}
-                      className="h-8 border border-slate-300 rounded px-2 text-xs font-bold bg-white flex-1 outline-none"
-                    >
-                      <option value="NATURAL">NATURAL</option>
-                      <option value="JURIDICA">JURÍDICA</option>
-                    </select>
-                  </div>
-
-                  <div className="md:col-span-3 flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-slate-600 shrink-0 w-16 text-right">Doc.</span>
-                    <select 
-                      value={formData.docType} 
-                      onChange={e => setFormData({...formData, docType: e.target.value})}
-                      className="h-8 border border-slate-300 rounded px-2 text-xs font-bold bg-white flex-1 outline-none"
-                    >
-                      {documentTypes.length > 0 ? (
-                        documentTypes.map(t => <option key={t.code} value={t.name}>{t.name}</option>)
-                      ) : (
-                        <>
-                          <option value="DNI">DNI</option>
-                          <option value="RUC">RUC</option>
-                        </>
-                      )}
-                    </select>
-                  </div>
-
-                  <div className="md:col-span-6 flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-slate-600 shrink-0 w-16 text-right">Número</span>
-                    <div className="flex-1 flex gap-1">
-                      <input 
-                        type="text" required
-                        value={formData.docNumber} 
-                        onChange={e => setFormData({...formData, docNumber: e.target.value})}
-                        className="h-8 border border-slate-300 rounded px-2 text-xs font-bold flex-1 outline-none focus:border-emerald-500"
-                        placeholder="00000000"
-                      />
-                      <button 
-                        type="button"
-                        onClick={handleConsultDocument}
-                        disabled={loading}
-                        className="h-8 px-2 bg-emerald-50 text-emerald-600 rounded border border-emerald-200 hover:bg-emerald-600 hover:text-white transition-all disabled:opacity-50"
-                      >
-                        {loading ? <div className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
+            {/* Section 1: Identidad */}
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-2 mb-2">
+                <CreditCard className="w-4 h-4 text-blue-600" />
+                <span className="text-xs font-black text-slate-700 uppercase tracking-tighter">Información de Identidad</span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase ml-1">Tipo de Persona</label>
+                  <select 
+                    value={formData.personType} 
+                    onChange={e => setFormData({...formData, personType: e.target.value})}
+                    className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                  >
+                    <option value="NATURAL">PERSONA NATURAL</option>
+                    <option value="JURIDICA">PERSONA JURÍDICA</option>
+                  </select>
                 </div>
-
-                {/* --- SECCIÓN 2: NOMBRES / RAZÓN SOCIAL --- */}
-                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
-                  {formData.personType === 'NATURAL' ? (
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Primer Nombre</label>
-                        <input type="text" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} className="h-8 border border-slate-300 rounded px-2 text-xs font-bold outline-none" />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Segundo Nombre</label>
-                        <input type="text" value={formData.secondName} onChange={e => setFormData({...formData, secondName: e.target.value})} className="h-8 border border-slate-300 rounded px-2 text-xs font-bold outline-none" />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Apellido Paterno</label>
-                        <input type="text" value={formData.lastName} onChange={e => setFormData({...formData, lastName: e.target.value})} className="h-8 border border-slate-300 rounded px-2 text-xs font-bold outline-none" />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Apellido Materno</label>
-                        <input type="text" value={formData.surname} onChange={e => setFormData({...formData, surname: e.target.value})} className="h-8 border border-slate-300 rounded px-2 text-xs font-bold outline-none" />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-600 w-24 shrink-0">Razón Social</span>
-                      <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-8 border border-slate-300 rounded px-2 text-xs font-bold flex-1 outline-none bg-blue-50/50" />
-                    </div>
-                  )}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase ml-1">Tipo de Documento</label>
+                  <select 
+                    value={formData.docType} 
+                    onChange={e => setFormData({...formData, docType: e.target.value})}
+                    className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                  >
+                    <option value="DNI">DNI (DOCUMENTO NACIONAL DE IDENTIDAD)</option>
+                    <option value="RUC">RUC (REGISTRO ÚNICO DE CONTRIBUYENTES)</option>
+                    <option value="CE">C.E. (CARNET DE EXTRANJERÍA)</option>
+                  </select>
                 </div>
-
-                {/* --- SECCIÓN 3: CONTACTO --- */}
-                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-slate-600 w-16 shrink-0">Email</span>
-                    <input type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="h-8 border border-slate-300 rounded px-2 text-xs font-bold flex-1 outline-none" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-slate-600 w-16 shrink-0 text-right">Celular</span>
-                    <input type="text" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="h-8 border border-slate-300 rounded px-2 text-xs font-bold flex-1 outline-none" />
-                  </div>
-                </div>
-
-                {/* --- SECCIÓN 4: UBICACIÓN --- */}
-                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-slate-600 w-16 shrink-0">Dirección</span>
+                <div className="md:col-span-2 space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase ml-1">Número de Documento</label>
+                  <div className="relative group">
                     <input 
                       type="text" 
-                      readOnly={formData.personType === 'JURIDICA'} 
-                      value={formData.address} 
-                      onChange={e => setFormData({...formData, address: e.target.value})}
-                      className={`h-8 border border-slate-300 rounded px-2 text-xs font-bold flex-1 outline-none ${formData.personType === 'JURIDICA' ? 'bg-slate-50' : ''}`}
+                      value={formData.docNumber} 
+                      onChange={e => setFormData({...formData, docNumber: e.target.value})}
+                      className="w-full h-10 pl-10 pr-24 bg-white border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none transition-all shadow-sm"
+                      placeholder="Ingrese el número de documento..."
                     />
+                    <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                    <button 
+                      type="button" 
+                      onClick={onConsult}
+                      disabled={isConsulting}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 px-3 bg-blue-600 text-white rounded-md text-[10px] font-black uppercase flex items-center gap-2 hover:bg-blue-700 disabled:bg-slate-300 transition-all shadow-sm"
+                    >
+                      {isConsulting ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+                      {isConsulting ? 'Consultando...' : 'Consultar'}
+                    </button>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                    <div className="md:col-span-3 flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-600 w-16 shrink-0">País</span>
-                      <input type="text" value={formData.country} onChange={e => setFormData({...formData, country: e.target.value})} className="h-8 border border-slate-300 rounded px-2 text-xs font-bold flex-1 outline-none" />
-                    </div>
-                    <div className="md:col-span-9">
-                      <UbigeoSelector 
-                        department={formData.department}
-                        province={formData.province}
-                        district={formData.district}
-                        onChange={(data) => setFormData({...formData, ...data})}
-                        className="bg-transparent gap-2"
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Datos Personales / Empresa */}
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-2 mb-2">
+                <Building2 className="w-4 h-4 text-blue-600" />
+                <span className="text-xs font-black text-slate-700 uppercase tracking-tighter">Información General</span>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase ml-1">
+                    {formData.docType === 'RUC' ? 'Razón Social' : 'Nombre Completo / Razón Social'}
+                  </label>
+                  <input 
+                    type="text" 
+                    value={formData.name} 
+                    onChange={e => setFormData({...formData, name: e.target.value})}
+                    className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none transition-all uppercase"
+                    placeholder="Ingrese el nombre completo o razón social..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-500 uppercase ml-1">Teléfono / Celular</label>
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        value={formData.phone} 
+                        onChange={e => setFormData({...formData, phone: e.target.value})}
+                        className="w-full h-10 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none"
+                        placeholder="999 999 999"
                       />
+                      <Phone className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-500 uppercase ml-1">Correo Electrónico</label>
+                    <div className="relative">
+                      <input 
+                        type="email" 
+                        value={formData.email} 
+                        onChange={e => setFormData({...formData, email: e.target.value})}
+                        className="w-full h-10 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none"
+                        placeholder="ejemplo@correo.com"
+                      />
+                      <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                     </div>
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Footer Actions */}
-              <div className="p-3 bg-white border-t border-slate-200 flex justify-end gap-3 shrink-0">
-                <button 
-                  type="button" 
-                  onClick={onClose}
-                  className="px-6 h-10 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded text-xs transition-all uppercase tracking-widest"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={loading}
-                  className="px-8 h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded shadow-lg shadow-emerald-100 transition-all flex items-center gap-2 disabled:bg-emerald-300 uppercase text-xs"
-                >
-                  <Save className="w-4 h-4" />
-                  {loading ? 'Procesando...' : editingItem ? 'Guardar Cambios' : 'Registrar Cliente'}
-                </button>
+            {/* Section 3: Ubicación */}
+            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-2 mb-2">
+                <MapPin className="w-4 h-4 text-blue-600" />
+                <span className="text-xs font-black text-slate-700 uppercase tracking-tighter">Información de Ubicación</span>
               </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
+              
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase ml-1">Dirección Fiscal / Domicilio</label>
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      value={formData.address} 
+                      onChange={e => setFormData({...formData, address: e.target.value})}
+                      className="w-full h-10 pl-10 pr-4 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none uppercase"
+                      placeholder="Calle, Avenida, Jirón..."
+                    />
+                    <MapPin className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-500 uppercase ml-1">Departamento</label>
+                    <select 
+                      value={DEPARTMENTS.find(d => d.name.toUpperCase() === (formData.department || '').toUpperCase())?.id || ''} 
+                      onChange={e => {
+                        const dept = DEPARTMENTS.find(d => d.id === e.target.value);
+                        setFormData({...formData, department: dept?.name || '', province: '', district: ''});
+                      }}
+                      className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded text-[11px] font-bold outline-none uppercase transition-all focus:border-blue-400"
+                    >
+                      <option value="">-- SELECCIONE --</option>
+                      {DEPARTMENTS.map(d => <option key={d.id} value={d.id}>{d.name.toUpperCase()}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-500 uppercase ml-1">Provincia</label>
+                    <select 
+                      value={(() => {
+                        const deptId = DEPARTMENTS.find(d => d.name.toUpperCase() === (formData.department || '').toUpperCase())?.id;
+                        return deptId ? (PROVINCES[deptId]?.find(p => p.name.toUpperCase() === (formData.province || '').toUpperCase())?.id || '') : '';
+                      })()}
+                      onChange={e => {
+                        const deptId = DEPARTMENTS.find(d => d.name.toUpperCase() === (formData.department || '').toUpperCase())?.id;
+                        const prov = deptId ? PROVINCES[deptId]?.find(p => p.id === e.target.value) : null;
+                        setFormData({...formData, province: prov?.name || '', district: ''});
+                      }}
+                      className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded text-[11px] font-bold outline-none uppercase transition-all focus:border-blue-400"
+                      disabled={!formData.department}
+                    >
+                      <option value="">-- SELECCIONE --</option>
+                      {(() => {
+                        const deptId = DEPARTMENTS.find(d => d.name.toUpperCase() === (formData.department || '').toUpperCase())?.id;
+                        return deptId ? PROVINCES[deptId]?.map(p => <option key={p.id} value={p.id}>{p.name.toUpperCase()}</option>) : [];
+                      })()}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-500 uppercase ml-1">Distrito</label>
+                    <select 
+                      value={(() => {
+                        const deptId = DEPARTMENTS.find(d => d.name.toUpperCase() === (formData.department || '').toUpperCase())?.id;
+                        const provId = deptId ? PROVINCES[deptId]?.find(p => p.name.toUpperCase() === (formData.province || '').toUpperCase())?.id : null;
+                        return provId ? (DISTRICTS[provId]?.find(d => d.name.toUpperCase() === (formData.district || '').toUpperCase())?.id || '') : '';
+                      })()}
+                      onChange={e => {
+                        const deptId = DEPARTMENTS.find(d => d.name.toUpperCase() === (formData.department || '').toUpperCase())?.id;
+                        const provId = deptId ? PROVINCES[deptId]?.find(p => p.name.toUpperCase() === (formData.province || '').toUpperCase())?.id : null;
+                        const dist = provId ? DISTRICTS[provId]?.find(d => d.id === e.target.value) : null;
+                        setFormData({...formData, district: dist?.name || ''});
+                      }}
+                      className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded text-[11px] font-bold outline-none uppercase transition-all focus:border-blue-400"
+                      disabled={!formData.province}
+                    >
+                      <option value="">-- SELECCIONE --</option>
+                      {(() => {
+                        const deptId = DEPARTMENTS.find(d => d.name.toUpperCase() === (formData.department || '').toUpperCase())?.id;
+                        const provId = deptId ? PROVINCES[deptId]?.find(p => p.name.toUpperCase() === (formData.province || '').toUpperCase())?.id : null;
+                        return provId ? DISTRICTS[provId]?.map(d => <option key={d.id} value={d.id}>{d.name.toUpperCase()}</option>) : [];
+                      })()}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </form>
+
+          {/* Footer Actions */}
+          <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+            <button 
+              type="button" 
+              onClick={onClose} 
+              className="px-4 py-2 text-xs font-black text-slate-500 hover:text-red-600 uppercase tracking-widest transition-colors"
+            >
+              Cancelar
+            </button>
+            <div className="flex gap-3">
+              <button 
+                type="button" 
+                onClick={onSubmit}
+                disabled={loading}
+                className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 flex items-center gap-2 transition-all disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                {loading ? 'Procesando...' : (editingItem ? 'Actualizar Cliente' : 'Guardar Cliente')}
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </div>
     </AnimatePresence>
   );
 };

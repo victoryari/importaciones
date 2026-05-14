@@ -1,0 +1,109 @@
+﻿{
+    "value":  [
+                  {
+                      "id":  4,
+                      "productId":  14,
+                      "warehouseId":  4,
+                      "quantity":  1420,
+                      "floorId":  null,
+                      "zoneId":  5,
+                      "expiryDate":  null,
+                      "lotNumber":  null,
+                      "warehouse":  {
+                                        "id":  4,
+                                        "name":  "ALMACEN CUZCO",
+                                        "address":  "JR. CUZCO 1048",
+                                        "code":  "ALMC-01",
+                                        "commercialName":  "",
+                                        "createdAt":  "2026-05-08T16:54:01.982Z",
+                                        "isActive":  true,
+                                        "observation":  "",
+                                        "phones":  "",
+                                        "ruc":  "20126500603",
+                                        "type":  "PRINCIPAL",
+                                        "ubigeo":  "",
+                                        "updatedAt":  "2026-05-08T16:54:01.982Z",
+                                        "validateStock":  true
+                                    }
+                  },
+                  {
+                      "id":  5,
+                      "productId":  14,
+                      "warehouseId":  9,
+                      "quantity":  -1,
+                      "floorId":  null,
+                      "zoneId":  null,
+                      "expiryDate":  null,
+                      "lotNumber":  null,
+                      "warehouse":  {
+                                        "id":  9,
+                                        "name":  "Existencias",
+                                        "address":  "Almacén de Sistema",
+                                        "code":  null,
+                                        "commercialName":  null,
+                                        "createdAt":  "2026-05-12T22:05:26.654Z",
+                                        "isActive":  true,
+                                        "observation":  null,
+                                        "phones":  null,
+                                        "ruc":  null,
+                                        "type":  null,
+                                        "ubigeo":  null,
+                                        "updatedAt":  "2026-05-12T22:05:26.654Z",
+                                        "validateStock":  true
+                                    }
+                  },
+                  {
+                      "id":  6,
+                      "productId":  14,
+                      "warehouseId":  10,
+                      "quantity":  0,
+                      "floorId":  null,
+                      "zoneId":  null,
+                      "expiryDate":  null,
+                      "lotNumber":  null,
+                      "warehouse":  {
+                                        "id":  10,
+                                        "name":  "Comprobante",
+                                        "address":  "Almacén de Sistema",
+                                        "code":  null,
+                                        "commercialName":  null,
+                                        "createdAt":  "2026-05-12T22:05:26.659Z",
+                                        "isActive":  true,
+                                        "observation":  null,
+                                        "phones":  null,
+                                        "ruc":  null,
+                                        "type":  null,
+                                        "ubigeo":  null,
+                                        "updatedAt":  "2026-05-12T22:05:26.659Z",
+                                        "validateStock":  true
+                                    }
+                  },
+                  {
+                      "id":  7,
+                      "productId":  14,
+                      "warehouseId":  11,
+                      "quantity":  0,
+                      "floorId":  null,
+                      "zoneId":  null,
+                      "expiryDate":  null,
+                      "lotNumber":  null,
+                      "warehouse":  {
+                                        "id":  11,
+                                        "name":  "Despacho",
+                                        "address":  "Almacén de Sistema",
+                                        "code":  null,
+                                        "commercialName":  null,
+                                        "createdAt":  "2026-05-12T22:05:26.663Z",
+                                        "isActive":  true,
+                                        "observation":  null,
+                                        "phones":  null,
+                                        "ruc":  null,
+                                        "type":  null,
+                                        "ubigeo":  null,
+                                        "updatedAt":  "2026-05-12T22:05:26.663Z",
+                                        "validateStock":  true
+                                    }
+                  }
+              ],
+    "Count":  4
+}

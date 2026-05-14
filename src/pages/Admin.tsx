@@ -28,6 +28,7 @@ import { SellerForm } from './admin/forms/SellerForm';
 import { AgencyForm } from './admin/forms/AgencyForm';
 import { SeriesForm } from './admin/forms/SeriesForm';
 import { PurchaseEntryForm } from './admin/forms/PurchaseEntryForm';
+import { ReferralGuideForm } from './admin/forms/ReferralGuideForm';
 import { SupplierForm } from './admin/forms/SupplierForm';
 import { TransferForm } from './admin/forms/TransferForm';
 import { MovementAssistantForm } from './admin/forms/MovementAssistantForm';
@@ -259,7 +260,9 @@ export default function Admin() {
     return res.data.url;
   };
 
-  const openForm = (type: string, item: any = null) => {
+  const [purchaseMode, setPurchaseMode] = useState<'invoices' | 'guides'>('invoices');
+
+  const openForm = (type: string, item: any = null, purchaseEntryMode?: 'invoices' | 'guides') => {
     console.log(`[FRONTEND] openForm called for type: ${type}`, item);
     setEditingItem(item);
     if (type === 'products') { setProductFormData(item || initialProductData); setIsProductModalOpen(true); }
@@ -286,6 +289,10 @@ export default function Admin() {
       setIsSeriesModalOpen(true);
     }
     else if (type === 'purchases') {
+      const modeToSet = purchaseEntryMode || 'invoices';
+      console.log(`[FRONTEND] Setting purchase mode to: ${modeToSet}`);
+      setPurchaseMode(modeToSet);
+      
       if (item) {
         setPurchaseFormData({
           ...item,
@@ -295,11 +302,6 @@ export default function Admin() {
             name: i.product?.name || 'Producto',
             code: i.product?.code || '',
             unitSymbol: i.product?.unit?.symbol || 'UND',
-            availableUnits: [
-              i.product?.unit ? { id: i.product.unit.id, symbol: i.product.unit.symbol, name: i.product.unit.name, factor: 1 } : null,
-              i.product?.package ? { id: i.product.package.id, symbol: i.product.package.symbol, name: i.product.package.name, factor: i.product.quantityPerPackage } : null,
-              i.product?.subPackage ? { id: i.product.subPackage.id, symbol: i.product.subPackage.symbol, name: i.product.subPackage.name, factor: i.product.quantityPerSubPackage } : null
-            ].filter(Boolean),
             quantity: i.quantity,
             price: i.price,
             lotNumber: i.lotNumber || ''
@@ -307,7 +309,7 @@ export default function Admin() {
         });
       } else {
         setPurchaseFormData({
-          supplierId: '', supplierName: '', docType: 'FACTURA', docSeries: '', docNumber: '',
+          supplierId: '', supplierName: '', docType: modeToSet === 'guides' ? '09' : '01', docSeries: '', docNumber: '',
           date: new Date().toISOString().split('T')[0], currency: 'PEN', exchangeRate: '1.00',
           warehouseId: '', observation: '', items: []
         });
@@ -446,7 +448,28 @@ export default function Admin() {
   };
 
   const handleSubmitQuotation = async (e: any) => {
-    e.preventDefault(); setLoading(true);
+    e.preventDefault(); 
+    
+    // --- VALIDACIONES ESTRICTAS ---
+    if (!quotationFormData.razonSocial && !quotationFormData.customerId) {
+      alert('Error: Debe seleccionar o ingresar un cliente.');
+      return;
+    }
+    if (quotationItems.length === 0) {
+      alert('Error: El detalle de la cotización no puede estar vacío. Agregue al menos un producto.');
+      return;
+    }
+    if (!quotationFormData.pickupPlace) {
+      alert('Error: Debe seleccionar un "Lugar de Recojo" (Almacén).');
+      return;
+    }
+    const hasInvalidItems = quotationItems.some(i => i.quantity <= 0 || i.price <= 0);
+    if (hasInvalidItems) {
+      alert('Error: Todos los productos deben tener cantidad y precio mayor a cero.');
+      return;
+    }
+
+    setLoading(true);
     try {
       const selectedCustomer = customers.find(c => c.id === parseInt(quotationFormData.customerId));
       const selectedSeller = sellers.find(s => s.id === parseInt(quotationFormData.sellerId));
@@ -464,25 +487,21 @@ export default function Admin() {
         totalAmount: quotationTotal 
       };
       const isOrder = quotationFormData.docType === 'PED';
-      const isConversion = isOrder && editingItem && !editingItem.docNumber?.startsWith('PED');
       
       let url = '';
       let method = 'POST';
       
       if (isOrder) {
-        if (isConversion) {
-          url = '/api/orders';
-          payload.quotationId = editingItem.id;
-          method = 'POST'; // Conversion is a new order
-        } else if (editingItem) {
+        if (editingItem && editingItem.docType === 'PED') {
           url = `/api/orders/${editingItem.id}`;
           method = 'PUT';
         } else {
           url = '/api/orders';
           method = 'POST';
+          if (editingItem) payload.quotationId = editingItem.id;
         }
       } else {
-        if (editingItem) {
+        if (editingItem && editingItem.docType !== 'PED') {
           url = `/api/quotations/${editingItem.id}`;
           method = 'PUT';
         } else {
@@ -496,7 +515,6 @@ export default function Admin() {
       setIsQuotationModalOpen(false); 
       fetchData();
       
-      // Si es un pedido exitoso, cambiar a la pestaña de pedidos
       if (isOrder) handleOpenTab('orders', 'Pedidos');
     } catch (err: any) { 
       console.error(err);
@@ -518,8 +536,11 @@ export default function Admin() {
   const handleSubmitSupplier = async (data: any) => {
     setLoading(true);
     try {
-      if (editingItem) await axios.put(`/api/suppliers/${editingItem.id}`, data, { headers: { Authorization: `Bearer ${token}` } });
-      else await axios.post('/api/suppliers', data, { headers: { Authorization: `Bearer ${token}` } });
+      // Sincronizar el código con el número de documento
+      const payload = { ...data, code: data.docNumber };
+      
+      if (editingItem) await axios.put(`/api/suppliers/${editingItem.id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
+      else await axios.post('/api/suppliers', payload, { headers: { Authorization: `Bearer ${token}` } });
       setIsSupplierModalOpen(false);
       await fetchData();
       showSuccess('Proveedor guardado');
@@ -600,7 +621,11 @@ export default function Admin() {
       setIsMovementAssistantOpen(false);
       await fetchData();
       showSuccess('Movimiento procesado correctamente');
-    } catch (err) { alert('Error al procesar movimiento'); } finally { setLoading(false); }
+    } catch (err: any) { 
+      alert(err.response?.data?.error || 'Error al procesar movimiento'); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleSubmitCustomer = async (e: any) => {
@@ -814,7 +839,7 @@ export default function Admin() {
                       />
                     )}
                     {currentTab === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => {}} onEdit={(o) => openForm('orders', o)} onOpenPayment={handleOpenPayment} />}
-                    {currentTab === 'inventory' && <InventoryModule products={products} stockDetails={stockDetails} movements={movements} onUpdateStock={(pid, s) => axios.put(`/api/products/${pid}/stock`, {stock:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onEdit={(p) => openForm('products', p)} onOpenAssistant={() => setIsMovementAssistantOpen(true)} />}
+                    {currentTab === 'inventory' && <InventoryModule products={products} stockDetails={stockDetails} movements={movements} onUpdateStock={(pid, s) => axios.put(`/api/products/${pid}/stock`, {stock:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onEdit={(p) => openForm('products', p)} onOpenAssistant={() => setIsMovementAssistantOpen(true)} token={token} onRefresh={fetchData} />}
                     {currentTab === 'customers' && <CustomerModule customers={customers} onEdit={(c) => openForm('customers', c)} onNew={() => openForm('customers')} onDelete={(id) => handleDelete('customers', id)} departments={[]} />}
                     {currentTab === 'exchange-rates' && <ExchangeRateModule token={token} exchangeRates={exchangeRates} onDelete={(id) => handleDelete('exchange-rates', id)} onSave={(d) => axios.post('/api/exchange-rates', d, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} loading={loading} />}
                     {currentTab === 'logistics' && <LogisticsModule logisticsTab={logisticsTab} setLogisticsTab={setLogisticsTab} shippingAgencies={shippingAgencies} shippingZones={shippingZones} openEditModal={(item) => openForm(logisticsTab === 'agencies' ? 'shipping-agencies' : 'shipping-zones', item)} handleDelete={(t,id) => handleDelete(t,id)} />}
@@ -824,8 +849,8 @@ export default function Admin() {
                     {currentTab === 'purchases' && (
                       <PurchaseModule 
                         token={token || undefined} 
-                        onNew={() => openForm('purchases')} 
-                        onEdit={(p) => openForm('purchases', p)}
+                        onNew={(mode) => openForm('purchases', null, mode)} 
+                        onEdit={(p, mode) => openForm('purchases', p, mode)}
                         onDelete={(id) => handleDelete('purchases', id)}
                         purchases={purchases} 
                       />
@@ -857,7 +882,28 @@ export default function Admin() {
               searchResults={searchResults} 
               handleSearchProduct={(q) => { if(q.length > 1) axios.get(`/api/products/search?q=${q}`, {headers:{Authorization:`Bearer ${token}`}}).then(r=>setSearchResults(r.data)) }} 
               quotationItems={quotationItems} 
-              addQuotationItem={(p) => { if(!quotationItems.find(i=>i.productId===p.id)) setQuotationItems([...quotationItems, {productId:p.id, name:p.name, code:p.code, price:p.salePrice, quantity:1, discount:0, unit:p.unit}]); setSearchResults([]); }} 
+              addQuotationItem={(p) => { 
+                if(!quotationItems.find(i=>i.productId===p.id)) {
+                  // --- Lógica PEPS (FIFO) ---
+                  const warehouseId = parseInt(quotationFormData.pickupPlace);
+                  const validRecords = (p.stockRecords || []).filter((sr: any) => sr.warehouseId === warehouseId && sr.quantity > 0);
+                  // Ordenar por ID (los IDs más bajos suelen ser los ingresos más antiguos)
+                  const oldestLot = validRecords.sort((a: any, b: any) => a.id - b.id)[0];
+                  
+                  setQuotationItems([...quotationItems, {
+                    productId: p.id, 
+                    name: p.name, 
+                    code: p.code, 
+                    price: p.salePrice, 
+                    quantity: 1, 
+                    discount: 0, 
+                    unit: p.unit, 
+                    lot: oldestLot?.lot || null,
+                    stockRecords: p.stockRecords || []
+                  }]);
+                }
+                setSearchResults([]); 
+              }} 
               updateQuotationItem={(id, f, v) => setQuotationItems(quotationItems.map(i=>i.productId===id?{...i,[f]:v}:i))} 
               removeQuotationItem={(id) => {
                 if (id === -1) {
@@ -896,11 +942,11 @@ export default function Admin() {
             <WarehouseForm isOpen={isWarehouseModalOpen} onClose={() => setIsWarehouseModalOpen(false)} onSubmit={handleSubmitWarehouse} formData={warehouseFormData} setFormData={setWarehouseFormData} loading={loading} token={token} refreshData={fetchData} />
           </div>
 
-          <div style={{ display: activeTabId === 'customers' ? 'block' : 'none' }}>
+          <div style={{ display: (activeTabId === 'customers' || isCustomerModalOpen) ? 'block' : 'none' }}>
             <CustomerForm isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} onSubmit={handleSubmitCustomer} formData={customerFormData} setFormData={setCustomerFormData} editingItem={editingItem} loading={loading} documentTypes={documentTypes} handleConsultDocument={handleConsultDocument} />
           </div>
 
-          <div style={{ display: activeTabId === 'sellers' ? 'block' : 'none' }}>
+          <div style={{ display: (activeTabId === 'sellers' || isSellerModalOpen) ? 'block' : 'none' }}>
             <SellerForm isOpen={isSellerModalOpen} onClose={() => setIsSellerModalOpen(false)} onSubmit={handleSubmitSeller} formData={sellerFormData} setFormData={setSellerFormData} loading={loading} isEditing={!!editingItem} />
           </div>
 
@@ -921,14 +967,26 @@ export default function Admin() {
           </div>
 
           <div style={{ display: activeTabId === 'purchases' ? 'block' : 'none' }}>
-            <PurchaseEntryForm 
-              isOpen={isPurchaseModalOpen}
-              onClose={() => setIsPurchaseModalOpen(false)}
-              onSuccess={() => { setIsPurchaseModalOpen(false); fetchData(); showSuccess('Compra registrada'); }}
-              token={token}
-              formData={purchaseFormData}
-              setFormData={setPurchaseFormData}
-            />
+            {purchaseMode === 'guides' ? (
+              <ReferralGuideForm 
+                isOpen={isPurchaseModalOpen}
+                onClose={() => setIsPurchaseModalOpen(false)}
+                onSuccess={() => { setIsPurchaseModalOpen(false); fetchData(); showSuccess('Guía de Ingreso registrada'); }}
+                token={token}
+                formData={purchaseFormData}
+                setFormData={setPurchaseFormData}
+              />
+            ) : (
+              <PurchaseEntryForm 
+                isOpen={isPurchaseModalOpen}
+                onClose={() => setIsPurchaseModalOpen(false)}
+                onSuccess={() => { setIsPurchaseModalOpen(false); fetchData(); showSuccess('Compra registrada correctamente'); }}
+                token={token}
+                formData={purchaseFormData}
+                setFormData={setPurchaseFormData}
+                mode={purchaseMode}
+              />
+            )}
           </div>
 
           <div style={{ display: activeTabId === 'suppliers' ? 'block' : 'none' }}>

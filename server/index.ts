@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import express from 'express';
+import express from 'express'; 
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -1219,7 +1219,8 @@ app.post('/api/suppliers', authenticateToken, async (req, res) => {
     res.json(supplier);
   } catch (error: any) {
     if (error.code === 'P2002') return res.status(400).json({ error: 'Ya existe un proveedor con ese número de documento.' });
-    res.status(500).json({ error: 'Error al crear proveedor' });
+    console.error('Error creating supplier:', error);
+    res.status(500).json({ error: 'Error al crear proveedor: ' + (error.message || 'Error desconocido') });
   }
 });
 
@@ -1265,16 +1266,57 @@ app.get('/api/purchases', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/purchases/search', authenticateToken, async (req, res) => {
+  try {
+    const { type, series, number } = req.query;
+    
+    const cleanSeries = (series as string || '').trim().toUpperCase();
+    const cleanNumber = (number as string || '').trim();
+    const numericNumber = cleanNumber.replace(/^0+/, '');
+
+    const whereClause: any = {
+      docSeries: cleanSeries,
+      docNumber: { in: [cleanNumber, numericNumber, cleanNumber.padStart(8, '0')] }
+    };
+
+    // Si busca una guía (09), incluir también GRM
+    if (type === '09') {
+      whereClause.docType = { in: ['09', 'GRM', 'GUIA'] };
+    } else {
+      whereClause.docType = type as string;
+    }
+
+    const purchase = await (prisma as any).purchase.findFirst({
+      where: whereClause,
+      include: {
+        items: {
+          include: {
+            product: { include: { unit: true } }
+          }
+        }
+      }
+    });
+    res.json(purchase);
+  } catch (error) {
+    console.error('Error searching purchase:', error);
+    res.status(500).json({ error: 'Error al buscar documento' });
+  }
+});
+
 app.post('/api/purchases', authenticateToken, async (req, res) => {
   try {
-    const { supplierId, supplierName, docType, docSeries, docNumber, date, currency, exchangeRate, warehouseId, items, observation } = req.body;
+    const { supplierId, supplierName, docType, docSeries, docNumber, date, currency, exchangeRate, warehouseId, items, observation, referenceId, purchaseType, totalAmount: bodyTotal } = req.body;
     
     const purchase = await prisma.$transaction(async (tx) => {
       // 1. Create Purchase
+      const calculatedTotal = items.reduce((acc: number, item: any) => acc + (Number(item.quantity) * Number(item.price)), 0);
+      const finalTotal = bodyTotal !== undefined ? parseFloat(bodyTotal) : calculatedTotal;
+
       const newPurchase = await (tx as any).purchase.create({
         data: {
           supplierId: parseInt(supplierId),
           supplierName,
+          referenceId: referenceId ? parseInt(referenceId) : null,
           docType,
           docSeries,
           docNumber,
@@ -1282,23 +1324,30 @@ app.post('/api/purchases', authenticateToken, async (req, res) => {
           currency,
           exchangeRate: parseFloat(exchangeRate),
           warehouseId: warehouseId ? parseInt(warehouseId) : null,
+          purchaseType: purchaseType || 'NACIONAL',
           observation,
-          totalAmount: items.reduce((acc: number, item: any) => acc + (Number(item.quantity) * Number(item.price)), 0),
+          totalAmount: finalTotal,
           items: {
             create: items.map((item: any) => ({
               productId: item.productId,
               quantity: parseInt(item.quantity),
               price: parseFloat(item.price),
               lotNumber: item.lotNumber || null,
-              unitSymbol: item.unitSymbol || null
+              seriesNumber: item.seriesNumber || null,
+              expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
+              unitSymbol: item.unitSymbol || null,
+              observation: item.observation || null
             }))
           }
         }
       });
 
       // 2. Update stock and prices for each item
+      // Solo incrementamos stock si NO hay un documento de referencia (como una Guía previa)
+      const shouldIncrementStock = !referenceId;
+
       for (const item of items) {
-        if (warehouseId) {
+        if (warehouseId && shouldIncrementStock) {
           const stockRecord = await (tx as any).stock.findFirst({
             where: { 
               productId: item.productId, 
@@ -1332,28 +1381,33 @@ app.post('/api/purchases', authenticateToken, async (req, res) => {
               type: 'INPUT',
               lotNumber: item.lotNumber || null,
               purchaseId: newPurchase.id,
-              observation: `Compra ${docSeries}-${docNumber}`
+              observation: `Compra ${docSeries}-${docNumber} (${docType})`
             }
           } as any);
+        } else if (referenceId) {
+           console.log(`[PURCHASE] Skiping stock increment for ${item.productId} because it references ${referenceId}`);
         }
 
-        // Update product cost and recalculate sale price
-        const prod = await tx.product.findUnique({ where: { id: item.productId }, include: { unit: true } }) as any;
-        if (prod) {
-          item.productName = prod.name || '';
-          item.productCode = prod.code || '';
-          item.unit = prod.unit?.symbol || 'UN.';
-          const newCost = parseFloat(item.price);
-          const margin = Number(prod.profitMargin || 0);
-          const suggestedSalePrice = newCost * (1 + margin / 100);
-          
-          await tx.product.update({
-            where: { id: prod.id },
-            data: { 
-              costPrice: newCost,
-              salePrice: suggestedSalePrice
-            }
-          });
+        // Update product cost and recalculate sale price (Solo si es Factura o DUA)
+        const isAccountingDoc = ['01', '50', '03'].includes(docType);
+        if (isAccountingDoc) {
+          const prod = await tx.product.findUnique({ where: { id: item.productId }, include: { unit: true } }) as any;
+          if (prod) {
+            item.productName = prod.name || '';
+            item.productCode = prod.code || '';
+            item.unit = prod.unit?.symbol || 'UN.';
+            const newCost = parseFloat(item.price);
+            const margin = Number(prod.profitMargin || 0);
+            const suggestedSalePrice = newCost * (1 + margin / 100);
+            
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { 
+                costPrice: newCost,
+                salePrice: suggestedSalePrice
+              }
+            });
+          }
         }
       }
 
@@ -1370,7 +1424,7 @@ app.post('/api/purchases', authenticateToken, async (req, res) => {
 app.put('/api/purchases/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { supplierId, supplierName, docType, docSeries, docNumber, date, currency, exchangeRate, warehouseId, items, observation } = req.body;
+    const { supplierId, supplierName, docType, docSeries, docNumber, date, currency, exchangeRate, warehouseId, items, observation, totalAmount: bodyTotal } = req.body;
 
     const purchaseId = parseInt(id);
 
@@ -1415,7 +1469,7 @@ app.put('/api/purchases/:id', authenticateToken, async (req, res) => {
           exchangeRate: parseFloat(exchangeRate),
           warehouseId: warehouseId ? parseInt(warehouseId) : null,
           observation,
-          totalAmount: items.reduce((acc: number, item: any) => acc + (Number(item.quantity) * Number(item.price)), 0),
+          totalAmount: bodyTotal !== undefined ? parseFloat(bodyTotal) : items.reduce((acc: number, item: any) => acc + (Number(item.quantity) * Number(item.price)), 0),
           items: {
             create: items.map((item: any) => ({
               productId: item.productId,
@@ -1470,9 +1524,10 @@ app.put('/api/purchases/:id', authenticateToken, async (req, res) => {
           });
         }
 
-        // Update product cost and recalculate sale price
+        // Update product cost and recalculate sale price (Solo si es Factura o DUA)
+        const isAccountingDoc = ['01', '50', '03'].includes(docType);
         const prod = await tx.product.findUnique({ where: { id: newItem.productId }, include: { unit: true } }) as any;
-        if (prod) {
+        if (prod && isAccountingDoc) {
           const newCost = parseFloat(newItem.price);
           const margin = Number(prod.profitMargin || 0);
           const suggestedSalePrice = newCost * (1 + margin / 100);
@@ -1662,30 +1717,34 @@ app.get('/api/movements', authenticateToken, async (req, res) => {
 app.get('/api/movements/sources', authenticateToken, async (req, res) => {
   try {
     const { from, to, type } = req.query;
+    const whereClause: any = {
+      date: {
+        gte: from ? new Date(from as string) : undefined,
+        lte: to ? new Date(to as string) : undefined
+      }
+    };
+
     if (type === 'COMPRA') {
-      const purchases = await (prisma as any).purchase.findMany({
-        where: {
-          date: {
-            gte: from ? new Date(from as string) : undefined,
-            lte: to ? new Date(to as string) : undefined
-          }
-        },
-        include: { 
-          supplier: true, 
-          items: { 
-            include: { 
-              product: { 
-                include: { unit: true } 
-              } 
+      whereClause.docType = { in: ['01', '03', '50'] };
+    } else if (type === 'GUIA') {
+      whereClause.docType = { in: ['09', 'GRM', 'GUIA'] };
+    }
+
+    const purchases = await (prisma as any).purchase.findMany({
+      where: whereClause,
+      include: { 
+        supplier: true, 
+        items: { 
+          include: { 
+            product: { 
+              include: { unit: true } 
             } 
           } 
-        },
-        orderBy: { date: 'desc' }
-      });
-      res.json(purchases);
-    } else {
-      res.json([]);
-    }
+        } 
+      },
+      orderBy: { date: 'desc' }
+    });
+    res.json(purchases);
   } catch (error) {
     res.status(500).json({ error: 'Error al buscar fuentes' });
   }
@@ -1699,10 +1758,12 @@ app.post('/api/movements', authenticateToken, async (req, res) => {
       for (const item of items) {
         const qty = parseInt(item.quantity);
         const pId = parseInt(item.productId);
-        const fromWhId = item.fromWarehouseId ? parseInt(item.fromWarehouseId) : null;
-        const toWhId = item.toWarehouseId ? parseInt(item.toWarehouseId) : null;
-        const fromZoneId = item.fromZoneId ? parseInt(item.fromZoneId) : null;
-        const toZoneId = item.toZoneId ? parseInt(item.toZoneId) : null;
+        
+        // Robust parsing to avoid NaN
+        const fromWhId = (item.fromWarehouseId && item.fromWarehouseId !== 'TRANSIT') ? parseInt(item.fromWarehouseId) : null;
+        const toWhId = (item.toWarehouseId && item.toWarehouseId !== 'TRANSIT') ? parseInt(item.toWarehouseId) : null;
+        const fromZoneId = (item.fromZoneId && item.fromZoneId !== 'TRANSIT_ZONE') ? parseInt(item.fromZoneId) : null;
+        const toZoneId = (item.toZoneId && item.toZoneId !== 'TRANSIT_ZONE') ? parseInt(item.toZoneId) : null;
         
         // Handle 'TRANSIT' special case from Assistant
         let finalFromWhId = fromWhId;
@@ -1788,9 +1849,96 @@ app.post('/api/movements', authenticateToken, async (req, res) => {
     });
 
     res.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Movement error:', error);
-    res.status(500).json({ error: 'Error al procesar el movimiento' });
+    res.status(500).json({ error: `Error al procesar movimiento: ${error.message}` });
+  }
+});
+
+app.post('/api/movements/:id/annul', authenticateToken, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    
+    await prisma.$transaction(async (tx) => {
+      const movement = await (tx as any).stockMovement.findUnique({
+        where: { id },
+        include: { product: true }
+      });
+
+      if (!movement) throw new Error('Movimiento no encontrado');
+      if (movement.status === 'ANNULLED') throw new Error('El movimiento ya está anulado');
+
+      const qty = movement.quantity;
+      const pId = movement.productId;
+
+      // REVERSE LOGIC
+      // 1. Re-add to FROM (if it was an output or transfer)
+      if ((movement.type === 'OUTPUT' || movement.type === 'TRANSFER') && movement.fromWarehouseId) {
+        const stockFrom = await (tx as any).stock.findFirst({
+          where: { 
+            productId: pId, 
+            warehouseId: movement.fromWarehouseId, 
+            zoneId: movement.fromZoneId || null,
+            lotNumber: movement.lotNumber || null
+          }
+        });
+
+        if (stockFrom) {
+          await (tx as any).stock.update({
+            where: { id: stockFrom.id },
+            data: { quantity: { increment: qty } }
+          });
+        } else {
+          await (tx as any).stock.create({
+            data: {
+              productId: pId,
+              warehouseId: movement.fromWarehouseId,
+              zoneId: movement.fromZoneId || null,
+              quantity: qty,
+              lotNumber: movement.lotNumber || null
+            }
+          });
+        }
+
+        if (movement.type === 'OUTPUT') {
+          await tx.product.update({
+            where: { id: pId },
+            data: { stock: { increment: qty } }
+          });
+        }
+      }
+
+      // 2. Subtract from TO (if it was an input or transfer)
+      if ((movement.type === 'INPUT' || movement.type === 'TRANSFER') && movement.toWarehouseId) {
+        await (tx as any).stock.updateMany({
+          where: { 
+            productId: pId, 
+            warehouseId: movement.toWarehouseId, 
+            zoneId: movement.toZoneId || null,
+            lotNumber: movement.lotNumber || null
+          },
+          data: { quantity: { decrement: qty } }
+        });
+
+        if (movement.type === 'INPUT') {
+          await tx.product.update({
+            where: { id: pId },
+            data: { stock: { decrement: qty } }
+          });
+        }
+      }
+
+      // 3. Mark as Annulled
+      await (tx as any).stockMovement.update({
+        where: { id },
+        data: { status: 'ANNULLED' }
+      });
+    });
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Annulment error:', error);
+    res.status(500).json({ error: error.message || 'Error al anular movimiento' });
   }
 });
 
@@ -1899,8 +2047,17 @@ app.post('/api/orders', async (req, res) => {
       });
 
       // 2. Move stock immediately for CREDIT or CASH orders to reserve inventory
-      if (paymentStatus === 'CREDIT' || paymentCondition === 'CONTADO') {
+      const normalizedCondition = (paymentCondition || '').toUpperCase();
+      const normalizedStatus = (paymentStatus || '').toUpperCase();
+      
+      console.log(`[ORDER] Processing stock for Order ID: ${newOrder.id}`);
+      console.log(`[ORDER] Condition: ${normalizedCondition}, Status: ${normalizedStatus}, Origin: ${origin}`);
+
+      if (normalizedStatus === 'CREDIT' || normalizedCondition === 'CONTADO' || normalizedCondition === 'CRÉDITO' || normalizedCondition === 'CREDITO') {
+        console.log(`[ORDER] Triggering moveStockToTemp for Order ${newOrder.id}`);
         await moveStockToTemp(tx, newOrder.id, items);
+      } else {
+        console.log(`[ORDER] Skipping moveStockToTemp for Order ${newOrder.id} - Condition did not match.`);
       }
 
       // 3. If from quotation, update quotation status
@@ -1923,58 +2080,81 @@ app.post('/api/orders', async (req, res) => {
 
 // --- HELPERS ---
 async function moveStockToTemp(tx: any, orderId: number, items: any[]) {
+  // Nombres de almacenes de control manuales
+  const DESPACHO_NAME = 'A1.CUZCO.1048 - DESPACHO';
+  // Nota: El usuario tiene escrito 'COPROBANTE' en DB
+  const COMPROBANTE_NAME = 'A1.CUZCO.1048 - COPROBANTE'; 
+  
   const getOrCreateWarehouse = async (name: string) => {
     let w = await tx.warehouse.findUnique({ where: { name } });
     if (!w) {
       w = await tx.warehouse.create({
-        data: {
-          name,
-          address: 'Almacén de Sistema',
-          isActive: true
-        }
+        data: { name, address: 'Almacén de Sistema', isActive: true }
       });
     }
     return w;
   };
 
-  const existencias = await getOrCreateWarehouse('Existencias');
-  const comprobante = await getOrCreateWarehouse('Comprobante');
-  const despacho = await getOrCreateWarehouse('Despacho');
+  const despacho = await getOrCreateWarehouse(DESPACHO_NAME);
 
   for (const item of items) {
-    // 1. Salida de Existencias
-    const stockExt = await tx.stock.findFirst({ where: { productId: item.productId, warehouseId: existencias.id } });
-    if (stockExt) {
-      await tx.stock.update({ where: { id: stockExt.id }, data: { quantity: { decrement: item.quantity } } });
-    } else {
-      await tx.stock.create({ data: { productId: item.productId, warehouseId: existencias.id, quantity: -item.quantity } });
+    // 1. Identificar almacén de origen REAL
+    // Excluimos transitorios (COMPRAS), sistema (Existencias) y control (Despacho/Comprobante)
+    const stockSource = await tx.stock.findFirst({
+      where: { 
+        productId: item.productId, 
+        quantity: { gte: item.quantity },
+        warehouse: {
+          name: { 
+            notIn: [
+              'COMPRAS NAC./IMP.', 
+              'Existencias', 
+              'Comprobante', 
+              'Despacho',
+              DESPACHO_NAME,
+              COMPROBANTE_NAME
+            ] 
+          }
+        }
+      },
+      include: { warehouse: true }
+    });
+
+    if (!stockSource) {
+      console.warn(`[STOCK] No hay stock disponible fuera de almacenes transitorios para producto ID: ${item.productId}`);
+      continue;
     }
 
-    // 2. Ingreso a Comprobante
-    const stockComp = await tx.stock.findFirst({ where: { productId: item.productId, warehouseId: comprobante.id } });
-    if (stockComp) {
-      await tx.stock.update({ where: { id: stockComp.id }, data: { quantity: { increment: item.quantity } } });
-    } else {
-      await tx.stock.create({ data: { productId: item.productId, warehouseId: comprobante.id, quantity: item.quantity } });
-    }
+    console.log(`[STOCK] Reservando ${item.quantity} unidades desde ${stockSource.warehouse.name} hacia ${DESPACHO_NAME}`);
 
-    // 3. Ingreso a Despacho
-    const stockDesp = await tx.stock.findFirst({ where: { productId: item.productId, warehouseId: despacho.id } });
-    if (stockDesp) {
+    // 2. Salida de Origen Real
+    await tx.stock.update({ 
+      where: { id: stockSource.id }, 
+      data: { quantity: { decrement: item.quantity } } 
+    });
+
+    // 3. Ingreso a Despacho Manual (Reserva)
+    let stockDesp = await tx.stock.findFirst({
+      where: { productId: item.productId, warehouseId: despacho.id }
+    });
+    if (!stockDesp) {
+      stockDesp = await tx.stock.create({
+        data: { productId: item.productId, warehouseId: despacho.id, quantity: item.quantity }
+      });
+    } else {
       await tx.stock.update({ where: { id: stockDesp.id }, data: { quantity: { increment: item.quantity } } });
-    } else {
-      await tx.stock.create({ data: { productId: item.productId, warehouseId: despacho.id, quantity: item.quantity } });
     }
 
-    // 4. Record movement
+    // 4. Registrar Movimiento
     await tx.stockMovement.create({
       data: {
         productId: item.productId,
-        fromWarehouseId: existencias.id,
-        toWarehouseId: despacho.id, // Primary destination for preparation
+        orderId: orderId,
+        fromWarehouseId: stockSource.warehouseId,
+        toWarehouseId: despacho.id,
         quantity: item.quantity,
-        orderId,
-        type: 'TRANSFER'
+        type: 'TRANSFER',
+        observation: `Reserva automática pedido #${orderId} (Desde ${stockSource.warehouse.name})`
       }
     });
   }
@@ -2161,24 +2341,51 @@ app.delete('/api/orders/:id', authenticateToken, async (req, res) => {
   
   try {
     await prisma.$transaction(async (tx) => {
-      // 0. Get order to check for quotationId
-      const order = await tx.order.findUnique({ where: { id: orderId } });
+      // 0. Get order with movements to check for quotationId and reverse stock
+      const order = await tx.order.findUnique({ 
+        where: { id: orderId },
+        include: { movements: true }
+      });
 
-      // 1. Delete associated payments
-      console.log(`[DELETE ORDER] Deleting payments for order ${orderId}`);
-      await tx.payment.deleteMany({ where: { orderId } });
-      
-      // 2. The order has cascade on OrderItem and StockMovement
-      console.log(`[DELETE ORDER] Deleting order record ${orderId}`);
-      await tx.order.delete({ where: { id: orderId } });
+      if (order) {
+        // 1. Reverse stock if there were movements
+        const DESPACHO_NAME = 'A1.CUZCO.1048 - DESPACHO';
+        const despacho = await tx.warehouse.findUnique({ where: { name: DESPACHO_NAME } });
 
-      // 3. Revert quotation status if exists
-      if (order && order.quotationId) {
-        console.log(`[DELETE ORDER] Reverting quotation status for ID: ${order.quotationId}`);
-        await tx.quotation.update({
-          where: { id: order.quotationId },
-          data: { status: 'PENDING' }
-        });
+        if (despacho) {
+          console.log(`[DELETE ORDER] Reversing ${order.movements.length} stock movements targeting ${DESPACHO_NAME}`);
+          for (const move of order.movements) {
+            if (move.toWarehouseId === despacho.id && move.fromWarehouseId) {
+              // Return to original source
+              await tx.stock.updateMany({
+                where: { productId: move.productId, warehouseId: move.fromWarehouseId },
+                data: { quantity: { increment: move.quantity } }
+              });
+              // Remove from Despacho Manual
+              await tx.stock.updateMany({
+                where: { productId: move.productId, warehouseId: despacho.id },
+                data: { quantity: { decrement: move.quantity } }
+              });
+            }
+          }
+        }
+
+        // 2. Delete associated payments
+        console.log(`[DELETE ORDER] Deleting payments for order ${orderId}`);
+        await tx.payment.deleteMany({ where: { orderId } });
+        
+        // 3. The order has cascade on OrderItem and StockMovement
+        console.log(`[DELETE ORDER] Deleting order record ${orderId}`);
+        await tx.order.delete({ where: { id: orderId } });
+
+        // 4. Revert quotation status if exists
+        if (order.quotationId) {
+          console.log(`[DELETE ORDER] Reverting quotation status for ID: ${order.quotationId}`);
+          await tx.quotation.update({
+            where: { id: order.quotationId },
+            data: { status: 'PENDING' }
+          });
+        }
       }
     });
     

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 import { motion } from 'motion/react';
 import { 
   BarChart3, Search, Package, AlertTriangle, X, 
@@ -26,6 +27,8 @@ interface InventoryModuleProps {
   onUpdateStock: (productId: number, newStock: number) => void;
   onEdit: (product: Product) => void;
   onOpenAssistant?: () => void;
+  token?: string;
+  onRefresh?: () => void;
 }
 
 export const InventoryModule: React.FC<InventoryModuleProps> = ({
@@ -34,7 +37,9 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
   movements,
   onUpdateStock,
   onEdit,
-  onOpenAssistant
+  onOpenAssistant,
+  token,
+  onRefresh
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeSubTab, setActiveSubTab] = useState<'stock' | 'history'>('stock');
@@ -57,6 +62,18 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
     m.observation?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     m.lotNumber?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleAnnul = async (movementId: number) => {
+    if (!window.confirm('¿Está seguro de anular este movimiento? Esta acción revertirá el stock a su estado anterior.')) return;
+    try {
+      await axios.post(`/api/movements/${movementId}/annul`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (onRefresh) onRefresh();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Error al anular movimiento');
+    }
+  };
 
   return (
     <motion.div 
@@ -241,6 +258,7 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
                   <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400">Ruta / Almacén</th>
                   <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400 text-center">Cant.</th>
                   <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400">Glosa / Observación</th>
+                  <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -289,7 +307,20 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
                       <span className="text-sm font-black text-slate-800">{mov.quantity}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-[11px] text-slate-500 font-medium italic truncate max-w-xs">{mov.observation}</p>
+                      <p className={`text-[11px] font-medium italic truncate max-w-xs ${mov.status === 'ANNULLED' ? 'text-red-400 line-through' : 'text-slate-500'}`}>
+                        {mov.status === 'ANNULLED' ? `[ANULADO] ${mov.observation}` : mov.observation}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {mov.status !== 'ANNULLED' && (
+                        <button 
+                          onClick={() => handleAnnul(mov.id)}
+                          className="p-2 hover:bg-red-50 text-red-500 rounded-lg transition-colors group/btn"
+                          title="Anular Movimiento"
+                        >
+                          <X className="w-4 h-4 group-hover/btn:scale-110" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

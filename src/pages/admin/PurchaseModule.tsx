@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, PlusCircle, TrendingUp, Edit2, Trash2 } from 'lucide-react';
+import { Search, PlusCircle, TrendingUp, Edit2, Trash2, Package } from 'lucide-react';
 import axios from 'axios';
 import { formatNumber, formatCurrency } from '../../lib/utils';
 
@@ -18,57 +18,96 @@ interface Purchase {
 
 interface PurchaseModuleProps {
   token?: string | null;
-  onNew: () => void;
-  onEdit: (purchase: Purchase) => void;
+  onNew: (type?: 'invoices' | 'guides') => void;
+  onEdit: (purchase: Purchase, type?: 'invoices' | 'guides') => void;
   onDelete: (id: number) => void;
   purchases: Purchase[];
 }
 
 export const PurchaseModule: React.FC<PurchaseModuleProps> = ({ token, onNew, onEdit, onDelete, purchases }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'invoices' | 'guides'>('invoices');
 
-  const filtered = purchases.filter(p => 
-    p.supplierName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    p.docNumber?.includes(searchTerm)
-  );
+  // Clasificar documentos
+  const filtered = purchases.filter(p => {
+    const matchesSearch = p.supplierName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                         p.docNumber?.includes(searchTerm);
+    
+    if (activeTab === 'guides') {
+      return matchesSearch && (p.docType === 'GUIA' || p.docType === '09' || p.docType === 'GRM');
+    } else {
+      // Invoices, Boletas, DUA, etc.
+      return matchesSearch && (p.docType !== 'GUIA' && p.docType !== '09' && p.docType !== 'GRM');
+    }
+  });
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight">Registro de Compras</h2>
-          <p className="text-xs font-bold text-blue-600 uppercase tracking-widest">Ingresos por Importación y Compras Locales</p>
+          <h2 className="text-2xl font-black text-slate-800 tracking-tight">Gestión de Adquisiciones</h2>
+          <p className="text-xs font-bold text-blue-600 uppercase tracking-widest">
+            {activeTab === 'guides' ? 'Módulo de Almacén: Ingresos Físicos' : 'Módulo de Administración: Compras y Facturación'}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text" 
-              placeholder="Buscar compra..." 
+              placeholder="Buscar..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none w-64 transition-all"
             />
           </div>
           <button 
-            onClick={onNew}
+            onClick={() => onNew(activeTab)}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-100 transition-all"
           >
-            <PlusCircle className="w-4 h-4" /> Nuevo Ingreso
+            <PlusCircle className="w-4 h-4" /> 
+            {activeTab === 'guides' ? 'Nueva Guía de Ingreso' : 'Nueva Factura / DUA'}
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-6 rounded-4xl border border-slate-100 shadow-sm">
+      {/* --- TABS --- */}
+      <div className="flex bg-slate-100 p-1 rounded-2xl w-fit">
+        <button 
+          onClick={() => setActiveTab('invoices')}
+          className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'invoices' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Facturas / Boletas / DUA
+        </button>
+        <button 
+          onClick={() => setActiveTab('guides')}
+          className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'guides' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+        >
+          Guías de Remisión (Ingreso)
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+        <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600"><TrendingUp className="w-6 h-6" /></div>
+            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600"><TrendingUp className="w-5 h-5" /></div>
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Compras (Mes)</p>
-              <p className="text-xl font-black text-slate-800">{formatCurrency(purchases.reduce((acc, p) => acc + Number(p.totalAmount), 0))}</p>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total {activeTab === 'guides' ? 'Guías' : 'Facturas'}</p>
+              <p className="text-lg font-black text-slate-800">{filtered.length} Documentos</p>
             </div>
           </div>
         </div>
+        {activeTab === 'invoices' && (
+          <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600"><TrendingUp className="w-5 h-5" /></div>
+              <div>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Monto Total</p>
+                <p className="text-lg font-black text-slate-800">{formatCurrency(filtered.reduce((acc, p) => acc + Number(p.totalAmount), 0))}</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
@@ -78,7 +117,7 @@ export const PurchaseModule: React.FC<PurchaseModuleProps> = ({ token, onNew, on
               <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Fecha</th>
               <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Proveedor</th>
               <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Documento</th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Monto Total</th>
+              {activeTab === 'invoices' && <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Monto</th>}
               <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado</th>
               <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Acciones</th>
             </tr>
@@ -93,37 +132,41 @@ export const PurchaseModule: React.FC<PurchaseModuleProps> = ({ token, onNew, on
                   </div>
                 </td>
                 <td className="px-6 py-4">
-                  <div className="font-bold text-slate-700">{p.supplierName}</div>
+                  <div className="font-bold text-slate-700 text-sm">{p.supplierName || (p as any).supplier?.name}</div>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[9px] font-black">{p.docType}</span>
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-black ${['GUIA', '09', 'GRM'].includes(p.docType) ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>
+                      {['09', 'GRM'].includes(p.docType) ? 'GUIA' : p.docType}
+                    </span>
                     <span className="text-xs font-bold text-slate-600">{p.docSeries}-{p.docNumber}</span>
                   </div>
                 </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="text-sm font-black text-slate-800">{p.currency} {formatNumber(p.totalAmount)}</div>
-                </td>
+                {activeTab === 'invoices' && (
+                  <td className="px-6 py-4 text-right">
+                    <div className="text-sm font-black text-slate-800">{p.currency} {formatNumber(p.totalAmount)}</div>
+                  </td>
+                )}
                 <td className="px-6 py-4">
-                  <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-black uppercase tracking-widest">
+                  <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${p.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
                     {p.status}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-center">
                   <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button 
-                      onClick={() => onEdit(p)}
-                      className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg transition-all shadow-sm"
-                      title="Editar Compra"
+                      onClick={() => onEdit(p, activeTab)}
+                      className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg transition-all"
+                      title="Ver/Editar"
                     >
-                      <Edit2 className="w-4 h-4" />
+                      <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button 
                       onClick={() => onDelete(p.id)}
-                      className="p-2 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-lg transition-all shadow-sm"
-                      title="Eliminar Compra"
+                      className="p-2 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-lg transition-all"
+                      title="Eliminar"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </td>
@@ -131,6 +174,12 @@ export const PurchaseModule: React.FC<PurchaseModuleProps> = ({ token, onNew, on
             ))}
           </tbody>
         </table>
+        {filtered.length === 0 && (
+          <div className="p-12 text-center">
+            <Package className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+            <p className="text-sm font-bold text-slate-400">No se encontraron documentos en esta categoría</p>
+          </div>
+        )}
       </div>
     </div>
   );

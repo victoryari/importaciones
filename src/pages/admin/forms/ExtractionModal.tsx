@@ -106,8 +106,8 @@ export const ExtractionModal: React.FC<ExtractionModalProps> = ({ isOpen, onClos
                       <input type="radio" className="hidden" checked={sourceType === 'COMPRA'} onChange={() => setSourceType('COMPRA')} />
                       <span className={`text-xs font-bold ${sourceType === 'COMPRA' ? 'text-blue-700' : 'text-slate-500'}`}>Compra</span>
                     </label>
-                    <label className="flex items-center gap-2 cursor-pointer group opacity-50 pointer-events-none">
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sourceType === 'GUIA' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sourceType === 'GUIA' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white group-hover:border-blue-400'}`}>
                         {sourceType === 'GUIA' && <div className="w-2 h-2 rounded-full bg-white" />}
                       </div>
                       <input type="radio" className="hidden" checked={sourceType === 'GUIA'} onChange={() => setSourceType('GUIA')} />

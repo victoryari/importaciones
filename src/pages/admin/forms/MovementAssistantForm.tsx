@@ -28,6 +28,19 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
   const [isExtractionModalOpen, setIsExtractionModalOpen] = useState(false);
   const [sunatOperations, setSunatOperations] = useState<any[]>([]);
   const [showCustomerResults, setShowCustomerResults] = useState(false);
+  
+  // Reset form when opening/closing
+  useEffect(() => {
+    if (!isOpen) {
+      setType('TRANSFERENCIA');
+      setReason('');
+      setObservation('');
+      setCustomerId('');
+      setCustomerName('');
+      setItems([]);
+      setQuickProductCode('');
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -127,6 +140,7 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
       toWarehouseId: sourceInfo.warehouseId?.toString() || '',
       toZoneId: '',
       quantity: item.quantity,
+      lotNumber: item.lotNumber || '', // PRESERVAR EL LOTE
       guideNumber: '',
       docType: sourceInfo.docType || '50',
       docNumber: `${sourceInfo.docSeries}-${sourceInfo.docNumber}`,
@@ -349,7 +363,7 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
                   </div>
                   <div className="flex gap-2 ml-4">
                     <button type="button" onClick={() => setIsExtractionModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-[10px] font-black hover:bg-emerald-500 transition-all active:scale-95 shadow-lg shadow-emerald-900/20">
-                      <Download className="w-4 h-4" /> EXTRAER COMPRA
+                      <Download className="w-4 h-4" /> EXTRAER DOCUMENTO
                     </button>
                     <button type="button" onClick={handleAddRow} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-[10px] font-black hover:bg-blue-500 transition-all active:scale-95 shadow-lg shadow-blue-900/20">
                       <Plus className="w-4 h-4" /> AGREGAR MANUAL
@@ -371,6 +385,7 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
                           <th className="px-2 py-3 border-r border-slate-200 w-28 text-center">Nro Guía</th>
                           <th className="px-2 py-3 border-r border-slate-200 w-16 text-center">T.Doc</th>
                           <th className="px-2 py-3 border-r border-slate-200 w-32 text-center">Nro Doc</th>
+                          <th className="px-2 py-3 border-r border-slate-200 w-32 text-center bg-blue-50/50 text-blue-700">Lote</th>
                           <th className="px-2 py-3 border-r border-slate-200 w-24 text-center">Cantidad</th>
                           <th className="px-2 py-3 border-r border-slate-200 w-16 text-center">U.M.</th>
                           <th className="px-2 py-3 text-center w-12"></th>
@@ -451,6 +466,9 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
                             </td>
                             <td className="px-2 py-2 border-r border-slate-50">
                               <input type="text" value={item.docNumber || ''} onChange={(e) => handleItemChange(idx, 'docNumber', e.target.value)} className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-[10px] font-black text-blue-800 text-center" />
+                            </td>
+                            <td className="px-2 py-2 border-r border-slate-50 bg-blue-50/20">
+                              <input type="text" value={item.lotNumber || ''} onChange={(e) => handleItemChange(idx, 'lotNumber', e.target.value.toUpperCase())} className="w-full bg-white border border-blue-200 rounded px-2 py-1 text-[10px] font-black text-center text-blue-600" placeholder="SIN LOTE" />
                             </td>
                             <td className="px-2 py-2 border-r border-slate-50">
                               <input type="number" value={item.quantity} onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)} className="w-full bg-blue-50 border border-blue-200 rounded px-2 py-1 text-[11px] text-right font-black text-blue-700 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20" />
