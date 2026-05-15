@@ -1,26 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ProductGrid from '../components/ProductGrid';
-import { motion } from 'motion/react';
-import { Filter, ChevronRight, Search, X } from 'lucide-react';
+import { Filter, ChevronRight, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function ProductsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [categories, setCategories]     = useState<any[]>([]);
   const [priceRange, setPriceRange]     = useState<number>(2000);
-  const [localSearch, setLocalSearch]   = useState(searchParams.get('search') || '');
 
   const selectedCategory = searchParams.get('category') || '';
 
   useEffect(() => {
     fetch('/api/categories').then(r => r.json()).then(setCategories).catch(() => {});
   }, []);
-
-  // Sincronizar el input local si el param cambia externamente (ej. desde la Navbar)
-  useEffect(() => {
-    setLocalSearch(searchParams.get('search') || '');
-  }, [searchParams.get('search')]);
 
   const handleCategorySelect = (slug: string) => {
     const newSlug = selectedCategory === slug ? '' : slug;
@@ -33,19 +26,7 @@ export default function ProductsPage() {
     setSearchParams(newParams);
   };
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newParams = new URLSearchParams(searchParams);
-    if (localSearch.trim()) {
-      newParams.set('search', localSearch.trim());
-    } else {
-      newParams.delete('search');
-    }
-    setSearchParams(newParams);
-  };
-
   const clearSearch = () => {
-    setLocalSearch('');
     const newParams = new URLSearchParams(searchParams);
     newParams.delete('search');
     setSearchParams(newParams);
@@ -65,38 +46,6 @@ export default function ProductsPage() {
           <p className="text-lg text-blue-100 max-w-xl mx-auto font-medium">
             Explora nuestra colección completa de productos premium con los mejores precios del mercado.
           </p>
-
-          {/* Barra de búsqueda prominente en el header */}
-          <form
-            onSubmit={handleSearchSubmit}
-            className="mt-8 max-w-xl mx-auto flex items-center gap-2"
-          >
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-300" />
-              <input
-                type="text"
-                placeholder="Buscar por nombre, código, marca..."
-                value={localSearch}
-                onChange={e => setLocalSearch(e.target.value)}
-                className="w-full pl-12 pr-4 py-3.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl text-white placeholder-blue-200 font-medium outline-none focus:bg-white/20 focus:border-white/50 transition-all"
-              />
-              {localSearch && (
-                <button
-                  type="button"
-                  onClick={clearSearch}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-200 hover:text-white transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-            <button
-              type="submit"
-              className="bg-white text-blue-900 font-black px-6 py-3.5 rounded-2xl hover:bg-blue-50 transition-colors shrink-0"
-            >
-              Buscar
-            </button>
-          </form>
         </div>
       </div>
 
