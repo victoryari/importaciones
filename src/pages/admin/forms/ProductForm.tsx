@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { PlusCircle, Edit2, Save, X, Image as ImageIcon, Upload, Trash2, Globe, Package, Calendar, Power, Info } from 'lucide-react';
+import { PlusCircle, Edit2, Save, X, Image as ImageIcon, Upload, Trash2, Globe, Package, Calendar, Power, Info, Sparkles } from 'lucide-react';
 
 import axios from 'axios';
 
@@ -255,7 +255,25 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         <button type="button" onClick={() => setFormData({...formData, useExpiryDate: !formData.useExpiryDate})} className={`h-8 rounded flex items-center justify-center gap-2 transition-all border ${formData.useExpiryDate ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white border-slate-300 text-slate-400'}`}>
                           <Calendar className="w-3.5 h-3.5" /> <span className="text-[9px] font-black uppercase">Venc.</span>
                         </button>
+                        <button type="button" onClick={() => setFormData({...formData, isOnSale: !formData.isOnSale, discountPercent: formData.isOnSale ? '' : formData.discountPercent})} className={`col-span-2 h-8 rounded flex items-center justify-center gap-2 transition-all border ${formData.isOnSale ? 'bg-red-500 border-red-500 text-white animate-pulse' : 'bg-white border-slate-300 text-slate-400'}`}>
+                          <Sparkles className="w-3.5 h-3.5" /> <span className="text-[9px] font-black uppercase">Oferta</span>
+                        </button>
                       </div>
+                      {formData.isOnSale && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <label className="text-[9px] font-bold text-red-500 uppercase whitespace-nowrap">% Dcto:</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            placeholder="15"
+                            value={formData.discountPercent || ''}
+                            onChange={e => setFormData({...formData, discountPercent: e.target.value})}
+                            className="h-7 w-full border border-red-300 rounded px-2 text-xs font-black text-right bg-red-50 text-red-700 focus:ring-2 focus:ring-red-200 outline-none"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

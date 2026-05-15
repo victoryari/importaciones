@@ -85,6 +85,8 @@ model Product {
   profitMargin          Decimal         @default(0.00) @db.Decimal(10, 2)
   existenceTypeCode     String?         @default("01")
   valuationMethodCode   String?         @default("1")
+  isOnSale              Boolean         @default(false)
+  discountPercent       Decimal?        @db.Decimal(5, 2)
   orderItems            OrderItem[]
   brand                 Brand?          @relation(fields: [brandId], references: [id])
   category              Category        @relation(fields: [categoryId], references: [id])

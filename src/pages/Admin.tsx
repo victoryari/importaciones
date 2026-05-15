@@ -122,7 +122,7 @@ export default function Admin() {
 
   // Formularios iniciales
   const initialSellerData = { name: '', dni: '', phone: '', email: '', isActive: true };
-  const initialProductData = { code: '', name: '', slug: '', weight: '', description: '', features: '', sanitaryRegister: '', certificate: '', igv: 18, costPrice: 0, salePrice: 0, profitMargin: 30, minSalePrice: 0, maxSalePrice: 0, stock: 0, categoryId: '', brandId: '', unitId: '', packageId: '', quantityPerPackage: 1, subPackageId: '', quantityPerSubPackage: 1, images: [], isActive: true, isFeatured: false, showInWeb: true, manageLots: false, useExpiryDate: false };
+  const initialProductData = { code: '', name: '', slug: '', weight: '', description: '', features: '', sanitaryRegister: '', certificate: '', igv: 18, costPrice: 0, salePrice: 0, profitMargin: 30, minSalePrice: 0, maxSalePrice: 0, stock: 0, categoryId: '', brandId: '', unitId: '', packageId: '', quantityPerPackage: 1, subPackageId: '', quantityPerSubPackage: 1, images: [], isActive: true, isFeatured: false, showInWeb: true, manageLots: false, useExpiryDate: false, isOnSale: false, discountPercent: '' };
   const initialQuotationData = { 
     igvPercent: 18,
     docType: 'COT',
@@ -467,10 +467,8 @@ export default function Admin() {
 
       // Eliminar campos que no existen en el schema de Prisma
       const cleanData = dataToSubmit as any;
-      delete cleanData.profitMargin;
-      delete cleanData.existenceTypeCode;
-      delete cleanData.valuationMethodCode;
       delete cleanData.image;
+      delete cleanData.isFeatured;
 
       await axios({ method: editingItem ? 'PUT' : 'POST', url, data: dataToSubmit, headers: { Authorization: `Bearer ${token}` } });
       showSuccess('Guardado'); setIsProductModalOpen(false); fetchData();

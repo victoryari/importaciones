@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { 
   Package, Layers, Tag, Scale, PlusCircle, Search, 
   Edit2, Trash2, Eye, Filter, ChevronRight, LayoutGrid, 
-  List, MoreVertical, Image as ImageIcon, Globe, Calendar, Power, Lock
+  List, MoreVertical, Image as ImageIcon, Globe, Calendar, Power, Lock, Sparkles
 } from 'lucide-react';
 import { formatNumber } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
@@ -43,6 +43,8 @@ interface Product {
   showInWeb: boolean;
   manageLots: boolean;
   useExpiryDate: boolean;
+  isOnSale?: boolean;
+  discountPercent?: number;
 }
 
 interface ProductModuleProps {
@@ -206,6 +208,11 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
                             {item.useExpiryDate && (
                               <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-tighter flex items-center gap-0.5">
                                 <Calendar className="w-2 h-2" /> Venc.
+                              </span>
+                            )}
+                            {item.isOnSale && (
+                              <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-tighter flex items-center gap-0.5 animate-pulse">
+                                <Sparkles className="w-2 h-2" /> Oferta {item.discountPercent ? `-${item.discountPercent}%` : ''}
                               </span>
                             )}
                           </div>

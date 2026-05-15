@@ -353,6 +353,20 @@ app.get('/api/products', searchLimiter, async (req, res) => {
 });
 
 
+// Endpoint de productos en oferta (público)
+app.get('/api/products/offers', async (req, res) => {
+  try {
+    const products = await (prisma as any).product.findMany({
+      where: { isOnSale: true, isActive: true, showInWeb: true },
+      include: { category: true, brand: true, unit: true },
+      orderBy: { updatedAt: 'desc' }
+    });
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener ofertas' });
+  }
+});
+
 app.post('/api/products', authenticateToken, async (req, res) => {
   try {
     const { 
@@ -361,7 +375,8 @@ app.post('/api/products', authenticateToken, async (req, res) => {
       igv, costPrice, salePrice, minSalePrice, maxSalePrice,
       brandId, unitId, isActive,
       packageId, quantityPerPackage, subPackageId, quantityPerSubPackage,
-      showInWeb, manageLots, useExpiryDate
+      showInWeb, manageLots, useExpiryDate, isOnSale, discountPercent,
+      profitMargin, existenceTypeCode, valuationMethodCode
     } = req.body;
 
     if (!name || !slug || !categoryId) {
@@ -396,7 +411,12 @@ app.post('/api/products', authenticateToken, async (req, res) => {
         quantityPerSubPackage: (quantityPerSubPackage && !isNaN(parseInt(quantityPerSubPackage))) ? parseInt(quantityPerSubPackage) : 1,
         showInWeb: showInWeb !== undefined ? showInWeb : true,
         manageLots: manageLots !== undefined ? manageLots : false,
-        useExpiryDate: useExpiryDate !== undefined ? useExpiryDate : false
+        useExpiryDate: useExpiryDate !== undefined ? useExpiryDate : false,
+        isOnSale: isOnSale !== undefined ? isOnSale : false,
+        discountPercent: (discountPercent && !isNaN(parseFloat(discountPercent))) ? parseFloat(discountPercent) : null,
+        profitMargin: (profitMargin && !isNaN(parseFloat(profitMargin))) ? parseFloat(profitMargin) : 0,
+        existenceTypeCode: existenceTypeCode || '01',
+        valuationMethodCode: valuationMethodCode || '1'
       }
     });
     res.json(product);
@@ -418,7 +438,8 @@ app.put('/api/products/:id', authenticateToken, async (req, res) => {
       igv, costPrice, salePrice, minSalePrice, maxSalePrice,
       brandId, unitId, isActive,
       packageId, quantityPerPackage, subPackageId, quantityPerSubPackage,
-      showInWeb, manageLots, useExpiryDate
+      showInWeb, manageLots, useExpiryDate, isOnSale, discountPercent,
+      profitMargin, existenceTypeCode, valuationMethodCode
     } = req.body;
 
     if (!name || !slug || !categoryId) {
@@ -434,7 +455,6 @@ app.put('/api/products/:id', authenticateToken, async (req, res) => {
       where: { id: parseInt(id) },
       data: { 
         name, slug, 
-        // stock managed by movements
         categoryId: parsedCategoryId, 
         images,
         code, 
@@ -454,7 +474,12 @@ app.put('/api/products/:id', authenticateToken, async (req, res) => {
         quantityPerSubPackage: (quantityPerSubPackage && !isNaN(parseInt(quantityPerSubPackage))) ? parseInt(quantityPerSubPackage) : 1,
         showInWeb: showInWeb !== undefined ? showInWeb : true,
         manageLots: manageLots !== undefined ? manageLots : false,
-        useExpiryDate: useExpiryDate !== undefined ? useExpiryDate : false
+        useExpiryDate: useExpiryDate !== undefined ? useExpiryDate : false,
+        isOnSale: isOnSale !== undefined ? isOnSale : false,
+        discountPercent: (discountPercent && !isNaN(parseFloat(discountPercent))) ? parseFloat(discountPercent) : null,
+        profitMargin: (profitMargin && !isNaN(parseFloat(profitMargin))) ? parseFloat(profitMargin) : 0,
+        existenceTypeCode: existenceTypeCode || '01',
+        valuationMethodCode: valuationMethodCode || '1'
       }
     });
     res.json(product);

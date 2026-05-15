@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import CategorySection from './components/CategorySection';
 import ProductGrid from './components/ProductGrid';
+import CategoryCarousel from './components/CategoryCarousel';
 import Footer from './components/Footer';
 import { motion } from 'motion/react';
 import { Truck, ShieldCheck, CreditCard, Clock } from 'lucide-react';
@@ -36,6 +37,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 import AllCategories from './pages/AllCategories';
 import ProductsPage from './pages/Products';
+import OffersPage from './pages/Offers';
 
 function HomePage() {
   const [promoAd, setPromoAd] = useState<Ad | null>(null);
@@ -89,23 +91,8 @@ function HomePage() {
 
       <CategorySection />
       
-      {/* Promotional Banner */}
-      <section className="px-4 py-10">
-        <div className="max-w-7xl mx-auto h-64 md:h-80 rounded-3xl overflow-hidden relative">
-          <img 
-            src={(isMobile && promoAd?.mobileImageUrl) ? promoAd.mobileImageUrl : (promoAd?.imageUrl || "https://images.unsplash.com/photo-1556910103-1c02745aae4d?q=80&w=2000&auto=format&fit=crop")} 
-            className="absolute inset-0 w-full h-full object-cover"
-            alt="Promotion"
-          />
-          <div className="absolute inset-0 bg-blue-900/60 flex flex-col justify-center px-12 text-white">
-            <h3 className="text-4xl font-bold mb-4">{promoAd?.title || "Especial de Cocina"}</h3>
-            <p className="text-xl mb-6 text-white/80">Descuentos exclusivos en marcas seleccionadas.</p>
-            <button className="bg-white text-blue-600 font-black py-3 px-8 rounded-full w-fit hover:bg-slate-100 transition-colors">
-              Explorar Ofertas
-            </button>
-          </div>
-        </div>
-      </section>
+      {/* Category Carousel + Ofertas */}
+      <CategoryCarousel />
 
       <ProductGrid limit={8} />
 
@@ -201,6 +188,7 @@ function AppContent() {
         <Route path="/contact" element={<div className="py-20 text-center font-bold text-3xl">Página en Construcción</div>} />
         <Route path="/categories" element={<AllCategories />} />
         <Route path="/products" element={<ProductsPage />} />
+        <Route path="/ofertas" element={<OffersPage />} />
         <Route path="/category/:slug" element={<CategoryPage />} />
       </Routes>
 
