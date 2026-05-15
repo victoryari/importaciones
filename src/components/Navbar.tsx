@@ -51,11 +51,19 @@ export default function Navbar() {
     fetch('/api/settings').then(r => r.json()).then(setSettings).catch(() => {});
   }, []);
 
-  // Sincronizar valor inicial desde la URL
+  // Limpiar búsqueda cuando el usuario navega fuera de /products
   useEffect(() => {
-    const q = searchParams.get('search') || '';
-    setInputValue(q);
-  }, []);
+    if (location.pathname !== '/products') {
+      setInputValue('');
+      setMobileInput('');
+      // También limpiar el param de la URL si hubiera quedado
+      const newParams = new URLSearchParams(searchParams);
+      if (newParams.has('search')) {
+        newParams.delete('search');
+        setSearchParams(newParams, { replace: true });
+      }
+    }
+  }, [location.pathname]);
 
   // Aplicar búsqueda debounced a la URL y navegar a /products si no estamos ahí
   useEffect(() => {
