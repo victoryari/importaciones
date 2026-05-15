@@ -232,7 +232,14 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
                       <td className="px-6 py-4 text-center">
                         {(() => {
                           const totalStock = (item.stockRecords || []).reduce((acc: number, s: any) => {
-                            if (s.warehouseId === 6 || s.warehouse?.type?.toUpperCase() === 'TRANSITORIO') return acc;
+                            const wType = s.warehouse?.type?.toUpperCase() || '';
+                            const wName = s.warehouse?.name?.toUpperCase() || '';
+                            const isInternal = ['TRANSITORIO', 'DESPACHO', 'COMPROBANTES', 'SISTEMA', 'CONTROL', 'EXISTENCIAS'].includes(wType) || 
+                                             wName.includes('DESPACHO') || 
+                                             wName.includes('COMPROBANTE') || 
+                                             wName.includes('TRANSITO') ||
+                                             wName.includes('EXISTENCIAS');
+                            if (isInternal) return acc;
                             return acc + s.quantity;
                           }, 0);
                           return (

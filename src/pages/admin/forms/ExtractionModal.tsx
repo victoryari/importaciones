@@ -135,7 +135,7 @@ export const ExtractionModal: React.FC<ExtractionModalProps> = ({ isOpen, onClos
                       <tr className="bg-slate-100 border-b-2 border-slate-200">
                         <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Tipo Doc</th>
                         <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Nro. Documento</th>
-                        <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Fecha</th>
+                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Fecha</th>
                         <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Proveedor / Cliente</th>
                         <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">
                           {sourceType === 'COMPRA' ? 'Total' : 'Cant. Total'}

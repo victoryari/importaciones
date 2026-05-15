@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Sparkles, ShoppingCart, Tag, ArrowLeft } from 'lucide-react';
-import { useCart } from '../context/CartContext';
+import { Sparkles, Tag, ArrowLeft } from 'lucide-react';
+import ProductCard from '../components/ProductCard';
 
 interface Product {
   id: number;
@@ -20,7 +20,6 @@ interface Product {
 export default function OffersPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { addToCart } = useCart();
 
   useEffect(() => {
     fetch('/api/products/offers')
@@ -31,18 +30,6 @@ export default function OffersPage() {
       })
       .catch(() => setIsLoading(false));
   }, []);
-
-  const getDiscountedPrice = (price: any, discount?: any) => {
-    const numPrice = parseFloat(price) || 0;
-    const numDiscount = parseFloat(discount) || 0;
-    if (numDiscount <= 0) return numPrice;
-    return numPrice * (1 - numDiscount / 100);
-  };
-
-  const formatPrice = (n: any) => {
-    const num = parseFloat(n) || 0;
-    return num.toFixed(2);
-  };
 
   return (
     <motion.div
@@ -99,82 +86,20 @@ export default function OffersPage() {
             <p className="text-sm text-slate-500 font-bold mb-6">
               {products.length} producto{products.length !== 1 ? 's' : ''} en oferta
             </p>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {products.map((product, index) => {
-                const discounted = getDiscountedPrice(product.salePrice, product.discountPercent);
-                return (
-                  <motion.div
-                    key={product.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all group border border-slate-100"
-                  >
-                    {/* Image */}
-                    <div className="relative aspect-square bg-slate-50 overflow-hidden">
-                      {product.images?.[0] ? (
-                        <img
-                          src={product.images[0]}
-                          alt={product.name}
-                          className="w-full h-full object-contain p-4 group-hover:scale-110 transition-transform duration-500"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-slate-200">
-                          <Tag className="w-12 h-12" />
-                        </div>
-                      )}
-                      {/* Discount Badge */}
-                      {product.discountPercent && (
-                        <div className="absolute top-3 left-3 bg-red-500 text-white text-xs font-black px-3 py-1.5 rounded-full shadow-lg animate-pulse">
-                          -{product.discountPercent}%
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Info */}
-                    <div className="p-4 space-y-2">
-                      {product.category && (
-                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">
-                          {product.category.name}
-                        </span>
-                      )}
-                      <h3 className="font-bold text-slate-900 text-sm line-clamp-2 leading-tight">
-                        {product.name}
-                      </h3>
-                      {product.brand && (
-                        <span className="text-[10px] text-blue-600 font-bold">{product.brand.name}</span>
-                      )}
-
-                      {/* Prices */}
-                      <div className="flex items-end gap-2 pt-1">
-                        <span className="text-xl font-black text-red-600">
-                          S/ {formatPrice(discounted)}
-                        </span>
-                        {product.discountPercent && product.discountPercent > 0 && (
-                          <span className="text-sm text-slate-400 line-through">
-                            S/ {formatPrice(product.salePrice)}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Add to cart */}
-                      <button
-                        onClick={() => addToCart({
-                          id: product.id,
-                          name: product.name,
-                          price: discounted,
-                          image: product.images?.[0] || '',
-                          quantity: 1
-                        })}
-                        className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-colors"
-                      >
-                        <ShoppingCart className="w-3.5 h-3.5" />
-                        Agregar al Carrito
-                      </button>
-                    </div>
-                  </motion.div>
-                );
-              })}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+              {products.map((product, index) => (
+                <ProductCard
+                  key={product.id}
+                  index={index}
+                  product={{
+                    ...product,
+                    price: product.salePrice,
+                    image: product.images?.[0] || 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?q=80&w=1000&auto=format&fit=crop',
+                    category: product.category?.name || 'Varios',
+                    isOnSale: true
+                  }}
+                />
+              ))}
             </div>
           </>
         )}

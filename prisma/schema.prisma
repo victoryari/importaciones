@@ -394,6 +394,9 @@ model QuotationItem {
   quantity    Int
   price       Decimal   @db.Decimal(10, 2)
   discount    Decimal   @default(0.00) @db.Decimal(10, 2)
+  lotNumber   String?
+  warehouseName String?
+  expiryDate  DateTime?
   product     Product   @relation(fields: [productId], references: [id], map: "quotation_item_product_id_fkey_new")
   quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
@@ -511,6 +514,9 @@ model OrderItem {
   quantity  Int
   price     Decimal @db.Decimal(10, 2)
   discount  Decimal @default(0.00) @db.Decimal(10, 2)
+  lotNumber   String?
+  warehouseName String?
+  expiryDate  DateTime?
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product   Product @relation(fields: [productId], references: [id])
 

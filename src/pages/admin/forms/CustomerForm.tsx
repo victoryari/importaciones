@@ -31,20 +31,45 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
       const data = await handleConsultDocument(formData.docType, formData.docNumber);
       if (data) {
         if (formData.docType === 'RUC') {
+          const address = data.direccion || data.direccion_completa || '';
+          let dept = data.departamento || data.department || '';
+          let prov = data.provincia || data.province || '';
+          let dist = data.distrito || data.district || '';
+
+          // Si los campos de ubicación vienen vacíos, intentar extraerlos del final de la dirección
+          // Formato común: "... LIMA LIMA COMAS"
+          if (!dept && address) {
+            const parts = address.trim().split(/\s+/);
+            if (parts.length >= 3) {
+              // Asumimos que los últimos 3 elementos son Dept, Prov, Dist
+              // Nota: Esto es heurístico para Perú
+              const potentialDist = parts[parts.length - 1].toUpperCase();
+              const potentialProv = parts[parts.length - 2].toUpperCase();
+              const potentialDept = parts[parts.length - 3].toUpperCase();
+
+              // Validar si al menos el departamento existe en nuestra data
+              if (DEPARTMENTS.some(d => d.name.toUpperCase() === potentialDept)) {
+                dept = potentialDept;
+                prov = potentialProv;
+                dist = potentialDist;
+              }
+            }
+          }
+
           setFormData({
             ...formData,
-            name: data.razonSocial || data.nombre_o_razon_social || '',
-            address: data.direccion || data.direccion_completa || '',
-            department: data.departamento || '',
-            province: data.provincia || '',
-            district: data.distrito || ''
+            name: (data.razonSocial || data.nombre_o_razon_social || '').toUpperCase(),
+            address: address.toUpperCase(),
+            department: dept.toUpperCase(),
+            province: prov.toUpperCase(),
+            district: dist.toUpperCase()
           });
         } else {
           setFormData({
             ...formData,
-            firstName: data.nombres || '',
-            lastName: `${data.apellidoPaterno || data.apellido_paterno || ''} ${data.apellidoMaterno || data.apellido_materno || ''}`.trim(),
-            name: `${data.nombres || ''} ${data.apellidoPaterno || data.apellido_paterno || ''} ${data.apellidoMaterno || data.apellido_materno || ''}`.trim()
+            firstName: (data.nombres || '').toUpperCase(),
+            lastName: `${data.apellidoPaterno || data.apellido_paterno || ''} ${data.apellidoMaterno || data.apellido_materno || ''}`.trim().toUpperCase(),
+            name: `${data.nombres || ''} ${data.apellidoPaterno || data.apellido_paterno || ''} ${data.apellidoMaterno || data.apellido_materno || ''}`.trim().toUpperCase()
           });
         }
       }

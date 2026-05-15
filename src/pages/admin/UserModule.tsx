@@ -216,7 +216,7 @@ export const UserModule = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1">
+                <label className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1">
                   <KeyIcon className="w-4 h-4" /> 
                   Contraseña {editingUser && '(Dejar en blanco para no cambiar)'}
                 </label>

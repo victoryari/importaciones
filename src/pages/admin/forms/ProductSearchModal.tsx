@@ -38,11 +38,14 @@ export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({ isOpen, 
   const calculateTotalStock = (product: any) => {
     if (!product.stockRecords) return product.stock || 0;
     return product.stockRecords.reduce((acc: number, record: any) => {
-      // Excluir almacenes de tránsito por ID o por tipo
       const whType = record.warehouse?.type?.toUpperCase() || '';
-      if (record.warehouseId === 6 || whType === 'TRANSITORIO') {
-        return acc;
-      }
+      const whName = record.warehouse?.name?.toUpperCase() || '';
+      const isInternal = ['TRANSITORIO', 'DESPACHO', 'COMPROBANTES', 'SISTEMA', 'CONTROL', 'EXISTENCIAS'].includes(whType) || 
+                       whName.includes('DESPACHO') || 
+                       whName.includes('COMPROBANTE') || 
+                       whName.includes('TRANSITO') ||
+                       whName.includes('EXISTENCIAS');
+      if (isInternal) return acc;
       return acc + record.quantity;
     }, 0);
   };

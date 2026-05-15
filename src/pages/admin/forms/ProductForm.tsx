@@ -165,9 +165,17 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       </div>
                     </fieldset>
 
-                    <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-1">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 flex items-center gap-2"><Info className="w-3 h-3" /> Descripción y Características</label>
-                      <textarea rows={3} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full p-2 border border-slate-300 rounded text-xs font-medium resize-none focus:ring-1 focus:ring-blue-500 outline-none" placeholder="Ingresa detalles técnicos..." />
+                    <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 flex items-center gap-2"><Info className="w-3 h-3" /> Descripción General</label>
+                        <textarea rows={6} value={formData.description || ''} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full p-2 border border-slate-300 rounded text-xs font-medium resize-y focus:ring-1 focus:ring-blue-500 outline-none min-h-25" placeholder="Ingresa detalles generales del producto..." />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 flex items-center gap-2"><Sparkles className="w-3 h-3" /> Características Técnicas (Puntos Clave)</label>
+                        <textarea rows={6} value={formData.features || ''} onChange={e => setFormData({...formData, features: e.target.value})} className="w-full p-2 border border-slate-300 rounded text-xs font-medium resize-y focus:ring-1 focus:ring-blue-500 outline-none min-h-25" placeholder="Usa guiones (-) para crear listas automáticas en la web, ej:
+- Material de alta calidad
+- Resistente al agua" />
+                      </div>
                     </div>
                   </div>
 

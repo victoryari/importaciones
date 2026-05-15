@@ -246,12 +246,12 @@ export const RoleModule = () => {
                           : 'bg-white border-slate-200 hover:border-slate-300 text-slate-600'
                       }`}
                     >
-                      <div className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded flex items-center justify-center border ${
+                      <div className={`mt-0.5 shrink-0 w-5 h-5 rounded flex items-center justify-center border ${
                         formData.permissions.includes(perm.id)
                           ? 'bg-blue-600 border-blue-600 text-white'
                           : 'bg-white border-slate-300'
                       }`}>
-                        {formData.permissions.includes(perm.id) && <CheckIcon className="w-3.5 h-3.5 stroke-[3]" />}
+                        {formData.permissions.includes(perm.id) && <CheckIcon className="w-3.5 h-3.5 stroke-3" />}
                       </div>
                       <input 
                         type="checkbox" 

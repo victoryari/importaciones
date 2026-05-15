@@ -50,24 +50,43 @@ interface Quotation {
 
 interface QuotationModuleProps {
   quotations: Quotation[];
-  onDelete: (id: number) => void;
-  onEdit: (quot: Quotation) => void;
-  onConvertToOrder: (quot: Quotation) => void;
+  onEdit: (q: Quotation) => void;
   onNew: () => void;
+  onDelete: (id: number) => void;
+  onConvertToOrder: (q: Quotation) => void;
   onReset: (id: number) => void;
+  sunatCurrencies?: any[];
 }
 
-export const QuotationModule: React.FC<QuotationModuleProps> = ({
-  quotations,
-  onDelete,
-  onEdit,
+export const QuotationModule: React.FC<QuotationModuleProps> = ({ 
+  quotations, 
+  onEdit, 
+  onNew, 
+  onDelete, 
   onConvertToOrder,
-  onNew,
-  onReset
+  onReset,
+  sunatCurrencies = []
 }) => {
   const { hasPermission } = useAuth();
-  const canWrite = hasPermission?.('WRITE_QUOTATIONS') || hasPermission?.('ALL');
+  const canWrite = hasPermission('WRITE_QUOTATIONS') || hasPermission('ALL');
+  const canDelete = hasPermission('DELETE_QUOTATIONS') || hasPermission('ALL');
+  
   const [searchTerm, setSearchTerm] = useState('');
+
+  const getCurrencySymbol = (currencyCode?: string) => {
+    if (!currencyCode) return 'S/';
+    // Encontrar en sunatCurrencies
+    const currency = sunatCurrencies.find(c => c.code === currencyCode);
+    if (currency) {
+      // Usualmente el símbolo está en la descripción o es predecible
+      if (currency.code === 'PEN' || currency.code === '1') return 'S/';
+      if (currency.code === 'USD' || currency.code === '2') return '$';
+      // Fallback: si la descripción tiene el símbolo (ej: "S/ - SOLES")
+      if (currency.description.includes('S/')) return 'S/';
+      if (currency.description.includes('$')) return '$';
+    }
+    return currencyCode === 'USD' ? '$' : 'S/';
+  };
 
   const filteredQuotations = quotations.filter(q => 
     q.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -155,9 +174,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     <td className="px-6 py-4 text-right">
                       <div className="flex flex-col items-end">
                         <span className="font-black text-slate-900">
-                          {quot.currency === 'PEN' ? 'S/' : '$'} {formatNumber(quot.totalAmount)}
+                          {getCurrencySymbol(quot.currency)} {formatNumber(quot.totalAmount)}
                         </span>
-                        {quot.currency === 'USD' && (
+                        {(quot.currency === 'USD' || quot.currency === '2') && (
                           <span className="text-[10px] text-slate-400 font-bold italic">TC: {quot.exchangeRate}</span>
                         )}
                       </div>

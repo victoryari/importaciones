@@ -450,7 +450,15 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                                   <span className="font-bold text-slate-800">{p.name}</span>
                                   <div className="flex flex-wrap gap-1 items-center mt-1">
                                     <span className="text-[10px] bg-slate-100 px-1 rounded text-slate-500 font-bold">{p.code}</span>
-                                    {p.stockRecords?.map((sr: any) => (
+                                    {p.stockRecords?.filter((sr: any) => {
+                                      const wType = sr.warehouse?.type?.toUpperCase() || '';
+                                      const wName = sr.warehouse?.name?.toUpperCase() || '';
+                                      return !['TRANSITORIO', 'DESPACHO', 'COMPROBANTES', 'SISTEMA', 'CONTROL', 'EXISTENCIAS'].includes(wType) && 
+                                             !wName.includes('DESPACHO') && 
+                                             !wName.includes('COMPROBANTE') && 
+                                             !wName.includes('TRANSITO') &&
+                                             !wName.includes('EXISTENCIAS');
+                                    }).map((sr: any) => (
                                       <span key={sr.id} className="text-[9px] text-indigo-600 font-black bg-indigo-50 px-1.5 py-0.5 rounded flex items-center gap-1 border border-indigo-100">
                                         <MapPin className="w-2.5 h-2.5" /> {sr.warehouse?.name.split(' ')[0]}: {sr.quantity}
                                       </span>

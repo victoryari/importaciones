@@ -1098,7 +1098,7 @@ app.post('/api/quotations', authenticateToken, async (req, res) => {
       }
     }
 
-    const quotation = await (prisma.quotation as any).create({
+    const quotation = await prisma.quotation.create({
       data: {
         customerId: finalCustomerId,
         customerName: customerName || '', 
@@ -1119,25 +1119,46 @@ app.post('/api/quotations', authenticateToken, async (req, res) => {
         billingStatus, pickupPlace, observation, notes,
         agencyId: (agencyId && !isNaN(parseInt(agencyId))) ? parseInt(agencyId) : null,
         items: {
-          create: (items || []).map((item: any) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            price: item.price,
-            discount: item.discount || 0
-          }))
+          create: (items || []).map((item: any) => {
+            const qty = parseInt(item.quantity);
+            const pId = parseInt(item.productId);
+            
+            let validExpiry = null;
+            if (item.expiryDate) {
+              const d = new Date(item.expiryDate);
+              if (!isNaN(d.getTime())) validExpiry = d;
+            }
+
+            return {
+              productId: pId,
+              quantity: isNaN(qty) ? 0 : qty,
+              price: parseFloat(item.price) || 0,
+              discount: parseFloat(item.discount) || 0,
+              lotNumber: item.lotNumber || item.lot || null,
+              warehouseName: item.warehouseName || null,
+              expiryDate: validExpiry
+            };
+          })
         }
-      } as any,
+      },
       include: { items: true }
     });
 
     // Incrementar correlativo si es una serie válida
     if (docSeries && docNumber && pickupPlace) {
-      const warehouse = await (prisma as any).warehouse.findFirst({ where: { name: pickupPlace } });
+      const warehouse = await (prisma as any).warehouse.findFirst({ 
+        where: { 
+          OR: [
+            { name: pickupPlace },
+            { id: isNaN(parseInt(pickupPlace)) ? -1 : parseInt(pickupPlace) }
+          ]
+        } 
+      });
       if (warehouse) {
         await (prisma as any).documentSeries.updateMany({
           where: { 
             warehouseId: warehouse.id, 
-            documentType: docType, 
+            documentType: docType || 'COT', 
             series: docSeries 
           },
           data: { currentNumber: parseInt(docNumber) }
@@ -1190,14 +1211,29 @@ app.put('/api/quotations/:id', authenticateToken, async (req, res) => {
         flete: parseFloat(flete as any) || 0, 
         billingStatus, pickupPlace, observation, notes,
         agencyId: (agencyId && !isNaN(parseInt(agencyId))) ? parseInt(agencyId) : null,
-        items: {
-          create: (items || []).map((item: any) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            price: item.price,
-            discount: item.discount || 0
-          }))
-        }
+      items: {
+        deleteMany: {}, // Limpiar ítems anteriores para evitar duplicados
+        create: (items || []).map((item: any) => {
+          const qty = parseInt(item.quantity);
+          const pId = parseInt(item.productId);
+          
+          let validExpiry = null;
+          if (item.expiryDate) {
+            const d = new Date(item.expiryDate);
+            if (!isNaN(d.getTime())) validExpiry = d;
+          }
+
+          return {
+            productId: pId,
+            quantity: isNaN(qty) ? 0 : qty,
+            price: parseFloat(item.price) || 0,
+            discount: parseFloat(item.discount) || 0,
+            lotNumber: item.lotNumber || item.lot || null,
+            warehouseName: item.warehouseName || null,
+            expiryDate: validExpiry
+          };
+        })
+      }
       } as any
     });
     res.json(quotation);
@@ -2337,17 +2373,29 @@ app.post('/api/orders', orderLimiter, async (req, res) => {
         return res.status(400).json({ error: `Stock insuficiente para ${product.name}. Disponible: ${totalStock}, Solicitado: ${item.quantity}` });
       }
 
-      // Usar el precio oficial de la BD, NO el precio enviado por el cliente
-      const officialPrice = Number(product.salePrice);
+      // Permitir el precio negociado/ingresado por el cliente en el frontend
+      const officialPrice = Number(item.price) >= 0 ? Number(item.price) : Number(product.salePrice);
       const itemDiscount = Math.min(Math.max(parseFloat(item.discount) || 0, 0), officialPrice); // descuento entre 0 y precio unitario
       const itemTotal = (officialPrice - itemDiscount) * item.quantity;
       serverCalculatedTotal += itemTotal;
 
+      // Validar fecha de vencimiento
+      let validExpiry = null;
+      if (item.expiryDate) {
+        const d = new Date(item.expiryDate);
+        if (!isNaN(d.getTime())) {
+          validExpiry = d;
+        }
+      }
+
       validatedItems.push({
         productId: item.productId,
-        quantity: item.quantity,
-        price: officialPrice, // precio oficial de BD
-        discount: itemDiscount
+        quantity: parseInt(item.quantity) || 0,
+        price: officialPrice, // precio enviado por el usuario o precio base
+        discount: itemDiscount,
+        lotNumber: item.lotNumber || item.lot || null,
+        warehouseName: item.warehouseName || null,
+        expiryDate: validExpiry
       });
     }
 
@@ -2420,7 +2468,7 @@ app.post('/api/orders', orderLimiter, async (req, res) => {
 
       if (normalizedStatus === 'CREDIT' || normalizedCondition === 'CONTADO' || normalizedCondition === 'CRÉDITO' || normalizedCondition === 'CREDITO') {
         console.log(`[ORDER] Triggering moveStockToTemp for Order ${newOrder.id}`);
-        await moveStockToTemp(tx, newOrder.id, items);
+        await moveStockToTemp(tx, newOrder.id, validatedItems);
       } else {
         console.log(`[ORDER] Skipping moveStockToTemp for Order ${newOrder.id} - Condition did not match.`);
       }
@@ -2469,12 +2517,13 @@ async function moveStockToTemp(tx: any, orderId: number, items: any[]) {
       where: { 
         productId: item.productId, 
         quantity: { gte: item.quantity },
+        lotNumber: item.lotNumber || null,
         warehouse: {
+          name: item.warehouseName ? item.warehouseName : {
+            notIn: ['Existencias', 'Comprobante', 'Despacho']
+          },
           type: { 
             notIn: ['TRANSITORIO', 'DESPACHO', 'COMPROBANTES', 'SISTEMA'] 
-          },
-          name: {
-            notIn: ['Existencias', 'Comprobante', 'Despacho']
           }
         }
       },
@@ -2496,14 +2545,27 @@ async function moveStockToTemp(tx: any, orderId: number, items: any[]) {
 
     // 3. Ingreso a Despacho Manual (Reserva)
     let stockDesp = await tx.stock.findFirst({
-      where: { productId: item.productId, warehouseId: despacho.id }
+      where: { 
+        productId: item.productId, 
+        warehouseId: despacho.id,
+        lotNumber: item.lotNumber || null
+      }
     });
     if (!stockDesp) {
       stockDesp = await tx.stock.create({
-        data: { productId: item.productId, warehouseId: despacho.id, quantity: item.quantity }
+        data: { 
+          productId: item.productId, 
+          warehouseId: despacho.id, 
+          quantity: item.quantity,
+          lotNumber: item.lotNumber || null,
+          expiryDate: item.expiryDate || null
+        }
       });
     } else {
-      await tx.stock.update({ where: { id: stockDesp.id }, data: { quantity: { increment: item.quantity } } });
+      await tx.stock.update({ 
+        where: { id: stockDesp.id }, 
+        data: { quantity: { increment: item.quantity } } 
+      });
     }
 
     // 4. Registrar Movimiento

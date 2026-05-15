@@ -214,15 +214,23 @@ export default function Admin() {
 
   const handleSearchProduct = (q: string) => {
     if (q.length > 1) {
+      // Usar endpoint correcto con todos los includes necesarios
       axios.get(`/api/products/search?q=${q}`, { headers: { Authorization: `Bearer ${token}` } })
         .then(r => setSearchResults(r.data));
+    } else {
+      setSearchResults([]);
     }
   };
 
   const addQuotationItem = (p: any) => {
     if (!quotationItems.find(i => i.productId === p.id)) {
-      const warehouseId = parseInt(quotationFormData.pickupPlace);
-      const validRecords = (p.stockRecords || []).filter((sr: any) => sr.warehouseId === warehouseId && sr.quantity > 0);
+      // --- Lógica PEPS (FIFO) Global (Solo Almacenes Principales) ---
+      const validRecords = (p.stockRecords || []).filter((sr: any) => {
+        const isTransitory = sr.warehouseId === 6 || sr.warehouse?.type?.toUpperCase() === 'TRANSITORIO';
+        return sr.quantity > 0 && !isTransitory;
+      });
+      
+      // Ordenar por ID (FIFO)
       const oldestLot = validRecords.sort((a: any, b: any) => a.id - b.id)[0];
 
       setQuotationItems([...quotationItems, {
@@ -233,7 +241,9 @@ export default function Admin() {
         quantity: 1,
         discount: 0,
         unit: p.unit,
-        lot: oldestLot?.lot || null,
+        lot: oldestLot?.lotNumber || oldestLot?.lot || null,
+        warehouseName: oldestLot?.warehouse?.name || 'S/A',
+        expiryDate: oldestLot?.expiryDate || null,
         stockRecords: p.stockRecords || []
       }]);
     }
@@ -413,7 +423,11 @@ export default function Admin() {
           price: Number(i.price || 0),
           quantity: Number(i.quantity || 0),
           discount: Number(i.discount || 0),
-          unit: i.product?.unit?.symbol || i.unit || 'UND'
+          unit: i.product?.unit?.symbol || i.unit || 'UND',
+          lot: i.lotNumber || i.lot || null,
+          warehouseName: i.warehouseName || null,
+          expiryDate: i.expiryDate || null,
+          stockRecords: i.product?.stockRecords || []
         })) || []);
       } else {
         setQuotationFormData({
@@ -491,16 +505,28 @@ export default function Admin() {
     e.preventDefault(); setLoading(true);
     try {
       const url = editingItem ? `/api/warehouses/${editingItem.id}` : '/api/warehouses';
-      const res = await axios({ method: editingItem ? 'PUT' : 'POST', url, data: warehouseFormData, headers: { Authorization: `Bearer ${token}` } });
+      
+      // Remove relation fields (like floors) before sending to prevent Prisma schema errors
+      const payload = {
+        name: warehouseFormData.name,
+        code: warehouseFormData.code,
+        type: warehouseFormData.type,
+        address: warehouseFormData.address,
+        ruc: warehouseFormData.ruc,
+        phones: warehouseFormData.phones,
+        observation: warehouseFormData.observation,
+        isActive: warehouseFormData.isActive,
+        validateStock: warehouseFormData.validateStock
+      };
+
+      const res = await axios({ method: editingItem ? 'PUT' : 'POST', url, data: payload, headers: { Authorization: `Bearer ${token}` } });
       showSuccess('Almacén guardado'); 
-      if (!editingItem) {
-        setIsWarehouseModalOpen(false);
-      } else {
-        // Actualizar el form data con la respuesta (que incluye IDs nuevos)
-        setWarehouseFormData(res.data);
-      }
+      setIsWarehouseModalOpen(false);
       fetchData();
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+    } catch (err: any) { 
+      console.error(err); 
+      alert(err.response?.data?.error || 'Error al guardar el almacén');
+    } finally { setLoading(false); }
   };
 
   const handleSubmitAgency = async (e: any) => {
@@ -578,6 +604,7 @@ export default function Admin() {
       const res = await axios({ method, url, data: payload, headers: { Authorization: `Bearer ${token}` } });
       showSuccess(isOrder ? 'Pedido generado' : 'Cotización guardada'); 
       setIsQuotationModalOpen(false); 
+      setIsOrderModalOpen(false);
       fetchData();
       
       if (isOrder) handleOpenTab('orders', 'Pedidos');
@@ -888,6 +915,8 @@ export default function Admin() {
                             id: undefined,
                             quotationId: q.id,
                             docType: 'PED',
+                            docSeries: '', // Resetear serie para que elija una de pedido
+                            docNumber: '', // Resetear número
                             ruc: q.customerDocNumber,
                             razonSocial: q.customerName,
                             address: q.customerAddress,
@@ -904,11 +933,16 @@ export default function Admin() {
                             price: i.price,
                             quantity: i.quantity,
                             discount: i.discount || 0,
-                            unit: i.product?.unit
+                            unit: i.product?.unit,
+                            lot: i.lotNumber || i.lot || null,
+                            expiryDate: i.expiryDate || null,
+                            warehouseName: i.warehouseName || null,
+                            stockRecords: i.product?.stockRecords || []
                           })) || []);
                           setIsQuotationModalOpen(true);
                         }} 
                         onReset={handleResetQuotation}
+                        sunatCurrencies={sunatCurrencies}
                       />
                     )}
                     {currentTab === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => {}} onEdit={(o) => openForm('orders', o)} onOpenPayment={handleOpenPayment} onNewDirectOrder={() => { handleResetQuotationForm(); setQuotationFormData(prev => ({...prev, docType: 'PED'})); setIsOrderModalOpen(true); }} />}
@@ -955,38 +989,11 @@ export default function Admin() {
               sunatPaymentConditions={sunatPaymentConditions}
               sunatOperationTypes={sunatOperationTypes}
               searchResults={searchResults} 
-              handleSearchProduct={(q) => { if(q.length > 1) axios.get(`/api/products/search?q=${q}`, {headers:{Authorization:`Bearer ${token}`}}).then(r=>setSearchResults(r.data)) }} 
+              handleSearchProduct={handleSearchProduct} 
               quotationItems={quotationItems} 
-              addQuotationItem={(p) => { 
-                if(!quotationItems.find(i=>i.productId===p.id)) {
-                  // --- Lógica PEPS (FIFO) ---
-                  const warehouseId = parseInt(quotationFormData.pickupPlace);
-                  const validRecords = (p.stockRecords || []).filter((sr: any) => sr.warehouseId === warehouseId && sr.quantity > 0);
-                  // Ordenar por ID (los IDs más bajos suelen ser los ingresos más antiguos)
-                  const oldestLot = validRecords.sort((a: any, b: any) => a.id - b.id)[0];
-                  
-                  setQuotationItems([...quotationItems, {
-                    productId: p.id, 
-                    name: p.name, 
-                    code: p.code, 
-                    price: p.salePrice, 
-                    quantity: 1, 
-                    discount: 0, 
-                    unit: p.unit, 
-                    lot: oldestLot?.lot || null,
-                    stockRecords: p.stockRecords || []
-                  }]);
-                }
-                setSearchResults([]); 
-              }} 
-              updateQuotationItem={(id, f, v) => setQuotationItems(quotationItems.map(i=>i.productId===id?{...i,[f]:v}:i))} 
-              removeQuotationItem={(id) => {
-                if (id === -1) {
-                  setQuotationItems(prev => prev.slice(0, -1));
-                } else {
-                  setQuotationItems(prev => prev.filter(i => i.productId !== id));
-                }
-              }} 
+              addQuotationItem={addQuotationItem} 
+              updateQuotationItem={updateQuotationItem} 
+              removeQuotationItem={removeQuotationItem} 
               quotationTotal={quotationTotal} 
               handleConsultCustomer={handleConsultForQuotation}
               handleQuickRegister={handleQuickRegisterCustomer}
@@ -1019,7 +1026,7 @@ export default function Admin() {
           </div>
 
           <div style={{ display: (activeTabId === 'customers' || isCustomerModalOpen) ? 'block' : 'none' }}>
-            <CustomerForm isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} onSubmit={handleSubmitCustomer} formData={customerFormData} setFormData={setCustomerFormData} editingItem={editingItem} loading={loading} documentTypes={documentTypes} handleConsultDocument={handleConsultDocument} />
+            <CustomerForm isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} onSubmit={handleSubmitCustomer} formData={customerFormData} setFormData={setCustomerFormData} editingItem={editingItem} loading={loading} documentTypes={documentTypes} handleConsultDocument={handleConsultForQuotation} />
           </div>
 
           <div style={{ display: (activeTabId === 'sellers' || isSellerModalOpen) ? 'block' : 'none' }}>

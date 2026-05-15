@@ -125,6 +125,7 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({
 
   return (
     <AnimatePresence>
+      {isOpen && (
       <div className="absolute inset-0 z-110 flex items-center justify-center p-0 overflow-hidden">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
         
@@ -364,7 +365,6 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({
               </button>
               <button 
                 type="submit" 
-                onClick={onSubmit}
                 disabled={loading}
                 className="px-8 h-10 bg-blue-800 hover:bg-blue-900 text-white font-black rounded shadow-lg shadow-blue-100 transition-all flex items-center gap-2 disabled:bg-blue-300 uppercase text-xs"
               >
@@ -375,6 +375,7 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({
           </form>
         </motion.div>
       </div>
+      )}
     </AnimatePresence>
   );
 };

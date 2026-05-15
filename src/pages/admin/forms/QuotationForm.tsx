@@ -78,11 +78,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
     }
   }, [isOpen, formData.date, formData.currency]);
 
-  useEffect(() => {
-    if (isOpen && !editingItem) {
-      setFormData((prev: any) => ({ ...prev, docType: 'COT' }));
-    }
-  }, [isOpen, editingItem]);
+
 
   const handleSeriesChange = (seriesId: string) => {
     const selected = series.find(s => s.id === parseInt(seriesId));
@@ -214,7 +210,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
             <div className="bg-slate-100 px-4 py-2 border-b border-slate-300 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-blue-800" />
-                <h2 className="text-sm font-bold text-slate-700 tracking-tight">Cotización</h2>
+                <h2 className="text-sm font-bold text-slate-700 tracking-tight">{formData.docType === 'PED' ? 'Pedido' : 'Cotización'}</h2>
               </div>
               <div className="flex items-center gap-8">
                 <div className="flex items-center gap-2">
@@ -248,7 +244,9 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                 <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                   <div className="md:col-span-5 flex items-center gap-1">
                     <span className="text-[11px] font-bold text-slate-600 shrink-0">Documento</span>
-                    <div className="h-8 border border-slate-300 rounded px-2 text-[10px] font-black bg-slate-100 w-24 flex items-center text-blue-700 uppercase">Cotización</div>
+                    <div className={`h-8 border border-slate-300 rounded px-2 text-[10px] font-black w-24 flex items-center uppercase ${formData.docType === 'PED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-blue-700'}`}>
+                      {formData.docType === 'PED' ? 'Pedido' : 'Cotización'}
+                    </div>
 
                     <span className="text-[11px] font-bold text-slate-600 shrink-0 ml-2">Serie</span>
                     <select 
@@ -491,16 +489,31 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                             <div key={p.id} onClick={() => { addQuotationItem(p); handleSearchProduct(''); }} className="p-2 hover:bg-blue-50 cursor-pointer text-xs flex justify-between border-b border-slate-50 items-center">
                               <div className="flex flex-col">
                                 <span className="font-bold">{p.name}</span>
-                                <div className="flex flex-wrap gap-1 items-center mt-1">
-                                  <span className="text-[10px] bg-slate-100 px-1 rounded text-slate-500 font-bold">{p.code}</span>
-                                  {p.stockRecords?.map((sr: any) => (
-                                    <span key={sr.id} className="text-[9px] text-indigo-600 font-black bg-indigo-50 px-1.5 py-0.5 rounded flex items-center gap-1 border border-indigo-100">
-                                      <MapPin className="w-2.5 h-2.5" />
-                                      {sr.warehouse?.name.split(' ')[0]}: {sr.quantity} {sr.zone && <span className="text-indigo-400 font-bold">({sr.zone.name})</span>}
-                                    </span>
-                                  ))}
-                                  {!p.stockRecords?.length && <span className="text-[9px] text-red-400 font-bold italic">Sin stock en almacenes</span>}
-                                </div>
+                                  <div className="flex flex-wrap gap-1 items-center mt-1">
+                                    <span className="text-[10px] bg-slate-100 px-1 rounded text-slate-500 font-bold">{p.code}</span>
+                                    {p.stockRecords?.filter((sr: any) => {
+                                      const wType = sr.warehouse?.type?.toUpperCase() || '';
+                                      const wName = sr.warehouse?.name?.toUpperCase() || '';
+                                      return !['TRANSITORIO', 'DESPACHO', 'COMPROBANTES', 'SISTEMA', 'CONTROL', 'EXISTENCIAS'].includes(wType) && 
+                                             !wName.includes('DESPACHO') && 
+                                             !wName.includes('COMPROBANTE') && 
+                                             !wName.includes('TRANSITO') &&
+                                             !wName.includes('EXISTENCIAS');
+                                    }).map((sr: any) => (
+                                      <span key={sr.id} className="text-[9px] text-indigo-600 font-black bg-indigo-50 px-1.5 py-0.5 rounded flex items-center gap-1 border border-indigo-100">
+                                        <MapPin className="w-2.5 h-2.5" />
+                                        {sr.warehouse?.name.split(' ')[0]}: {sr.quantity} {sr.zone && <span className="text-indigo-400 font-bold">({sr.zone.name})</span>}
+                                      </span>
+                                    ))}
+                                    {!p.stockRecords?.filter((sr: any) => {
+                                      const wType = sr.warehouse?.type?.toUpperCase() || '';
+                                      const wName = sr.warehouse?.name?.toUpperCase() || '';
+                                      return !['TRANSITORIO', 'DESPACHO', 'COMPROBANTES', 'SISTEMA', 'CONTROL'].includes(wType) && 
+                                             !wName.includes('DESPACHO') && 
+                                             !wName.includes('COMPROBANTE') && 
+                                             !wName.includes('TRANSITO');
+                                    }).length && <span className="text-[9px] text-red-400 font-bold italic">Sin stock en almacenes</span>}
+                                  </div>
                               </div>
                               <span className="text-blue-600 font-black whitespace-nowrap ml-4">S/ {p.salePrice}</span>
                             </div>
@@ -541,10 +554,18 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                           return (
                             <tr key={item.productId} className="border-b border-slate-200 hover:bg-slate-50 transition-colors">
                               <td className="px-2 py-1 text-center font-bold text-slate-500 border-r border-slate-200">{index + 1}</td>
-                              <td className="px-2 py-1 border-r border-slate-200 text-blue-600 font-bold">T1.P1.DP1</td>
+                              <td className="px-2 py-1 border-r border-slate-200 text-blue-600 font-bold uppercase">{item.warehouseName || 'S/A'}</td>
                               <td className="px-2 py-1 border-r border-slate-200 font-bold">{item.code || 'S/C'}</td>
-                              <td className="px-2 py-1 border-r border-slate-200 text-center font-bold text-[9px] text-emerald-700 bg-emerald-50/30 uppercase">
-                                {item.lot || '---'}
+                              <td className="px-2 py-1 border-r border-slate-200 text-center font-bold text-[9px] text-emerald-700 bg-emerald-50/30">
+                                <div className="flex flex-col items-center">
+                                  <span className="uppercase tracking-tighter">{item.lot || '---'}</span>
+                                  {item.expiryDate && (
+                                    <span className="text-[8px] text-amber-600 flex items-center gap-0.5 mt-0.5 font-black leading-none">
+                                      <Calendar className="w-2 h-2 shrink-0" />
+                                      {new Date(item.expiryDate).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="px-2 py-1 border-r border-slate-200 font-bold truncate max-w-62.5">{item.name}</td>
                               <td className="px-2 py-1 border-r border-slate-200"><input type="number" value={item.quantity} onChange={e => updateQuotationItem(item.productId, 'quantity', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white" /></td>
@@ -608,7 +629,13 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                     <button type="button" onClick={onClose} className="h-10 px-4 bg-slate-50 border border-slate-300 rounded text-xs font-bold hover:bg-slate-100 flex items-center gap-2"><X className="w-4 h-4 text-red-500" /> Salir</button>
                     <button type="button" onClick={async () => await generateQuotationPDF(formData, quotationItems, 'print')} className="h-10 px-4 bg-white border border-slate-300 rounded text-xs font-bold hover:bg-slate-100 flex items-center gap-2"><Printer className="w-4 h-4 text-slate-600" /> Imprimir</button>
                     <button type="button" onClick={async () => await generateQuotationPDF(formData, quotationItems, 'print')} className="h-10 px-4 bg-white border border-slate-300 rounded text-[10px] font-bold hover:bg-slate-100 flex items-center gap-1">Imprimir B5</button>
-                    <button type="submit" className="h-10 px-8 bg-blue-800 text-white rounded shadow-lg shadow-blue-100 hover:bg-blue-900 flex items-center gap-2 text-xs font-bold"><Save className="w-4 h-4" /> Guardar</button>
+                    <button type="submit" disabled={loading} className="h-10 px-8 bg-blue-800 text-white rounded shadow-lg shadow-blue-100 hover:bg-blue-900 flex items-center gap-2 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed">
+                      {loading ? (
+                        <><RefreshCw className="w-4 h-4 animate-spin" /> Procesando...</>
+                      ) : (
+                        <><Save className="w-4 h-4" /> Guardar</>
+                      )}
+                    </button>
                     <button type="button" onClick={async () => await generateQuotationPDF(formData, quotationItems, 'save')} className="h-10 px-4 bg-white border border-slate-300 rounded text-xs font-bold hover:bg-slate-100 flex items-center gap-2"><FileDown className="w-4 h-4 text-red-600" /> PDF</button>
                   </div>
 
