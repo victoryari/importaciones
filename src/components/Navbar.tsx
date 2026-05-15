@@ -180,26 +180,6 @@ export default function Navbar() {
           </button>
         </div>
 
-        {/* Indicador de búsqueda activa */}
-        <AnimatePresence>
-          {activeSearch && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              className="hidden md:flex items-center gap-2 mt-2 pb-1"
-            >
-              <span className="text-[11px] text-slate-500 font-medium">Buscando:</span>
-              <span className="flex items-center gap-1.5 bg-blue-100 text-blue-700 text-[11px] font-bold px-3 py-1 rounded-full">
-                "{activeSearch}"
-                <button onClick={clearSearch} className="hover:text-blue-900 transition-colors">
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Categories Bar (Desktop) */}
         <div className="hidden md:flex items-center gap-8 mt-4 pt-4 border-t border-slate-100">
           <Link to="/" className={cn("text-sm font-semibold hover:text-blue-600", location.pathname === '/' ? "text-blue-600" : "text-slate-600")}>Inicio</Link>
@@ -239,17 +219,6 @@ export default function Navbar() {
                   </button>
                 )}
               </div>
-
-              {/* Badge de búsqueda activa mobile */}
-              {activeSearch && (
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-slate-500 font-medium">Buscando:</span>
-                  <span className="flex items-center gap-1.5 bg-blue-100 text-blue-700 text-[11px] font-bold px-3 py-1 rounded-full">
-                    "{activeSearch}"
-                    <button onClick={clearSearch}><X className="w-3 h-3" /></button>
-                  </span>
-                </div>
-              )}
 
               <div className="space-y-4 font-bold text-slate-800">
                 <Link to="/" onClick={() => setIsOpen(false)} className="block py-2 border-b border-slate-50">Inicio</Link>
