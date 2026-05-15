@@ -48,6 +48,44 @@ const globalLimiter = rateLimit({
 });
 app.use('/api/', globalLimiter);
 
+// --- RATE LIMITERS ESPECÍFICOS ---
+// Login: 20 intentos por 15 min
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Demasiados intentos de inicio de sesión, por favor intenta más tarde.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Pedidos web: máx 5 por IP por minuto (anti-bot)
+const orderLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { error: 'Demasiados pedidos en poco tiempo. Por favor espere un momento.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Registro de clientes: máx 10 por IP por hora (anti-spam)
+const registrationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: { error: 'Demasiados registros desde esta IP. Intente más tarde.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Búsqueda de productos: máx 60 por IP por minuto (anti-scraping)
+const searchLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { error: 'Demasiadas solicitudes de búsqueda. Intente más tarde.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+
 app.use('/uploads', express.static(path.join(process.cwd(), 'public/uploads')));
 
 // Middleware
@@ -255,7 +293,7 @@ app.delete('/api/units/:id', authenticateToken, async (req, res) => {
 });
 
 // --- API PRODUCTS ---
-app.get('/api/products', async (req, res) => {
+app.get('/api/products', searchLimiter, async (req, res) => {
   try {
     const products = await (prisma as any).product.findMany({
       include: { 
@@ -564,14 +602,6 @@ app.post('/api/settings', authenticateToken, async (req, res) => {
 });
 
 // --- API AUTH ---
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: { error: 'Demasiados intentos de inicio de sesión, por favor intenta más tarde.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -2190,46 +2220,86 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/orders', async (req, res) => {
+app.post('/api/orders', orderLimiter, async (req, res) => {
   try {
     const { 
       customerId, customerName, customerEmail, customerPhone, customerCity, customerAddress, 
       customerDocType, customerDocNumber, docType, docSeries, docNumber,
       exchangeRate, dueDate, sellerId, sellerName, includeIgv, purchaseOrder, requirementNumber,
       consigneeName, consigneePhone, consigneeDocNumber, consigneeAddress,
-      notes, items, totalAmount, quotationId, paymentStatus, shippingCost, agencyId,
+      notes, items, quotationId, paymentStatus, shippingCost, agencyId,
       currency, paymentCondition, pickupPlace, origin
     } = req.body;
+    // NOTA: 'totalAmount' ya NO se acepta del cliente - se recalcula en el servidor
 
-    // --- VALIDACIONES DE INTEGRIDAD ---
+    // --- VALIDACIÓN DE INPUTS ---
     if (!customerName && !customerId) {
       return res.status(400).json({ error: 'Debe proporcionar un nombre de cliente o ID de cliente.' });
     }
-    if (!items || items.length === 0) {
+    if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'El pedido debe tener al menos un producto.' });
     }
-    if (parseFloat(totalAmount as any) <= 0) {
-      return res.status(400).json({ error: 'El monto total del pedido debe ser mayor a cero.' });
+    // Sanitizar: limitar a máximo 50 items por pedido (anti-abuse)
+    if (items.length > 50) {
+      return res.status(400).json({ error: 'El pedido supera el límite de 50 productos.' });
     }
-    
-    // Validate stock for all items
+    // Sanitizar campos de texto (limitar longitud)
+    if (customerName && customerName.length > 200) {
+      return res.status(400).json({ error: 'Nombre de cliente demasiado largo.' });
+    }
+    if (notes && notes.length > 1000) {
+      return res.status(400).json({ error: 'Las observaciones superan el límite de 1000 caracteres.' });
+    }
+
+    // --- RECALCULO DE PRECIOS EN EL SERVIDOR (Price Tampering Protection) ---
+    let serverCalculatedTotal = 0;
+    const validatedItems: any[] = [];
+
     for (const item of items) {
+      if (!item.productId || !Number.isInteger(item.productId)) {
+        return res.status(400).json({ error: 'ID de producto inválido en los items del pedido.' });
+      }
+      if (!item.quantity || item.quantity <= 0 || !Number.isInteger(item.quantity)) {
+        return res.status(400).json({ error: 'Cantidad inválida en los items del pedido.' });
+      }
+
       const product = await prisma.product.findUnique({
         where: { id: item.productId },
         include: { stockRecords: true }
       });
-      
-      if (!product) {
-        return res.status(404).json({ error: `Producto no encontrado (ID: ${item.productId})` });
+
+      if (!product || !product.isActive) {
+        return res.status(404).json({ error: `Producto no encontrado o inactivo (ID: ${item.productId})` });
       }
 
       const totalStock = (product as any).stockRecords.reduce((acc: number, curr: any) => acc + curr.quantity, 0);
       if (totalStock < item.quantity) {
         return res.status(400).json({ error: `Stock insuficiente para ${product.name}. Disponible: ${totalStock}, Solicitado: ${item.quantity}` });
       }
+
+      // Usar el precio oficial de la BD, NO el precio enviado por el cliente
+      const officialPrice = Number(product.salePrice);
+      const itemDiscount = Math.min(Math.max(parseFloat(item.discount) || 0, 0), officialPrice); // descuento entre 0 y precio unitario
+      const itemTotal = (officialPrice - itemDiscount) * item.quantity;
+      serverCalculatedTotal += itemTotal;
+
+      validatedItems.push({
+        productId: item.productId,
+        quantity: item.quantity,
+        price: officialPrice, // precio oficial de BD
+        discount: itemDiscount
+      });
     }
 
-    // Validate quotation status if provided
+    // Agregar costo de envío al total (si aplica)
+    const shippingCostNum = Math.max(parseFloat(shippingCost) || 0, 0);
+    const finalTotal = serverCalculatedTotal + shippingCostNum;
+
+    if (finalTotal <= 0) {
+      return res.status(400).json({ error: 'El monto total del pedido debe ser mayor a cero.' });
+    }
+
+    // Validar que la cotización no haya sido ya convertida
     if (quotationId) {
       const quotation = await prisma.quotation.findUnique({ where: { id: parseInt(quotationId) } });
       if (quotation && quotation.status === 'ACCEPTED') {
@@ -2238,18 +2308,18 @@ app.post('/api/orders', async (req, res) => {
     }
 
     const order = await prisma.$transaction(async (tx) => {
-      // 1. Create the order
+      // 1. Create the order using server-calculated total
       const newOrder = await tx.order.create({
         data: {
           customerId: customerId ? parseInt(customerId) : null,
-          customerName,
-          customerEmail,
-          customerPhone,
-          customerCity,
-          customerAddress,
+          customerName: customerName?.substring(0, 200),
+          customerEmail: customerEmail?.substring(0, 200),
+          customerPhone: customerPhone?.substring(0, 20),
+          customerCity: customerCity?.substring(0, 100),
+          customerAddress: customerAddress?.substring(0, 500),
           customerDocType,
-          customerDocNumber,
-          origin: origin || 'ADMIN',
+          customerDocNumber: customerDocNumber?.substring(0, 20),
+          origin: origin || 'WEB',
           docType: docType || 'COT',
           docSeries,
           docNumber,
@@ -2267,20 +2337,15 @@ app.post('/api/orders', async (req, res) => {
           currency: currency || 'PEN',
           paymentCondition: paymentCondition || 'CONTADO',
           pickupPlace,
-          notes,
-          totalAmount,
+          notes: notes?.substring(0, 1000),
+          totalAmount: finalTotal, // TOTAL CALCULADO EN EL SERVIDOR
           quotationId: quotationId ? parseInt(quotationId) : null,
           paymentStatus: paymentStatus || 'UNPAID',
-          shippingCost: parseFloat(shippingCost) || 0,
+          shippingCost: shippingCostNum,
           agencyId: agencyId ? parseInt(agencyId) : null,
           status: 'PENDING',
           items: {
-            create: items.map((item: any) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-              price: item.price,
-              discount: parseFloat(item.discount) || 0
-            }))
+            create: validatedItems // Items validados con precios oficiales
           }
         },
         include: { items: true }
