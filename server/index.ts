@@ -3148,7 +3148,7 @@ app.post('/api/roles', authenticateToken, async (req, res) => {
   try {
     const { name, permissions, isActive } = req.body;
     const role = await prisma.role.create({
-      data: { name, permissions, isActive }
+      data: { name, permissions: JSON.stringify(permissions), isActive }
     });
     res.json(role);
   } catch (error: any) {
@@ -3163,7 +3163,7 @@ app.put('/api/roles/:id', authenticateToken, async (req, res) => {
     const { name, permissions, isActive } = req.body;
     const role = await prisma.role.update({
       where: { id: parseInt(id) },
-      data: { name, permissions, isActive }
+      data: { name, permissions: JSON.stringify(permissions), isActive }
     });
     res.json(role);
   } catch (error: any) {
@@ -3188,7 +3188,7 @@ app.post('/api/users', authenticateToken, async (req, res) => {
     const { email, password, name, roleId, isActive } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, name, roleId: roleId ? parseInt(roleId) : null, isActive }
+      data: { email, password: hashedPassword, name, roleId: roleId ? parseInt(roleId) : null, isActive: isActive ?? true }
     });
     res.json({ id: user.id, email: user.email, name: user.name });
   } catch (error: any) {

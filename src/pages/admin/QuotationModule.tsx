@@ -3,10 +3,11 @@ import { motion } from 'motion/react';
 import { 
   FileText, PlusCircle, Search, Edit2, Trash2, Phone, 
   ShoppingCart, Filter, Eye, Download, MessageCircle,
-  Calendar, User, CreditCard, DollarSign, RefreshCcw
+  Calendar, User, CreditCard, DollarSign, RefreshCcw, Lock
 } from 'lucide-react';
 import { generateQuotationPDF } from '../../lib/pdfGenerator';
 import { formatNumber } from '../../lib/utils';
+import { useAuth } from '../../context/AuthContext';
 
 interface Customer {
   id: number;
@@ -64,6 +65,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   onNew,
   onReset
 }) => {
+  const { hasPermission } = useAuth();
+  const canWrite = hasPermission?.('WRITE_QUOTATIONS') || hasPermission?.('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredQuotations = quotations.filter(q => 
@@ -90,13 +93,20 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all outline-none"
           />
         </div>
-        <button 
-          onClick={onNew}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-blue-100 active:scale-95"
-        >
-          <PlusCircle className="w-5 h-5" />
-          Nueva Cotización
-        </button>
+        {canWrite ? (
+          <button 
+            onClick={onNew}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-blue-100 active:scale-95"
+          >
+            <PlusCircle className="w-5 h-5" />
+            Nueva Cotización
+          </button>
+        ) : (
+          <div className="flex items-center gap-2 bg-slate-100 text-slate-400 px-6 py-3 rounded-2xl font-bold cursor-not-allowed">
+            <Lock className="w-5 h-5" />
+            Nueva Cotización
+          </div>
+        )}
       </div>
 
       {/* Table List */}
@@ -154,7 +164,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {quot.status === 'PENDING' && (
+                        {quot.status === 'PENDING' && canWrite && (
                           <button 
                             onClick={() => onConvertToOrder(quot)}
                             className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
@@ -177,7 +187,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                         >
                           <MessageCircle className="w-4 h-4" />
                         </button>
-                        {quot.status === 'ACCEPTED' && (
+                        {quot.status === 'ACCEPTED' && canWrite && (
                           <button 
                             onClick={() => onReset && onReset(quot.id)}
                             className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-600 hover:text-white transition-all shadow-sm"
@@ -186,7 +196,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                             <RefreshCcw className="w-4 h-4" />
                           </button>
                         )}
-                        {quot.status === 'PENDING' && (
+                        {quot.status === 'PENDING' && canWrite && (
                           <>
                             <button 
                               onClick={() => onEdit(quot)}
@@ -203,6 +213,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </>
+                        )}
+                        {!canWrite && (
+                          <Lock className="w-4 h-4 text-slate-300" />
                         )}
                       </div>
                     </td>

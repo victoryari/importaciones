@@ -3,9 +3,10 @@ import { motion } from 'motion/react';
 import { 
   Package, Layers, Tag, Scale, PlusCircle, Search, 
   Edit2, Trash2, Eye, Filter, ChevronRight, LayoutGrid, 
-  List, MoreVertical, Image as ImageIcon, Globe, Calendar, Power
+  List, MoreVertical, Image as ImageIcon, Globe, Calendar, Power, Lock
 } from 'lucide-react';
 import { formatNumber } from '../../lib/utils';
+import { useAuth } from '../../context/AuthContext';
 
 interface Category {
   id: number;
@@ -63,6 +64,8 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
   onEdit,
   onNew
 }) => {
+  const { hasPermission } = useAuth();
+  const canWrite = hasPermission?.('WRITE_PRODUCTS') || hasPermission?.('ALL');
   const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'brands' | 'units'>('products');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -123,13 +126,20 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
             className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all outline-none"
           />
         </div>
-        <button 
-          onClick={() => onNew(activeTab)}
-          className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-100"
-        >
-          <PlusCircle className="w-5 h-5" />
-          Nuevo {activeTab === 'products' ? 'Producto' : activeTab === 'categories' ? 'Categoría' : activeTab === 'brands' ? 'Marca' : 'Unidad'}
-        </button>
+        {canWrite ? (
+          <button 
+            onClick={() => onNew(activeTab)}
+            className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-100"
+          >
+            <PlusCircle className="w-5 h-5" />
+            Nuevo {activeTab === 'products' ? 'Producto' : activeTab === 'categories' ? 'Categoría' : activeTab === 'brands' ? 'Marca' : 'Unidad'}
+          </button>
+        ) : (
+          <div className="flex items-center gap-2 bg-slate-100 text-slate-400 px-8 py-3 rounded-2xl font-bold cursor-not-allowed">
+            <Lock className="w-5 h-5" />
+            Nuevo {activeTab === 'products' ? 'Producto' : activeTab === 'categories' ? 'Categoría' : activeTab === 'brands' ? 'Marca' : 'Unidad'}
+          </div>
+        )}
       </div>
 
       {/* Content Area */}

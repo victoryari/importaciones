@@ -5,9 +5,10 @@ import {
   BarChart3, Search, Package, AlertTriangle, X, 
   ArrowUpRight, ArrowDownLeft, Edit2, Filter, 
   ChevronRight, RefreshCcw, Download, ArrowRightLeft,
-  History, Boxes, Calendar, FileText, MapPin
+  History, Boxes, Calendar, FileText, MapPin, Lock
 } from 'lucide-react';
 import { formatNumber } from '../../lib/utils';
+import { useAuth } from '../../context/AuthContext';
 
 interface Product {
   id: number;
@@ -41,6 +42,8 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
   token,
   onRefresh
 }) => {
+  const { hasPermission } = useAuth();
+  const canWrite = hasPermission?.('WRITE_INVENTORY') || hasPermission?.('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeSubTab, setActiveSubTab] = useState<'stock' | 'history'>('stock');
 
@@ -149,13 +152,20 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
                 />
               </div>
               <div className="flex items-center gap-3 w-full md:w-auto">
-                <button 
-                  onClick={onOpenAssistant}
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase flex items-center gap-2 px-6 py-3 rounded-2xl shadow-lg shadow-blue-100 transition-all hover:-translate-y-0.5"
-                >
-                  <ArrowRightLeft className="w-4 h-4" />
-                  Asistente de Movimientos
-                </button>
+                {canWrite ? (
+                  <button 
+                    onClick={onOpenAssistant}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase flex items-center gap-2 px-6 py-3 rounded-2xl shadow-lg shadow-blue-100 transition-all hover:-translate-y-0.5"
+                  >
+                    <ArrowRightLeft className="w-4 h-4" />
+                    Asistente de Movimientos
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 bg-slate-100 text-slate-400 text-xs font-black uppercase px-6 py-3 rounded-2xl cursor-not-allowed">
+                    <Lock className="w-4 h-4" />
+                    Asistente de Movimientos
+                  </div>
+                )}
                 <button className="text-xs font-black uppercase text-blue-600 hover:text-blue-700 flex items-center gap-2 px-4 py-2 rounded-xl hover:bg-blue-50 transition-all">
                   <Download className="w-4 h-4" />
                   Exportar Inventario
@@ -240,13 +250,20 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
                 className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-100 bg-slate-50/50 focus:bg-white focus:border-blue-500 outline-none"
               />
             </div>
-            <button 
-              onClick={onOpenAssistant}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase flex items-center gap-2 px-6 py-3 rounded-2xl shadow-lg shadow-blue-100 transition-all hover:-translate-y-0.5"
-            >
-              <PlusCircle className="w-4 h-4" />
-              Nuevo Movimiento
-            </button>
+            {canWrite ? (
+              <button 
+                onClick={onOpenAssistant}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase flex items-center gap-2 px-6 py-3 rounded-2xl shadow-lg shadow-blue-100 transition-all hover:-translate-y-0.5"
+              >
+                <PlusCircle className="w-4 h-4" />
+                Nuevo Movimiento
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 bg-slate-100 text-slate-400 text-xs font-black uppercase px-6 py-3 rounded-2xl cursor-not-allowed">
+                <Lock className="w-4 h-4" />
+                Nuevo Movimiento
+              </div>
+            )}
           </div>
 
           <div className="overflow-x-auto">
@@ -313,7 +330,7 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
                       </p>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      {mov.status !== 'ANNULLED' && (
+                      {mov.status !== 'ANNULLED' && canWrite && (
                         <button 
                           onClick={() => handleAnnul(mov.id)}
                           className="p-2 hover:bg-red-50 text-red-500 rounded-lg transition-colors group/btn"
@@ -321,6 +338,9 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
                         >
                           <X className="w-4 h-4 group-hover/btn:scale-110" />
                         </button>
+                      )}
+                      {mov.status !== 'ANNULLED' && !canWrite && (
+                        <Lock className="w-4 h-4 text-slate-300 mx-auto" />
                       )}
                     </td>
                   </tr>
