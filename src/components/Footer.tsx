@@ -25,8 +25,8 @@ export default function Footer() {
               )}
               {!settings.logo && (
                 <div>
-                  <span className="text-xl font-bold text-white block leading-tight">Carmelita</span>
-                  <span className="text-xs uppercase tracking-widest text-blue-500 font-semibold">Del Norte</span>
+                  <span className="text-xl font-bold text-white block leading-tight">{settings['business-name'] || 'Carmelita'}</span>
+                  <span className="text-xs uppercase tracking-widest text-blue-500 font-semibold">{settings['business-tagline'] || 'Del Norte'}</span>
                 </div>
               )}
             </Link>
@@ -104,7 +104,7 @@ export default function Footer() {
 
         <div className="pt-8 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-6">
           <p className="text-xs text-slate-500">
-            © 2024 Importaciones Carmelita del Norte S.A.C. Todos los derechos reservados.
+            © {new Date().getFullYear()} {settings['business-name'] || 'Importaciones Carmelita del Norte S.A.C.'}. Todos los derechos reservados.
           </p>
           <div className="flex gap-6">
             <a href="#" className="text-xs text-slate-500 hover:text-white transition-colors">Desarrollado por el Equipo de Sistemas</a>

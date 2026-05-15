@@ -309,7 +309,7 @@ export default function Admin() {
 
   const handleFileUpload = async (file: File) => {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('image', file);
     const res = await axios.post('/api/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${token}` }
     });
@@ -455,11 +455,22 @@ export default function Admin() {
     try {
       const url = editingItem ? `/api/products/${editingItem.id}` : '/api/products';
       
-      // Auto-generar slug si está vacío
+      // Auto-generar slug único: nombre + código (o timestamp si no hay código)
       const dataToSubmit = { ...productFormData };
       if (!dataToSubmit.slug) {
-        dataToSubmit.slug = dataToSubmit.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+        const base = dataToSubmit.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+        const suffix = dataToSubmit.code 
+          ? dataToSubmit.code.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '')
+          : Date.now().toString(36);
+        dataToSubmit.slug = `${base}-${suffix}`;
       }
+
+      // Eliminar campos que no existen en el schema de Prisma
+      const cleanData = dataToSubmit as any;
+      delete cleanData.profitMargin;
+      delete cleanData.existenceTypeCode;
+      delete cleanData.valuationMethodCode;
+      delete cleanData.image;
 
       await axios({ method: editingItem ? 'PUT' : 'POST', url, data: dataToSubmit, headers: { Authorization: `Bearer ${token}` } });
       showSuccess('Guardado'); setIsProductModalOpen(false); fetchData();

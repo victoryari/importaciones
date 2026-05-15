@@ -28,6 +28,7 @@ export default function Navbar() {
   const [settings, setSettings]     = useState<any>({});
   const [inputValue, setInputValue] = useState('');
   const [mobileInput, setMobileInput] = useState('');
+  const [isLoading, setIsLoading]   = useState(true);
 
   const { cartCount, setIsOpen: setIsCartOpen } = useCart();
   const location       = useLocation();
@@ -47,8 +48,14 @@ export default function Navbar() {
 
   // Carga de datos
   useEffect(() => {
-    fetch('/api/categories').then(r => r.json()).then(setCategories).catch(() => {});
-    fetch('/api/settings').then(r => r.json()).then(setSettings).catch(() => {});
+    Promise.all([
+      fetch('/api/categories').then(r => r.json()),
+      fetch('/api/settings').then(r => r.json())
+    ]).then(([cats, sets]) => {
+      setCategories(cats);
+      setSettings(sets);
+      setIsLoading(false);
+    }).catch(() => setIsLoading(false));
   }, []);
 
   // Limpiar búsqueda cuando el usuario navega fuera de /products
@@ -114,15 +121,15 @@ export default function Navbar() {
                 className="h-auto object-contain"
               />
             ) : (
-              <>
+              <div className={cn("flex items-center gap-2", isLoading && "opacity-0")}>
                 <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl group-hover:bg-blue-700 transition-colors">
-                  C
+                  {settings['business-name']?.[0] || ''}
                 </div>
                 <div className="hidden sm:block">
-                  <span className="text-xl font-bold text-blue-900 block leading-tight">Carmelita</span>
-                  <span className="text-xs uppercase tracking-widest text-blue-600 font-semibold">Del Norte</span>
+                  <span className="text-xl font-bold text-blue-900 block leading-tight">{settings['business-name'] || ''}</span>
+                  <span className="text-xs uppercase tracking-widest text-blue-600 font-semibold">{settings['business-tagline'] || ''}</span>
                 </div>
-              </>
+              </div>
             )}
           </Link>
 
@@ -161,7 +168,7 @@ export default function Navbar() {
               <span className="text-[10px] uppercase text-slate-500 font-bold">Llámanos</span>
               <div className="flex items-center gap-1 text-blue-900 font-bold">
                 <Phone className="w-3 h-3" />
-                <span>{settings.whatsapp || settings.phone || '+51 987 654 321'}</span>
+                <span>{settings.phone || settings.whatsapp || ''}</span>
               </div>
             </div>
 
@@ -236,9 +243,13 @@ export default function Navbar() {
               </div>
 
               <div className="pt-4 flex items-center gap-4 border-t border-slate-100">
-                <div className="flex-1 bg-blue-600 text-white text-center py-3 rounded-lg font-bold">
-                  Ingresar
-                </div>
+                <Link 
+                  to="/admin" 
+                  onClick={() => setIsOpen(false)}
+                  className="flex-1 bg-blue-600 text-white text-center py-3 rounded-lg font-bold"
+                >
+                  {settings['login-button-text'] || 'Ingresar'}
+                </Link>
                 <button
                   onClick={() => { setIsOpen(false); setIsCartOpen(true); }}
                   className="p-3 bg-slate-100 rounded-lg relative"

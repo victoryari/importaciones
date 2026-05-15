@@ -18,15 +18,22 @@ export default function Hero() {
   const [ads, setAds] = useState<Ad[]>([]);
   const [settings, setSettings] = useState<any>({});
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
-    fetch('/api/ads').then(res => res.json()).then(data => {
-      const heroAds = data.filter((ad: Ad) => ad.position === 'home-hero' && ad.isActive !== false);
+    
+    Promise.all([
+      fetch('/api/ads').then(res => res.json()),
+      fetch('/api/settings').then(res => res.json())
+    ]).then(([adsData, settingsData]) => {
+      const heroAds = adsData.filter((ad: Ad) => ad.position === 'home-hero' && ad.isActive !== false);
       setAds(heroAds);
-    });
-    fetch('/api/settings').then(res => res.json()).then(setSettings);
+      setSettings(settingsData);
+      setIsLoading(false);
+    }).catch(() => setIsLoading(false));
+
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
@@ -43,7 +50,11 @@ export default function Hero() {
 
   const currentAd = ads[currentAdIndex];
   const adImg = isMobile && currentAd?.mobileImageUrl ? currentAd.mobileImageUrl : currentAd?.imageUrl;
-  const bgImage = adImg || settings['home-bg-desktop'] || 'https://images.unsplash.com/photo-1541675154750-0444c7d51e8e?q=80&w=2000&auto=format&fit=crop';
+  const bgImage = adImg || settings['home-bg-desktop'] || '';
+
+  if (isLoading) {
+    return <section className="h-150 w-full bg-slate-900 animate-pulse" />;
+  }
 
   return (
     <section className="relative h-150 w-full overflow-hidden">
@@ -78,20 +89,20 @@ export default function Hero() {
             className="max-w-xl text-white"
           >
             <span className="inline-block px-4 py-1 bg-blue-600/30 backdrop-blur-md border border-blue-400/30 rounded-full text-blue-200 text-sm font-bold mb-6 tracking-wider uppercase">
-              Importaciones Carmelita del Norte
+              {settings['business-name'] || 'Importaciones Carmelita del Norte'}
             </span>
             <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
-              Calidad que Transforma tu Hogar
+              {settings['hero-title'] || 'Calidad que Transforma tu Hogar'}
             </h1>
             <p className="text-lg md:text-xl text-slate-200 mb-10 leading-relaxed max-w-md">
-              Somos los principales proveedores de menaje, cristalería y artículos del hogar en el norte del país. Precios mayoristas a tu alcance.
+              {settings['hero-subtitle'] || 'Somos los principales proveedores de menaje, cristalería y artículos del hogar en el norte del país.'}
             </p>
             <div className="flex flex-wrap gap-4">
               <Link 
-                to="/category/menaje" 
+                to="/products" 
                 className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-8 rounded-full flex items-center gap-2 transition-all transform hover:scale-105"
               >
-                Ver Catálogo
+                {settings['hero-button-text'] || 'Ver Catálogo'}
                 <ArrowRight className="w-5 h-5" />
               </Link>
             </div>

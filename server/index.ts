@@ -300,9 +300,15 @@ app.get('/api/products', searchLimiter, async (req, res) => {
     // Construir filtro de búsqueda dinámico
     const where: any = {};
 
-    // Filtrar solo activos y visibles en web por defecto
-    where.isActive = true;
-    where.showInWeb = true;
+    // Detectar si la petición viene del panel admin (tiene token válido)
+    const authHeader = req.headers.authorization;
+    const isAdminRequest = !!authHeader && authHeader.startsWith('Bearer ');
+    
+    // Solo filtrar activos/visibles en peticiones públicas (ecommerce)
+    if (!isAdminRequest) {
+      where.isActive = true;
+      where.showInWeb = true;
+    }
 
     // Filtro de categoría por slug
     if (category && typeof category === 'string') {
