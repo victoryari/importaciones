@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Link, useLocation, useSearchParams, useNavigate } from 'react-router-dom';
 import { Search, ShoppingCart, Menu, X, Phone, User, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -11,28 +11,82 @@ interface Category {
   slug: string;
 }
 
+/** Hook de debounce: retrasa la actualización del valor N milisegundos */
+function useDebounce(value: string, delay: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
 export default function Navbar() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen]         = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [settings, setSettings] = useState<any>({});
+  const [settings, setSettings]     = useState<any>({});
+  const [inputValue, setInputValue] = useState('');
+  const [mobileInput, setMobileInput] = useState('');
+
   const { cartCount, setIsOpen: setIsCartOpen } = useCart();
-  const location = useLocation();
+  const location       = useLocation();
+  const navigate       = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const desktopInputRef = useRef<HTMLInputElement>(null);
 
+  // Valor debounced (300ms) para no disparar búsqueda en cada tecla
+  const debouncedSearch = useDebounce(inputValue || mobileInput, 300);
+
+  // Scroll listener
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20);
-    };
+    const handleScroll = () => setIsScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
-    
-    // Fetch categories and settings
-    fetch('/api/categories').then(res => res.json()).then(setCategories);
-    fetch('/api/settings').then(res => res.json()).then(data => {
-      setSettings(data);
-    });
-
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Carga de datos
+  useEffect(() => {
+    fetch('/api/categories').then(r => r.json()).then(setCategories).catch(() => {});
+    fetch('/api/settings').then(r => r.json()).then(setSettings).catch(() => {});
+  }, []);
+
+  // Sincronizar valor inicial desde la URL
+  useEffect(() => {
+    const q = searchParams.get('search') || '';
+    setInputValue(q);
+  }, []);
+
+  // Aplicar búsqueda debounced a la URL y navegar a /products si no estamos ahí
+  useEffect(() => {
+    const current = searchParams.get('search') || '';
+    if (debouncedSearch === current) return;
+
+    const newParams = new URLSearchParams(searchParams);
+    if (debouncedSearch) {
+      newParams.set('search', debouncedSearch);
+    } else {
+      newParams.delete('search');
+    }
+
+    if (debouncedSearch && location.pathname !== '/products') {
+      // Redirigir al catálogo con la búsqueda
+      navigate(`/products?${newParams.toString()}`);
+    } else {
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [debouncedSearch]);
+
+  const clearSearch = () => {
+    setInputValue('');
+    setMobileInput('');
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete('search');
+    setSearchParams(newParams, { replace: true });
+    desktopInputRef.current?.focus();
+  };
+
+  const activeSearch = searchParams.get('search') || '';
 
   return (
     <nav className={cn(
@@ -41,13 +95,14 @@ export default function Navbar() {
     )}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
+
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 group">
+          <Link to="/" className="flex items-center gap-2 group shrink-0">
             {settings.logo ? (
-              <img 
-                src={settings.logo} 
-                alt="Logo" 
-                style={{ width: `${settings['logo-width'] || 150}px` }} 
+              <img
+                src={settings.logo}
+                alt="Logo"
+                style={{ width: `${settings['logo-width'] || 150}px` }}
                 className="h-auto object-contain"
               />
             ) : (
@@ -65,28 +120,32 @@ export default function Navbar() {
 
           {/* Desktop Search */}
           <div className="hidden md:flex flex-1 max-w-md mx-8">
-            <div className="relative w-full">
-              <input 
-                type="text" 
-                placeholder="Buscar productos..."
-                className="w-full bg-slate-100 border-none rounded-full py-2 px-10 focus:ring-2 focus:ring-blue-500 text-sm transition-all"
-                onChange={(e) => {
-                  const query = e.target.value;
-                  const searchParams = new URLSearchParams(window.location.search);
-                  if (query) {
-                    searchParams.set('search', query);
-                  } else {
-                    searchParams.delete('search');
-                  }
-                  window.history.replaceState(null, '', `?${searchParams.toString()}`);
-                  // Dispatch a custom event to notify other components
-                  window.dispatchEvent(new Event('popstate'));
-                }}
+            <div className="relative w-full group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+              <input
+                ref={desktopInputRef}
+                type="text"
+                placeholder="Buscar productos, códigos, marcas..."
+                value={inputValue}
+                onChange={e => setInputValue(e.target.value)}
+                className="w-full bg-slate-100 border-2 border-transparent rounded-full py-2.5 px-10 focus:ring-0 focus:border-blue-400 focus:bg-white text-sm transition-all outline-none"
               />
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              {/* Botón limpiar búsqueda */}
+              <AnimatePresence>
+                {inputValue && (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.6 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.6 }}
+                    onClick={clearSearch}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-slate-300 hover:bg-blue-500 hover:text-white text-slate-600 transition-all"
+                  >
+                    <X className="w-3 h-3" />
+                  </motion.button>
+                )}
+              </AnimatePresence>
             </div>
           </div>
-
 
           {/* Desktop Right Nav */}
           <div className="hidden md:flex items-center gap-6">
@@ -97,15 +156,12 @@ export default function Navbar() {
                 <span>{settings.whatsapp || settings.phone || '+51 987 654 321'}</span>
               </div>
             </div>
-            
+
             <button className="relative group">
               <User className="w-6 h-6 text-slate-700 group-hover:text-blue-600 transition-colors" />
             </button>
 
-            <button 
-              onClick={() => setIsCartOpen(true)}
-              className="relative group"
-            >
+            <button onClick={() => setIsCartOpen(true)} className="relative group">
               <ShoppingCart className="w-6 h-6 text-slate-700 group-hover:text-blue-600 transition-colors" />
               {cartCount > 0 && (
                 <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center animate-in zoom-in">
@@ -116,13 +172,33 @@ export default function Navbar() {
           </div>
 
           {/* Mobile Menu Button */}
-          <button 
+          <button
             className="md:hidden p-2 text-slate-700 hover:text-blue-600 transition-colors"
             onClick={() => setIsOpen(!isOpen)}
           >
             {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
         </div>
+
+        {/* Indicador de búsqueda activa */}
+        <AnimatePresence>
+          {activeSearch && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="hidden md:flex items-center gap-2 mt-2 pb-1"
+            >
+              <span className="text-[11px] text-slate-500 font-medium">Buscando:</span>
+              <span className="flex items-center gap-1.5 bg-blue-100 text-blue-700 text-[11px] font-bold px-3 py-1 rounded-full">
+                "{activeSearch}"
+                <button onClick={clearSearch} className="hover:text-blue-900 transition-colors">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Categories Bar (Desktop) */}
         <div className="hidden md:flex items-center gap-8 mt-4 pt-4 border-t border-slate-100">
@@ -133,35 +209,60 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Menu (Overlay) */}
+      {/* Mobile Menu */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             className="md:hidden bg-white border-t border-slate-100 overflow-hidden"
           >
             <div className="px-4 py-6 space-y-4">
+
+              {/* Mobile Search — ahora conectado */}
               <div className="relative">
-                <input 
-                  type="text" 
-                  placeholder="Buscar..."
-                  className="w-full bg-slate-100 border-none rounded-lg py-2 px-10 text-sm"
-                />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar productos, códigos, marcas..."
+                  value={mobileInput}
+                  onChange={e => setMobileInput(e.target.value)}
+                  className="w-full bg-slate-100 border-2 border-transparent rounded-lg py-2.5 px-10 text-sm outline-none focus:border-blue-400 focus:bg-white transition-all"
+                />
+                {mobileInput && (
+                  <button
+                    onClick={() => setMobileInput('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-slate-300 text-slate-600"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
               </div>
+
+              {/* Badge de búsqueda activa mobile */}
+              {activeSearch && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-500 font-medium">Buscando:</span>
+                  <span className="flex items-center gap-1.5 bg-blue-100 text-blue-700 text-[11px] font-bold px-3 py-1 rounded-full">
+                    "{activeSearch}"
+                    <button onClick={clearSearch}><X className="w-3 h-3" /></button>
+                  </span>
+                </div>
+              )}
+
               <div className="space-y-4 font-bold text-slate-800">
                 <Link to="/" onClick={() => setIsOpen(false)} className="block py-2 border-b border-slate-50">Inicio</Link>
                 <Link to="/nosotros" onClick={() => setIsOpen(false)} className="block py-2 border-b border-slate-50">Nosotros</Link>
                 <Link to="/contact" onClick={() => setIsOpen(false)} className="block py-2 border-b border-slate-50">Contacto</Link>
                 <Link to="/sucursales" onClick={() => setIsOpen(false)} className="block py-2 border-b border-slate-50">Sucursales</Link>
               </div>
+
               <div className="pt-4 flex items-center gap-4 border-t border-slate-100">
                 <div className="flex-1 bg-blue-600 text-white text-center py-3 rounded-lg font-bold">
                   Ingresar
                 </div>
-                <button 
+                <button
                   onClick={() => { setIsOpen(false); setIsCartOpen(true); }}
                   className="p-3 bg-slate-100 rounded-lg relative"
                 >

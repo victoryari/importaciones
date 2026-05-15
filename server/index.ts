@@ -295,7 +295,35 @@ app.delete('/api/units/:id', authenticateToken, async (req, res) => {
 // --- API PRODUCTS ---
 app.get('/api/products', searchLimiter, async (req, res) => {
   try {
+    const { search, category, limit } = req.query;
+
+    // Construir filtro de búsqueda dinámico
+    const where: any = {};
+
+    // Filtrar solo activos y visibles en web por defecto
+    where.isActive = true;
+    where.showInWeb = true;
+
+    // Filtro de categoría por slug
+    if (category && typeof category === 'string') {
+      where.category = { slug: category };
+    }
+
+    // Búsqueda multi-campo: nombre, código, marca, descripción, categoría
+    if (search && typeof search === 'string' && search.trim().length > 0) {
+      const term = search.trim();
+      where.OR = [
+        { name:        { contains: term } },
+        { code:        { contains: term } },
+        { description: { contains: term } },
+        { brand:       { name: { contains: term } } },
+        { category:    { name: { contains: term } } },
+      ];
+    }
+
     const products = await (prisma as any).product.findMany({
+      where,
+      take: limit ? parseInt(limit as string) : undefined,
       include: { 
         category: true,
         brand: true,
@@ -305,18 +333,19 @@ app.get('/api/products', searchLimiter, async (req, res) => {
         stockRecords: {
           include: { 
             warehouse: true,
-            zone: {
-              include: { floor: true }
-            }
+            zone: { include: { floor: true } }
           }
         }
-      }
+      },
+      orderBy: { name: 'asc' }
     });
+
     res.json(products);
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener productos' });
   }
 });
+
 
 app.post('/api/products', authenticateToken, async (req, res) => {
   try {
