@@ -44,6 +44,8 @@ const AVAILABLE_PERMISSIONS = [
   { id: 'VIEW_LOGISTICS', label: 'Ver Logística' },
   { id: 'WRITE_LOGISTICS', label: 'Gestionar Logística' },
   { id: 'VIEW_SETTINGS', label: 'Configuración del Sistema' },
+  { id: 'VIEW_PICKING', label: 'Ver Picking / Almacén' },
+  { id: 'WRITE_PICKING', label: 'Gestionar Picking / Almacén' },
 ];
 
 export const RoleModule = () => {

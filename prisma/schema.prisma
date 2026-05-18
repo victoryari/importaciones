@@ -160,6 +160,16 @@ model WarehouseZone {
   @@map("warehouse_zone")
 }
 
+model WarehouseOperator {
+  id        Int      @id @default(autoincrement())
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  orders    Order[] @relation("OrderPicker")
+
+  @@map("warehouse_operator")
+}
+
 model Stock {
   id          Int            @id @default(autoincrement())
   productId   Int
@@ -452,6 +462,10 @@ model Order {
   payments           Payment[]
   movements          StockMovement[]
   origin             String          @default("ADMIN")
+  warehouseStatus    String?         
+  pickerId           Int?
+  picker             WarehouseOperator? @relation("OrderPicker", fields: [pickerId], references: [id])
+  pickingStartedAt   DateTime?
 
   @@index([agencyId], map: "order_agency_fkey_manual")
   @@index([customerId], map: "order_customerId_fkey")

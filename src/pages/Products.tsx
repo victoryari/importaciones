@@ -155,7 +155,7 @@ export default function ProductsPage() {
               </div>
             </div>
 
-            <ProductGrid forceCategory={selectedCategory} maxPrice={priceRange} />
+            <ProductGrid forceCategory={selectedCategory} maxPrice={priceRange} hideHeader />
           </main>
         </div>
       </div>

@@ -28,6 +28,7 @@ interface ProductGridProps {
   forceCategory?: string;
   limit?: number;
   maxPrice?: number;
+  hideHeader?: boolean;
 }
 
 /** Mapea un producto de la API al formato del componente */
@@ -40,11 +41,12 @@ function mapProduct(p: any): Product {
   };
 }
 
-export default function ProductGrid({ forceCategory, limit, maxPrice }: ProductGridProps) {
+export default function ProductGrid({ forceCategory, limit, maxPrice, hideHeader }: ProductGridProps) {
   const [products, setProducts]           = useState<Product[]>([]);
   const [isLoading, setIsLoading]         = useState(true);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [favorites, setFavorites]         = useState<(string | number)[]>([]);
+  const [cols, setCols]                   = useState(3);
 
   const [searchParams] = useSearchParams();
   const { addToCart }  = useCart();
@@ -82,6 +84,16 @@ export default function ProductGrid({ forceCategory, limit, maxPrice }: ProductG
   useEffect(() => {
     loadProducts();
   }, [loadProducts]);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(data => {
+        const val = parseInt(data.products_per_page, 10);
+        if (val >= 2 && val <= 6) setCols(val);
+      })
+      .catch(() => {});
+  }, []);
 
   const displayedProducts = maxPrice
     ? products.filter(p => Number(p.price) <= maxPrice)
@@ -127,17 +139,19 @@ export default function ProductGrid({ forceCategory, limit, maxPrice }: ProductG
   return (
     <section className="py-20 bg-slate-50">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">
-            {searchQuery ? `Resultados para "${searchQuery}"` : 'Nuestros Productos'}
-          </h2>
-          <div className="h-1.5 w-24 bg-blue-600 mx-auto rounded-full" />
-          {!searchQuery && (
-            <p className="mt-6 text-slate-500 max-w-2xl mx-auto font-medium">
-              Selección exclusiva de productos premium diseñados para superar tus expectativas en cada detalle.
-            </p>
-          )}
-        </div>
+        {!hideHeader && (
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">
+              {searchQuery ? `Resultados para "${searchQuery}"` : 'Nuestros Productos'}
+            </h2>
+            <div className="h-1.5 w-24 bg-blue-600 mx-auto rounded-full" />
+            {!searchQuery && (
+              <p className="mt-6 text-slate-500 max-w-2xl mx-auto font-medium">
+                Selección exclusiva de productos premium diseñados para superar tus expectativas en cada detalle.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Estado de carga */}
         {isLoading ? (
@@ -146,7 +160,7 @@ export default function ProductGrid({ forceCategory, limit, maxPrice }: ProductG
             <p className="font-bold text-sm uppercase tracking-widest">Buscando productos...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 gap-8 ${cols === 2 ? 'lg:grid-cols-2' : cols === 3 ? 'lg:grid-cols-3' : cols === 4 ? 'lg:grid-cols-4' : cols === 5 ? 'lg:grid-cols-5' : cols === 6 ? 'lg:grid-cols-6' : 'lg:grid-cols-3'}`}>
             <AnimatePresence mode="popLayout">
               {displayedProducts.length > 0 ? (
                 displayedProducts.map((product, index) => (

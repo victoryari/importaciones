@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { 
   ShoppingCart, Search, Filter, Edit2, Trash2, Phone, 
   MessageCircle, Truck, CreditCard, Clock, CheckCircle, 
-  XCircle, FileText, MoreVertical, Eye, DollarSign, Lock
+  XCircle, FileText, MoreVertical, Eye, DollarSign, Lock, Undo2
 } from 'lucide-react';
 import { formatNumber, formatCurrency } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
@@ -41,6 +41,8 @@ interface OrderModuleProps {
   onEdit: (order: Order) => void;
   onOpenPayment: (order: Order) => void;
   onNewDirectOrder: () => void;
+  onCancelDispatch?: (id: number) => void;
+  onCancelPayment?: (id: number) => void;
 }
 
 export const OrderModule: React.FC<OrderModuleProps> = ({
@@ -50,7 +52,9 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
   onViewGuide,
   onEdit,
   onOpenPayment,
-  onNewDirectOrder
+  onNewDirectOrder,
+  onCancelDispatch,
+  onCancelPayment
 }) => {
   const { hasPermission } = useAuth();
   const canWrite = hasPermission?.('WRITE_ORDERS') || hasPermission?.('ALL');
@@ -170,13 +174,33 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
                         <MessageCircle className="w-4 h-4" />
                       </button>
                       {canWrite && (
-                        <button 
-                          onClick={() => onOpenPayment(order)}
-                          className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-600 hover:text-white transition-all shadow-sm"
-                          title="Registrar Cobro"
-                        >
-                          <DollarSign className="w-4 h-4" />
-                        </button>
+                        <>
+                          {order.status === 'DISPATCHED' && onCancelDispatch && (
+                            <button 
+                              onClick={() => onCancelDispatch(order.id)}
+                              className="p-2.5 bg-orange-50 text-orange-600 rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-sm"
+                              title="Anular Despacho"
+                            >
+                              <Undo2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {order.paymentStatus === 'PAID' && order.status === 'PREPARING' && onCancelPayment && (
+                            <button 
+                              onClick={() => onCancelPayment(order.id)}
+                              className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                              title="Anular Cobro"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => onOpenPayment(order)}
+                            className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-600 hover:text-white transition-all shadow-sm"
+                            title="Registrar Cobro"
+                          >
+                            <DollarSign className="w-4 h-4" />
+                          </button>
+                        </>
                       )}
                       <button 
                         onClick={() => onViewGuide(order)}
@@ -187,13 +211,32 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
                       </button>
                       {canWrite && (
                         <>
-                          <button 
-                            onClick={() => onEdit(order)}
-                            className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"
-                            title="Editar"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
+                          {order.paymentStatus === 'PAID' || ['DISPATCHED','SHIPPED','DELIVERED'].includes(order.status) ? (
+                            <span className="relative group">
+                              <button 
+                                disabled
+                                className="p-2.5 bg-slate-100 text-slate-300 rounded-xl cursor-not-allowed shadow-sm"
+                              >
+                                <Lock className="w-4 h-4" />
+                              </button>
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                                <div className="bg-slate-900 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap">
+                                  {order.status === 'DISPATCHED' || order.status === 'SHIPPED' || order.status === 'DELIVERED'
+                                    ? 'Anule el despacho y el cobro para editar'
+                                    : 'Anule el cobro para editar'}
+                                  <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-900" />
+                                </div>
+                              </div>
+                            </span>
+                          ) : (
+                            <button 
+                              onClick={() => onEdit(order)}
+                              className="p-2.5 bg-slate-50 text-slate-600 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm"
+                              title="Editar"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
                           <button 
                             onClick={() => onDelete(order.id)}
                             className="p-2.5 text-slate-300 hover:text-red-500 transition-colors"

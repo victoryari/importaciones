@@ -12,7 +12,7 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
   const [loading, setLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<'general' | 'ads'>('general');
+  const [activeSubTab, setActiveSubTab] = useState<'general' | 'products' | 'ads'>('general');
   
   const logoInputRef = useRef<HTMLInputElement>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
@@ -149,6 +149,12 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
               General
             </button>
             <button 
+              onClick={() => setActiveSubTab('products')}
+              className={`text-sm font-bold pb-2 border-b-2 transition-all ${activeSubTab === 'products' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+            >
+              Productos
+            </button>
+            <button 
               onClick={() => setActiveSubTab('ads')}
               className={`text-sm font-bold pb-2 border-b-2 transition-all ${activeSubTab === 'ads' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
             >
@@ -156,7 +162,7 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
             </button>
           </div>
         </div>
-        {activeSubTab === 'general' && (
+        {activeSubTab !== 'ads' && (
           <button 
             onClick={handleSaveAll}
             disabled={saveLoading}
@@ -331,6 +337,30 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      ) : activeSubTab === 'products' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div className="flex items-center gap-2 text-orange-600 font-bold mb-2">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
+              <h3>Visualización de Productos</h3>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 mb-1">Tarjetas por fila</label>
+              <select
+                value={settings.products_per_page || '3'}
+                onChange={(e) => handleChange('products_per_page', e.target.value)}
+                className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="2">2 tarjetas</option>
+                <option value="3">3 tarjetas</option>
+                <option value="4">4 tarjetas</option>
+                <option value="5">5 tarjetas</option>
+                <option value="6">6 tarjetas</option>
+              </select>
+              <p className="text-xs text-slate-400 mt-2">Define cuántas tarjetas de producto se muestran por fila en la tienda (vista escritorio).</p>
             </div>
           </div>
         </div>

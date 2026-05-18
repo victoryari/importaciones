@@ -20,6 +20,7 @@ interface Product {
 export default function OffersPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [cols, setCols] = useState(3);
 
   useEffect(() => {
     fetch('/api/products/offers')
@@ -29,6 +30,13 @@ export default function OffersPage() {
         setIsLoading(false);
       })
       .catch(() => setIsLoading(false));
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(data => {
+        const val = parseInt(data.products_per_page, 10);
+        if (val >= 2 && val <= 6) setCols(val);
+      })
+      .catch(() => {});
   }, []);
 
   return (
@@ -67,7 +75,7 @@ export default function OffersPage() {
         </Link>
 
         {isLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="bg-white rounded-2xl h-80 animate-pulse" />
             ))}
@@ -86,7 +94,7 @@ export default function OffersPage() {
             <p className="text-sm text-slate-500 font-bold mb-6">
               {products.length} producto{products.length !== 1 ? 's' : ''} en oferta
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 gap-8 ${cols === 2 ? 'lg:grid-cols-2' : cols === 3 ? 'lg:grid-cols-3' : cols === 4 ? 'lg:grid-cols-4' : cols === 5 ? 'lg:grid-cols-5' : cols === 6 ? 'lg:grid-cols-6' : 'lg:grid-cols-3'}`}>
               {products.map((product, index) => (
                 <ProductCard
                   key={product.id}

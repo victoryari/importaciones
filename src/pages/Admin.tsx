@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, Package, Save, Image as ImageIcon, Settings as SettingsIcon, LogOut, Trash2, X, CheckCircle, FileText, BarChart3, Star, ShoppingCart, Truck, DollarSign, User, MapPin, Hash, ArrowRightLeft, Building2, Users, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Package, Save, Image as ImageIcon, Settings as SettingsIcon, LogOut, Trash2, X, CheckCircle, FileText, BarChart3, Star, ShoppingCart, Truck, DollarSign, User, MapPin, Hash, ArrowRightLeft, Building2, Users, ShieldCheck, PackageSearch } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { SettingsModule } from './admin/SettingsModule';
 import { ExchangeRateModule } from './admin/ExchangeRateModule';
@@ -13,6 +13,7 @@ import { CustomerModule } from './admin/CustomerModule';
 import { DashboardModule } from './admin/DashboardModule';
 import { SellerModule } from './admin/SellerModule';
 import { WarehouseModule } from './admin/WarehouseModule';
+import WarehousePickingModule from './admin/WarehousePickingModule';
 import { SeriesModule } from './admin/SeriesModule';
 import { PurchaseModule } from './admin/PurchaseModule';
 import { TransferModule } from './admin/TransferModule';
@@ -851,7 +852,8 @@ export default function Admin() {
             { id: 'products', icon: Package, label: 'Productos', permission: 'VIEW_PRODUCTS' }, 
             { id: 'quotations', icon: FileText, label: 'Cotizaciones', permission: 'VIEW_QUOTATIONS' }, 
             { id: 'orders', icon: ShoppingCart, label: 'Pedidos', permission: 'VIEW_ORDERS' }, 
-            { id: 'inventory', icon: BarChart3, label: 'Inventario / Stock', permission: 'VIEW_INVENTORY' }, 
+            { id: 'inventory', icon: BarChart3, label: 'Inventario / Stock', permission: 'VIEW_INVENTORY' },
+            { id: 'picking', icon: PackageSearch, label: 'Picking / Almacén', permission: 'VIEW_PICKING' }, 
             { id: 'purchases', icon: ShoppingCart, label: 'Compras', permission: 'VIEW_PURCHASES' },
             { id: 'logistics', icon: Truck, label: 'Logística', permission: 'VIEW_LOGISTICS' },
             { id: 'warehouses', icon: MapPin, label: 'Almacenes / Sedes', permission: 'VIEW_WAREHOUSES' },
@@ -945,13 +947,14 @@ export default function Admin() {
                         sunatCurrencies={sunatCurrencies}
                       />
                     )}
-                    {currentTab === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => {}} onEdit={(o) => openForm('orders', o)} onOpenPayment={handleOpenPayment} onNewDirectOrder={() => { handleResetQuotationForm(); setQuotationFormData(prev => ({...prev, docType: 'PED'})); setIsOrderModalOpen(true); }} />}
+                    {currentTab === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => {}} onEdit={(o) => openForm('orders', o)} onOpenPayment={handleOpenPayment} onNewDirectOrder={() => { handleResetQuotationForm(); setQuotationFormData(prev => ({...prev, docType: 'PED'})); setIsOrderModalOpen(true); }} onCancelDispatch={(id) => { if (confirm('¿Anular despacho? Se revertirá el stock y el pedido volverá a "Preparado" en picking.')) { axios.put(`/api/orders/${id}/status`, {status: 'PREPARING'}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData).catch(err => alert(err.response?.data?.error || 'Error al anular despacho')); } }} onCancelPayment={(id) => { if (confirm('¿Anular cobro? Se eliminarán los pagos y se devolverá el stock a los almacenes originales.')) { axios.post(`/api/orders/${id}/cancel-payment`, {}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData).catch(err => alert(err.response?.data?.error || 'Error al anular cobro')); } }} />}
                     {currentTab === 'inventory' && <InventoryModule products={products} stockDetails={stockDetails} movements={movements} onUpdateStock={(pid, s) => axios.put(`/api/products/${pid}/stock`, {stock:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onEdit={(p) => openForm('products', p)} onOpenAssistant={() => setIsMovementAssistantOpen(true)} token={token} onRefresh={fetchData} />}
                     {currentTab === 'customers' && <CustomerModule customers={customers} onEdit={(c) => openForm('customers', c)} onNew={() => openForm('customers')} onDelete={(id) => handleDelete('customers', id)} departments={[]} />}
                     {currentTab === 'exchange-rates' && <ExchangeRateModule token={token} exchangeRates={exchangeRates} onDelete={(id) => handleDelete('exchange-rates', id)} onSave={(d) => axios.post('/api/exchange-rates', d, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} loading={loading} />}
                     {currentTab === 'logistics' && <LogisticsModule logisticsTab={logisticsTab} setLogisticsTab={setLogisticsTab} shippingAgencies={shippingAgencies} shippingZones={shippingZones} openEditModal={(item) => openForm(logisticsTab === 'agencies' ? 'shipping-agencies' : 'shipping-zones', item)} handleDelete={(t,id) => handleDelete(t,id)} />}
                     {currentTab === 'sellers' && <SellerModule sellers={sellers} onEdit={(s) => openForm('sellers', s)} onNew={() => openForm('sellers')} onDelete={(id) => handleDelete('sellers', id)} />}
                     {currentTab === 'warehouses' && <WarehouseModule warehouses={warehouses} onEdit={(w) => openForm('warehouses', w)} onNew={() => openForm('warehouses')} onDelete={(id) => handleDelete('warehouses', id)} />}
+                    {currentTab === 'picking' && <WarehousePickingModule />}
                     {currentTab === 'series' && <SeriesModule series={series} warehouses={warehouses} onEdit={(s) => openForm('series', s)} onNew={() => openForm('series')} onDelete={(id) => handleDelete('series', id)} />}
                     {currentTab === 'purchases' && (
                       <PurchaseModule 

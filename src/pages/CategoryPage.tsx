@@ -76,7 +76,7 @@ export default function CategoryPage() {
         </div>
         
         {/* We reuse ProductGrid but we need to tell it to filter by category slug */}
-        <ProductGrid forceCategory={category.name} />
+        <ProductGrid forceCategory={category.name} hideHeader />
       </div>
     </div>
   );

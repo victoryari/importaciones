@@ -2471,9 +2471,14 @@ app.post('/api/orders', orderLimiter, async (req, res) => {
       console.log(`[ORDER] Processing stock for Order ID: ${newOrder.id}`);
       console.log(`[ORDER] Condition: ${normalizedCondition}, Status: ${normalizedStatus}, Origin: ${origin}`);
 
-      if (normalizedStatus === 'CREDIT' || normalizedCondition === 'CONTADO' || normalizedCondition === 'CRÉDITO' || normalizedCondition === 'CREDITO') {
+      const shouldReserve = normalizedStatus === 'CREDIT' || normalizedCondition === 'CONTADO' || normalizedCondition === 'CRÉDITO' || normalizedCondition === 'CREDITO';
+      if (shouldReserve) {
         console.log(`[ORDER] Triggering moveStockToTemp for Order ${newOrder.id}`);
         await moveStockToTemp(tx, newOrder.id, validatedItems);
+        await tx.order.update({
+          where: { id: newOrder.id },
+          data: { warehouseStatus: 'PENDING' }
+        });
       } else {
         console.log(`[ORDER] Skipping moveStockToTemp for Order ${newOrder.id} - Condition did not match.`);
       }
@@ -2625,6 +2630,10 @@ app.post('/api/orders/:id/payment', authenticateToken, async (req, res) => {
       // 3. If first payment (was UNPAID), move stock to temp
       if (order.paymentStatus === 'UNPAID') {
         await moveStockToTemp(tx, orderId, order.items);
+        await tx.order.update({
+          where: { id: orderId },
+          data: { warehouseStatus: 'PENDING' }
+        });
       }
 
       return await tx.order.update({
@@ -2658,14 +2667,32 @@ app.put('/api/orders/:id/status', authenticateToken, async (req, res) => {
 
       if (!order) throw new Error('Pedido no encontrado');
 
-      // If status is being set to DISPATCHED, handle final stock exit from Despacho
-      if (status === 'DISPATCHED' && order.status !== 'DISPATCHED') {
-        const despacho = await tx.warehouse.findUnique({ where: { name: 'Despacho' } });
-        const comprobante = await tx.warehouse.findUnique({ where: { name: 'Comprobante' } });
+      // --- VALIDAR TRANSICIONES PERMITIDAS ---
+      const allowedTransitions: Record<string, string[]> = {
+        'PREPARING':   ['DISPATCHED'],
+        'DISPATCHED':  ['SHIPPED', 'PREPARING'],
+        'SHIPPED':     ['DELIVERED'],
+      };
+
+      const validNext = allowedTransitions[order.status] || [];
+      if (!validNext.includes(status)) {
+        throw new Error(
+          `Transición no válida: no se puede cambiar de "${order.status}" a "${status}". ` +
+          `Transiciones permitidas desde "${order.status}": ${validNext.join(', ') || 'ninguna'}`
+        );
+      }
+
+      // --- DISPATCH (PREPARING → DISPATCHED): mover stock a Comprobante ---
+      if (status === 'DISPATCHED' && order.status === 'PREPARING') {
+        const despacho = await tx.warehouse.findFirst({
+          where: { name: { contains: 'DESPACHO' } }
+        });
+        const comprobante = await tx.warehouse.findFirst({
+          where: { name: { contains: 'COMPROBANTE' } }
+        });
 
         if (despacho && comprobante) {
           for (const item of order.items) {
-            // Remove from temp warehouses
             await tx.stock.updateMany({
               where: { productId: item.productId, warehouseId: despacho.id },
               data: { quantity: { decrement: item.quantity } }
@@ -2674,20 +2701,140 @@ app.put('/api/orders/:id/status', authenticateToken, async (req, res) => {
               where: { productId: item.productId, warehouseId: comprobante.id },
               data: { quantity: { decrement: item.quantity } }
             });
+
+            await tx.stockMovement.create({
+              data: {
+                productId: item.productId,
+                fromWarehouseId: despacho.id,
+                toWarehouseId: comprobante.id,
+                quantity: item.quantity,
+                type: 'OUTPUT',
+                orderId,
+                observation: `Despacho pedido #${orderId} - Guía: ${referralGuide || ''}`
+              }
+            });
+          }
+        }
+      }
+
+      // --- CANCEL DISPATCH (DISPATCHED → PREPARING): revertir stock ---
+      if (status === 'PREPARING' && order.status === 'DISPATCHED') {
+        const despacho = await tx.warehouse.findFirst({
+          where: { name: { contains: 'DESPACHO' } }
+        });
+        const comprobante = await tx.warehouse.findFirst({
+          where: { name: { contains: 'COMPROBANTE' } }
+        });
+
+        if (despacho && comprobante) {
+          for (const item of order.items) {
+            await tx.stock.updateMany({
+              where: { productId: item.productId, warehouseId: despacho.id },
+              data: { quantity: { increment: item.quantity } }
+            });
+            await tx.stock.updateMany({
+              where: { productId: item.productId, warehouseId: comprobante.id },
+              data: { quantity: { increment: item.quantity } }
+            });
+
+            await tx.stockMovement.create({
+              data: {
+                productId: item.productId,
+                fromWarehouseId: comprobante.id,
+                toWarehouseId: despacho.id,
+                quantity: item.quantity,
+                type: 'INPUT',
+                orderId,
+                observation: `Anulación despacho pedido #${orderId}`
+              }
+            });
           }
         }
       }
 
       return await tx.order.update({
         where: { id: orderId },
-        data: { status, referralGuide, carrierGuide }
+        data: {
+          status,
+          ...(status === 'PREPARING' ? { warehouseStatus: 'PICKED', referralGuide: null, carrierGuide: null } : {}),
+          ...(referralGuide && { referralGuide }),
+          ...(carrierGuide && { carrierGuide })
+        }
       });
     });
 
     res.json(updatedOrder);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating status:', error);
-    res.status(500).json({ error: 'Error al actualizar el estado' });
+    res.status(500).json({ error: 'Error al actualizar el estado: ' + (error.message || '') });
+  }
+});
+
+// --- ANULAR COBRO (reversión total: elimina pagos, devuelve stock, resetea estados) ---
+app.post('/api/orders/:id/cancel-payment', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const orderId = parseInt(id);
+
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        include: { items: true, movements: true, payments: true }
+      });
+
+      if (!order) throw new Error('Pedido no encontrado');
+
+      // Solo se puede anular cobro si está PREPARING (pagado, no despachado)
+      if (order.status !== 'PREPARING') {
+        throw new Error(
+          'No se puede anular el cobro porque el pedido ya fue despachado. ' +
+          'Debe anular el despacho primero.'
+        );
+      }
+      if (order.paymentStatus !== 'PAID' && order.paymentStatus !== 'PARTIAL') {
+        throw new Error('El pedido no tiene pagos registrados para anular.');
+      }
+
+      // 1. Revertir stock: devolver desde DESPACHO a almacenes originales
+      const DESPACHO_NAME = 'A1.CUZCO.1048 - DESPACHO';
+      const despacho = await tx.warehouse.findUnique({ where: { name: DESPACHO_NAME } });
+
+      if (despacho) {
+        for (const move of order.movements) {
+          if (move.toWarehouseId === despacho.id && move.fromWarehouseId) {
+            await tx.stock.updateMany({
+              where: { productId: move.productId, warehouseId: move.fromWarehouseId },
+              data: { quantity: { increment: move.quantity } }
+            });
+            await tx.stock.updateMany({
+              where: { productId: move.productId, warehouseId: despacho.id },
+              data: { quantity: { decrement: move.quantity } }
+            });
+          }
+        }
+      }
+
+      // 2. Eliminar movimientos de stock asociados
+      await tx.stockMovement.deleteMany({ where: { orderId } });
+
+      // 3. Eliminar pagos
+      await tx.payment.deleteMany({ where: { orderId } });
+
+      // 4. Resetear estados del pedido
+      return await tx.order.update({
+        where: { id: orderId },
+        data: {
+          paymentStatus: 'UNPAID',
+          status: 'PENDING',
+          warehouseStatus: null
+        }
+      });
+    });
+
+    res.json(updatedOrder);
+  } catch (error: any) {
+    console.error('Error canceling payment:', error);
+    res.status(500).json({ error: 'Error al anular cobro: ' + (error.message || '') });
   }
 });
 
@@ -2732,6 +2879,25 @@ app.put('/api/orders/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const orderId = parseInt(id);
+    
+    // --- RESTRICCIÓN: No editar si está pagado o despachado ---
+    const currentOrder = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!currentOrder) return res.status(404).json({ error: 'Pedido no encontrado' });
+
+    const paidStatuses = ['PAID', 'PARTIAL'];
+    const dispatchedStatuses = ['DISPATCHED', 'SHIPPED', 'DELIVERED'];
+
+    if (paidStatuses.includes(currentOrder.paymentStatus)) {
+      return res.status(400).json({
+        error: 'No se puede editar un pedido que ya tiene pagos registrados. Debe anular el cobro primero.'
+      });
+    }
+    if (dispatchedStatuses.includes(currentOrder.status)) {
+      return res.status(400).json({
+        error: 'No se puede editar un pedido que ya fue despachado. Debe anular el despacho y el cobro primero.'
+      });
+    }
+
     const { 
       customerName, customerEmail, customerPhone, customerCity, customerAddress, 
       notes, totalAmount, status, paymentStatus, currency, paymentCondition, pickupPlace
@@ -2858,7 +3024,7 @@ app.post('/api/payments', authenticateToken, async (req, res) => {
       // Verificar si el pago excede el saldo
       const order = await tx.order.findUnique({
         where: { id: parseInt(orderId) },
-        include: { payments: true }
+        include: { payments: true, items: true }
       });
       
       if (!order) throw new Error('Pedido no encontrado');
@@ -2888,15 +3054,26 @@ app.post('/api/payments', authenticateToken, async (req, res) => {
 
       if (updatedOrder) {
         const totalPaidAfter = updatedOrder.payments.reduce((acc, p) => acc + Number(p.amount), 0);
-        if (totalPaidAfter >= Number(updatedOrder.totalAmount) - 0.01) {
+        const isFullyPaid = totalPaidAfter >= Number(updatedOrder.totalAmount) - 0.01;
+
+        if (isFullyPaid) {
           await tx.order.update({
             where: { id: updatedOrder.id },
-            data: { paymentStatus: 'PAID' }
+            data: { paymentStatus: 'PAID', status: 'PREPARING' }
           });
         } else {
           await tx.order.update({
             where: { id: updatedOrder.id },
             data: { paymentStatus: 'PARTIAL' }
+          });
+        }
+
+        // Si es el primer pago (estaba UNPAID), reservar stock y enviar a bandeja de picking
+        if (order.paymentStatus === 'UNPAID' && order.items && order.items.length > 0) {
+          await moveStockToTemp(tx, order.id, order.items);
+          await tx.order.update({
+            where: { id: updatedOrder.id },
+            data: { warehouseStatus: 'PENDING' }
           });
         }
       }
@@ -3404,6 +3581,180 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
     res.json({ id: user.id, email: user.email, name: user.name });
   } catch (error: any) {
     res.status(500).json({ error: 'Error al actualizar usuario' });
+  }
+});
+
+// --- PICKING / WAREHOUSE MODULE ---
+
+// --- PICKING OPERATORS ---
+app.get('/api/picking/operators', authenticateToken, async (req, res) => {
+  try {
+    const operators = await prisma.warehouseOperator.findMany({
+      orderBy: { name: 'asc' }
+    });
+    res.json(operators);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener operarios' });
+  }
+});
+
+app.post('/api/picking/operators', authenticateToken, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'El nombre es requerido' });
+    const operator = await prisma.warehouseOperator.create({
+      data: { name: name.trim() }
+    });
+    res.json(operator);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al crear operario' });
+  }
+});
+
+app.put('/api/picking/operators/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, isActive } = req.body;
+    const operator = await prisma.warehouseOperator.update({
+      where: { id: parseInt(id) },
+      data: { ...(name && { name: name.trim() }), ...(isActive !== undefined && { isActive }) }
+    });
+    res.json(operator);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al actualizar operario' });
+  }
+});
+
+app.get('/api/picking/orders', authenticateToken, async (req, res) => {
+  try {
+    const orders = await prisma.order.findMany({
+      where: {
+        warehouseStatus: { not: null },
+        status: { not: 'DISPATCHED' }
+      },
+      include: {
+        items: {
+          include: {
+            product: {
+              include: {
+                unit: true,
+              }
+            }
+          }
+        },
+        payments: true,
+        picker: true,
+        agency: true
+      },
+      orderBy: [
+        { warehouseStatus: 'asc' },
+        { createdAt: 'desc' }
+      ]
+    });
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener pedidos de picking' });
+  }
+});
+
+app.put('/api/picking/:id/assign', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { pickerId } = req.body;
+
+    const order = await prisma.order.update({
+      where: { id: parseInt(id) },
+      data: {
+        pickerId: parseInt(pickerId),
+        warehouseStatus: 'IN_PICKING',
+        pickingStartedAt: new Date()
+      },
+      include: {
+        picker: true
+      }
+    });
+
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al asignar operario' });
+  }
+});
+
+app.put('/api/picking/:id/prepare', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const order = await prisma.order.update({
+      where: { id: parseInt(id) },
+      data: { warehouseStatus: 'PICKED' }
+    });
+
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al marcar como preparado' });
+  }
+});
+
+app.put('/api/picking/:id/dispatch', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { referralGuide, carrierGuide } = req.body;
+    const orderId = parseInt(id);
+
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        include: { items: true }
+      });
+
+      if (!order) throw new Error('Pedido no encontrado');
+
+      const despacho = await tx.warehouse.findFirst({
+        where: { name: { contains: 'DESPACHO' } }
+      });
+      const comprobante = await tx.warehouse.findFirst({
+        where: { name: { contains: 'COMPROBANTE' } }
+      });
+
+      if (despacho && comprobante) {
+        for (const item of order.items) {
+          await tx.stock.updateMany({
+            where: { productId: item.productId, warehouseId: despacho.id },
+            data: { quantity: { decrement: item.quantity } }
+          });
+          await tx.stock.updateMany({
+            where: { productId: item.productId, warehouseId: comprobante.id },
+            data: { quantity: { decrement: item.quantity } }
+          });
+
+          await tx.stockMovement.create({
+            data: {
+              productId: item.productId,
+              fromWarehouseId: despacho.id,
+              toWarehouseId: comprobante.id,
+              quantity: item.quantity,
+              type: 'OUTPUT',
+              orderId,
+              observation: `Despacho pedido #${orderId} - Guía: ${referralGuide || ''}`
+            }
+          });
+        }
+      }
+
+      return await tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: 'DISPATCHED',
+          warehouseStatus: 'DISPATCHED',
+          ...(referralGuide && { referralGuide }),
+          ...(carrierGuide && { carrierGuide })
+        }
+      });
+    });
+
+    res.json(updatedOrder);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Error al despachar pedido: ' + error.message });
   }
 });
 
