@@ -1495,7 +1495,7 @@ app.get('/api/purchases', authenticateToken, async (req, res) => {
     for (const purchase of purchases) {
       let computedStatus = purchase.status; // Default to DB status
       
-      const isGuide = ['09', 'GRM', 'GUIA'].includes(purchase.docType);
+      const isGuide = ['09', 'GRM', 'GUIA', 'DUA'].includes(purchase.docType);
       if (isGuide) {
         let hasStockInTransit = false;
         for (const item of purchase.items) {
@@ -2045,7 +2045,7 @@ app.get('/api/movements/sources', authenticateToken, async (req, res) => {
     };
 
     if (type === 'COMPRA') {
-      whereClause.docType = { in: ['01', '03', '50'] };
+      whereClause.docType = { in: ['01', '03', '50', 'DUA'] };
     } else if (type === 'GUIA') {
       whereClause.docType = { in: ['09', 'GRM', 'GUIA'] };
     }
@@ -2065,11 +2065,16 @@ app.get('/api/movements/sources', authenticateToken, async (req, res) => {
       orderBy: { date: 'desc' }
     });
 
-    // --- FILTRO INTELIGENTE DE GUÍAS EN TRÁNSITO ---
+    // --- FILTRO INTELIGENTE DE DOCUMENTOS EN TRÁNSITO ---
     let finalPurchases = purchases;
-    if (type === 'GUIA') {
+    if (type === 'GUIA' || type === 'COMPRA') {
       const validPurchases = [];
       for (const purchase of purchases) {
+        if (purchase.warehouseId !== 6) {
+          validPurchases.push(purchase);
+          continue;
+        }
+
         let hasStockInTransit = false;
         for (const item of purchase.items) {
           const stockRecord = await (prisma as any).stock.findFirst({
@@ -2081,7 +2086,7 @@ app.get('/api/movements/sources', authenticateToken, async (req, res) => {
           });
           if (stockRecord && stockRecord.quantity > 0) {
             hasStockInTransit = true;
-            break; // Con un solo ítem que tenga stock, la guía debe aparecer
+            break; // Con un solo ítem que tenga stock, el documento debe aparecer
           }
         }
         if (hasStockInTransit) {
@@ -2200,7 +2205,7 @@ app.post('/api/movements', authenticateToken, async (req, res) => {
         await (tx as any).stockMovement.create({
           data: {
             productId: pId,
-            fromWarehouseId: (type === 'SALIDA' || type === 'TRANSFERENCIA') ? fromWhId : null,
+            fromWarehouseId: (type === 'SALIDA' || type === 'TRANSFERENCIA' || (type === 'INGRESO' && item.fromWarehouseId === 'TRANSIT')) ? finalFromWhId : null,
             toWarehouseId: (type === 'INGRESO' || type === 'TRANSFERENCIA') ? toWhId : null,
             fromZoneId: (type === 'SALIDA' || type === 'TRANSFERENCIA') ? fromZoneId : null,
             toZoneId: (type === 'INGRESO' || type === 'TRANSFERENCIA') ? toZoneId : null,
@@ -2237,8 +2242,8 @@ app.post('/api/movements/:id/annul', authenticateToken, async (req, res) => {
       const pId = movement.productId;
 
       // REVERSE LOGIC
-      // 1. Re-add to FROM (if it was an output or transfer)
-      if ((movement.type === 'OUTPUT' || movement.type === 'TRANSFER') && movement.fromWarehouseId) {
+      // 1. Re-add to FROM
+      if (movement.fromWarehouseId) {
         const stockFrom = await (tx as any).stock.findFirst({
           where: { 
             productId: pId, 
