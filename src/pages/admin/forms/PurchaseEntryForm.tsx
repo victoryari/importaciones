@@ -261,10 +261,16 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({ isOpen, onClose
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-hidden">
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-7xl max-h-full bg-[#D4D9E2] flex flex-col border border-[#8A9DB8] shadow-2xl overflow-hidden rounded-sm">
-          
-          <div className="bg-[#4A628A] px-3 py-1.5 flex items-center justify-between border-b border-white shadow-sm">
+      {isOpen && (
+        <motion.div key="purchase-entry"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 z-[150] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-hidden"
+        >
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-7xl max-h-full bg-[#D4D9E2] flex flex-col border border-[#8A9DB8] shadow-2xl overflow-hidden rounded-sm">
+            
+            <div className="bg-[#4A628A] px-3 py-1.5 flex items-center justify-between border-b border-white shadow-sm">
             <div className="flex items-center gap-2">
               <ShoppingCart className="w-4 h-4 text-white" />
               <h2 className="text-xs font-bold text-white uppercase tracking-wider">
@@ -551,7 +557,8 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({ isOpen, onClose
             token={token || ''}
           />
         </motion.div>
-      </div>
-    </AnimatePresence>
+      </motion.div>
+    )}
+  </AnimatePresence>
   );
 };

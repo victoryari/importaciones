@@ -74,7 +74,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 sm:p-6 overflow-hidden">
+      <div className="absolute inset-0 z-[250] flex items-center justify-center p-4 sm:p-6 overflow-hidden">
         <motion.div 
           initial={{ opacity: 0 }} 
           animate={{ opacity: 1 }} 

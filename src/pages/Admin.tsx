@@ -1189,7 +1189,7 @@ export default function Admin() {
             })}
 
           {/* Modals localized to their respective tabs */}
-          <div style={{ display: (activeTabId === 'quotations' || activeTabId === 'orders') ? 'block' : 'none' }}>
+          <div style={{ display: activeTabId === 'quotations' ? 'block' : 'none' }}>
             <QuotationForm 
               isOpen={isQuotationModalOpen} 
               onClose={() => setIsQuotationModalOpen(false)} 
@@ -1242,11 +1242,11 @@ export default function Admin() {
             <WarehouseForm isOpen={isWarehouseModalOpen} onClose={() => setIsWarehouseModalOpen(false)} onSubmit={handleSubmitWarehouse} formData={warehouseFormData} setFormData={setWarehouseFormData} loading={loading} token={token} refreshData={fetchData} />
           </div>
 
-          <div style={{ display: (activeTabId === 'customers' || isCustomerModalOpen) ? 'block' : 'none' }}>
+          <div style={{ display: activeTabId === 'customers' ? 'block' : 'none' }}>
             <CustomerForm isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} onSubmit={handleSubmitCustomer} formData={customerFormData} setFormData={setCustomerFormData} editingItem={editingItem} loading={loading} documentTypes={documentTypes} handleConsultDocument={handleConsultForQuotation} />
           </div>
 
-          <div style={{ display: (activeTabId === 'sellers' || isSellerModalOpen) ? 'block' : 'none' }}>
+          <div style={{ display: activeTabId === 'sellers' ? 'block' : 'none' }}>
             <SellerForm isOpen={isSellerModalOpen} onClose={() => setIsSellerModalOpen(false)} onSubmit={handleSubmitSeller} formData={sellerFormData} setFormData={setSellerFormData} loading={loading} isEditing={!!editingItem} />
           </div>
 
@@ -1267,7 +1267,7 @@ export default function Admin() {
             />
           </div>
 
-          <div style={{ display: (activeTabId === 'invoices' || isInvoiceModalOpen) ? 'block' : 'none' }}>
+          <div style={{ display: activeTabId === 'invoices' ? 'block' : 'none' }}>
             <InvoiceForm
               isOpen={isInvoiceModalOpen}
               onClose={() => setIsInvoiceModalOpen(false)}
@@ -1295,11 +1295,13 @@ export default function Admin() {
             />
           </div>
 
-          <OrderDetailModal
-            isOpen={isOrderDetailOpen}
-            onClose={() => setIsOrderDetailOpen(false)}
-            order={orderDetail}
-          />
+          <div style={{ display: activeTabId === 'orders' ? 'block' : 'none' }}>
+            <OrderDetailModal
+              isOpen={isOrderDetailOpen}
+              onClose={() => setIsOrderDetailOpen(false)}
+              order={orderDetail}
+            />
+          </div>
 
           <div style={{ display: activeTabId === 'purchases' ? 'block' : 'none' }}>
             {purchaseMode === 'guides' ? (
@@ -1350,60 +1352,66 @@ export default function Admin() {
             />
           </div>
 
-          <MovementAssistantForm 
-            isOpen={isMovementAssistantOpen}
-            onClose={() => setIsMovementAssistantOpen(false)}
-            onSubmit={handleSubmitMovement}
-            warehouses={warehouses}
-            customers={[
-              ...customers.map(c => ({ ...c, type: 'CUSTOMER' })),
-              ...suppliers.map(s => ({ ...s, type: 'SUPPLIER' }))
-            ]}
-            products={products}
-            token={token}
-          />
+          <div style={{ display: activeTabId === 'inventory' ? 'block' : 'none' }}>
+            <MovementAssistantForm 
+              isOpen={isMovementAssistantOpen}
+              onClose={() => setIsMovementAssistantOpen(false)}
+              onSubmit={handleSubmitMovement}
+              warehouses={warehouses}
+              customers={[
+                ...customers.map(c => ({ ...c, type: 'CUSTOMER' })),
+                ...suppliers.map(s => ({ ...s, type: 'SUPPLIER' }))
+              ]}
+              products={products}
+              token={token}
+            />
+          </div>
+
+          <div style={{ display: activeTabId === 'orders' ? 'block' : 'none' }}>
+            <OrderForm 
+              isOpen={isOrderModalOpen}
+              onClose={() => setIsOrderModalOpen(false)}
+              onSubmit={handleSubmitQuotation}
+              formData={quotationFormData}
+              setFormData={setQuotationFormData}
+              editingItem={editingItem}
+              loading={loading}
+              customers={customers}
+              sellers={sellers}
+              warehouses={warehouses}
+              shippingAgencies={shippingAgencies}
+              sunatCurrencies={sunatCurrencies}
+              sunatPaymentConditions={sunatPaymentConditions}
+              sunatOperationTypes={sunatOperationTypes}
+              searchResults={searchResults}
+              handleSearchProduct={handleSearchProduct}
+              quotationItems={quotationItems}
+              addQuotationItem={addQuotationItem}
+              updateQuotationItem={updateQuotationItem}
+              removeQuotationItem={removeQuotationItem}
+              quotationTotal={quotationTotal}
+              handleConsultCustomer={handleConsultForQuotation}
+              handleQuickRegister={handleQuickRegisterCustomer}
+              onOpenCustomerForm={(doc) => { setCustomerFormData({ ...initialCustomerData, docNumber: doc }); setIsCustomerModalOpen(true); }}
+              token={token || ''}
+              sunatIgvAffectations={sunatIgvAffectations}
+              sunatDocTypes={sunatDocTypes}
+              series={series}
+            />
+          </div>
+
+          <div style={{ display: activeTabId === 'orders' ? 'block' : 'none' }}>
+            <PaymentForm 
+              isOpen={isPaymentModalOpen}
+              onClose={() => setIsPaymentModalOpen(false)}
+              order={selectedOrderForPayment}
+              onSubmit={handleSubmitPayment}
+              onDeletePayment={handleDeletePayment}
+              loading={loading}
+            />
+          </div>
 
           </div> {/* Cierre del contenedor Content Area */}
-
-          <OrderForm 
-            isOpen={isOrderModalOpen}
-            onClose={() => setIsOrderModalOpen(false)}
-            onSubmit={handleSubmitQuotation}
-            formData={quotationFormData}
-            setFormData={setQuotationFormData}
-            editingItem={editingItem}
-            loading={loading}
-            customers={customers}
-            sellers={sellers}
-            warehouses={warehouses}
-            shippingAgencies={shippingAgencies}
-            sunatCurrencies={sunatCurrencies}
-            sunatPaymentConditions={sunatPaymentConditions}
-            sunatOperationTypes={sunatOperationTypes}
-            searchResults={searchResults}
-            handleSearchProduct={handleSearchProduct}
-            quotationItems={quotationItems}
-            addQuotationItem={addQuotationItem}
-            updateQuotationItem={updateQuotationItem}
-            removeQuotationItem={removeQuotationItem}
-            quotationTotal={quotationTotal}
-            handleConsultCustomer={handleConsultForQuotation}
-            handleQuickRegister={handleQuickRegisterCustomer}
-            onOpenCustomerForm={(doc) => { setCustomerFormData({ ...initialCustomerData, docNumber: doc }); setIsCustomerModalOpen(true); }}
-            token={token || ''}
-            sunatIgvAffectations={sunatIgvAffectations}
-            sunatDocTypes={sunatDocTypes}
-            series={series}
-          />
-
-          <PaymentForm 
-            isOpen={isPaymentModalOpen}
-            onClose={() => setIsPaymentModalOpen(false)}
-            order={selectedOrderForPayment}
-            onSubmit={handleSubmitPayment}
-            onDeletePayment={handleDeletePayment}
-            loading={loading}
-          />
         </main>
       </div>
     </div>

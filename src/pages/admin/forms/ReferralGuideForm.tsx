@@ -156,8 +156,14 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({ isOpen, on
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-hidden">
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-6xl max-h-full bg-[#E8EBF0] flex flex-col border border-[#8A9DB8] shadow-2xl overflow-hidden rounded-sm">
+      {isOpen && (
+        <motion.div key="referral-guide"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 z-[150] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-hidden"
+        >
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-6xl max-h-full bg-[#E8EBF0] flex flex-col border border-[#8A9DB8] shadow-2xl overflow-hidden rounded-sm">
           
           <div className="bg-[#5C7285] px-3 py-1.5 flex items-center justify-between border-b border-white shadow-sm">
             <div className="flex items-center gap-2">
@@ -373,8 +379,9 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({ isOpen, on
             token={token || ''}
           />
         </motion.div>
-      </div>
-    </AnimatePresence>
+      </motion.div>
+    )}
+  </AnimatePresence>
   );
 };
 
