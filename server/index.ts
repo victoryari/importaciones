@@ -1037,7 +1037,7 @@ app.get('/api/quotations', authenticateToken, async (req, res) => {
   try {
     const quotations = await prisma.quotation.findMany({
       include: { 
-        items: { include: { product: true } },
+        items: { include: { product: { include: { unit: true } } } },
         customer: true
       },
       orderBy: { createdAt: 'desc' }
@@ -1136,7 +1136,8 @@ app.post('/api/quotations', authenticateToken, async (req, res) => {
               discount: parseFloat(item.discount) || 0,
               lotNumber: item.lotNumber || item.lot || null,
               warehouseName: item.warehouseName || null,
-              expiryDate: validExpiry
+              expiryDate: validExpiry,
+              unitMeasure: item.unitMeasure || null
             };
           })
         }
@@ -1230,7 +1231,8 @@ app.put('/api/quotations/:id', authenticateToken, async (req, res) => {
             discount: parseFloat(item.discount) || 0,
             lotNumber: item.lotNumber || item.lot || null,
             warehouseName: item.warehouseName || null,
-            expiryDate: validExpiry
+            expiryDate: validExpiry,
+            unitMeasure: item.unitMeasure || null
           };
         })
       }
@@ -2400,7 +2402,8 @@ app.post('/api/orders', orderLimiter, async (req, res) => {
         discount: itemDiscount,
         lotNumber: item.lotNumber || item.lot || null,
         warehouseName: item.warehouseName || null,
-        expiryDate: validExpiry
+        expiryDate: validExpiry,
+        unitMeasure: item.unitMeasure || null
       });
     }
 
@@ -2838,6 +2841,208 @@ app.post('/api/orders/:id/cancel-payment', authenticateToken, async (req, res) =
   }
 });
 
+// --- API INVOICES ---
+app.get('/api/invoices', authenticateToken, async (req, res) => {
+  try {
+    const invoices = await prisma.invoice.findMany({
+      include: { items: { include: { product: true } }, installments: true, seller: true, customer: true },
+      orderBy: { id: 'desc' }
+    });
+    res.json(invoices);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener facturas' });
+  }
+});
+
+app.get('/api/invoices/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: parseInt(id) },
+      include: { items: { include: { product: true } }, installments: true, seller: true, customer: true }
+    });
+    if (!invoice) return res.status(404).json({ error: 'Factura no encontrada' });
+    res.json(invoice);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener factura' });
+  }
+});
+
+app.post('/api/invoices', authenticateToken, async (req, res) => {
+  try {
+    const {
+      documentType, series, number, customerName, customerDocType, customerDocNumber,
+      customerAddress, customerEmail, customerPhone, customerId, issueDate, dueDate,
+      currency, exchangeRate, paymentCondition, operationType, includeIgv, priceIncludesIgv,
+      igvPercent, sellerId, orderId, notes, items, installments
+    } = req.body;
+
+    const numberFormatted = `${series}-${String(number).padStart(8, '0')}`;
+
+    // Calculate totals
+    let subtotal = 0;
+    let totalIgv = 0;
+    const igvRate = (igvPercent || 18) / 100;
+
+    const invoiceItems = items.map((item: any) => {
+      const price = parseFloat(item.price) || 0;
+      const qty = parseInt(item.quantity) || 0;
+      const discount = parseFloat(item.discount) || 0;
+      const itemTotal = qty * price;
+      const itemDiscount = itemTotal * (discount / 100);
+      const itemFinal = itemTotal - itemDiscount;
+      subtotal += itemFinal;
+      return {
+        productId: parseInt(item.productId),
+        quantity: qty,
+        unitMeasure: item.unitMeasure || 'UND',
+        price,
+        discount,
+        priceType: item.priceType || 'PRICE1',
+        total: itemFinal,
+        lotNumber: item.lotNumber || null
+      };
+    });
+
+    totalIgv = includeIgv !== false ? subtotal * igvRate : 0;
+    const totalAmount = subtotal + totalIgv;
+
+    const invoice = await prisma.$transaction(async (tx) => {
+      // Update series counter
+      await tx.documentSeries.updateMany({
+        where: { documentType, series },
+        data: { currentNumber: number }
+      });
+
+      return await tx.invoice.create({
+        data: {
+          documentType, series, number, numberFormatted,
+          customerName, customerDocType, customerDocNumber,
+          customerAddress, customerEmail, customerPhone,
+          customerId: customerId ? parseInt(customerId) : null,
+          issueDate: issueDate ? new Date(issueDate) : new Date(),
+          dueDate: dueDate ? new Date(dueDate) : null,
+          currency: currency || 'PEN',
+          exchangeRate: parseFloat(exchangeRate) || 1,
+          paymentCondition: paymentCondition || 'CONTADO',
+          operationType: operationType || '10',
+          includeIgv: includeIgv !== false,
+          priceIncludesIgv: priceIncludesIgv !== false,
+          igvPercent: parseFloat(igvPercent) || 18,
+          subtotal, totalIgv, totalAmount,
+          sellerId: sellerId ? parseInt(sellerId) : null,
+          orderId: orderId ? parseInt(orderId) : null,
+          notes,
+          items: { create: invoiceItems },
+          installments: installments ? {
+            create: installments.map((inst: any, idx: number) => ({
+              number: idx + 1,
+              amount: parseFloat(inst.amount) || 0,
+              daysOffset: parseInt(inst.daysOffset) || 0,
+              dueDate: new Date(inst.dueDate),
+              status: 'PENDING'
+            }))
+          } : undefined
+        },
+        include: { items: { include: { product: true } }, installments: true, seller: true, customer: true }
+      });
+    });
+
+    // If created from order, update order billing status
+    if (orderId) {
+      await prisma.order.update({
+        where: { id: parseInt(orderId) },
+        data: { voucherNumber: numberFormatted }
+      });
+    }
+
+    res.json(invoice);
+  } catch (error: any) {
+    console.error('Error creating invoice:', error);
+    res.status(500).json({ error: 'Error al crear factura: ' + (error.message || '') });
+  }
+});
+
+app.put('/api/invoices/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const invoiceId = parseInt(id);
+    const { notes, items, installments, ...data } = req.body;
+
+    const invoice = await prisma.$transaction(async (tx) => {
+      // Delete existing items and installments
+      await tx.invoiceItem.deleteMany({ where: { invoiceId } });
+      await tx.invoiceInstallment.deleteMany({ where: { invoiceId } });
+
+      // Recalculate totals
+      let subtotal = 0;
+      let totalIgv = 0;
+      const igvRate = (data.igvPercent || 18) / 100;
+
+      const invoiceItems = (items || []).map((item: any) => {
+        const price = parseFloat(item.price) || 0;
+        const qty = parseInt(item.quantity) || 0;
+        const discount = parseFloat(item.discount) || 0;
+        const itemTotal = qty * price;
+        const itemDiscount = itemTotal * (discount / 100);
+        const itemFinal = itemTotal - itemDiscount;
+        subtotal += itemFinal;
+        return {
+          productId: parseInt(item.productId),
+          quantity: qty,
+          unitMeasure: item.unitMeasure || 'UND',
+          price,
+          discount,
+          priceType: item.priceType || 'PRICE1',
+          total: itemFinal,
+          lotNumber: item.lotNumber || null
+        };
+      });
+
+      totalIgv = data.includeIgv !== false ? subtotal * igvRate : 0;
+      const totalAmount = subtotal + totalIgv;
+
+      return await tx.invoice.update({
+        where: { id: invoiceId },
+        data: {
+          ...data,
+          customerId: data.customerId ? parseInt(data.customerId) : null,
+          sellerId: data.sellerId ? parseInt(data.sellerId) : null,
+          exchangeRate: parseFloat(data.exchangeRate) || 1,
+          igvPercent: parseFloat(data.igvPercent) || 18,
+          subtotal, totalIgv, totalAmount,
+          items: { create: invoiceItems },
+          installments: installments ? {
+            create: (installments || []).map((inst: any, idx: number) => ({
+              number: idx + 1,
+              amount: parseFloat(inst.amount) || 0,
+              daysOffset: parseInt(inst.daysOffset) || 0,
+              dueDate: new Date(inst.dueDate),
+              status: 'PENDING'
+            }))
+          } : undefined
+        },
+        include: { items: { include: { product: true } }, installments: true, seller: true, customer: true }
+      });
+    });
+
+    res.json(invoice);
+  } catch (error: any) {
+    console.error('Error updating invoice:', error);
+    res.status(500).json({ error: 'Error al actualizar factura: ' + (error.message || '') });
+  }
+});
+
+app.delete('/api/invoices/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.invoice.delete({ where: { id: parseInt(id) } });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Error al eliminar factura: ' + (error.message || '') });
+  }
+});
+
 app.get('/api/stats', authenticateToken, async (req, res) => {
   try {
     const totalOrders = await prisma.order.count();
@@ -3246,6 +3451,18 @@ app.get('/api/series/next/:warehouseId/:docType', authenticateToken, async (req,
     });
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener correlativo' });
+  }
+});
+
+// --- API DOCUMENT TYPES ---
+app.get('/api/document-types', authenticateToken, async (req, res) => {
+  try {
+    const types = await prisma.documentType.findMany({
+      orderBy: { name: 'asc' }
+    });
+    res.json(types);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener tipos de documento' });
   }
 });
 

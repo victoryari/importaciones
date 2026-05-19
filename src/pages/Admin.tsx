@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, Package, Save, Image as ImageIcon, Settings as SettingsIcon, LogOut, Trash2, X, CheckCircle, FileText, BarChart3, Star, ShoppingCart, Truck, DollarSign, User, MapPin, Hash, ArrowRightLeft, Building2, Users, ShieldCheck, PackageSearch } from 'lucide-react';
+import { LayoutDashboard, Package, Save, Image as ImageIcon, Settings as SettingsIcon, LogOut, Trash2, X, CheckCircle, FileText, BarChart3, Star, ShoppingCart, Truck, DollarSign, User, MapPin, Hash, ArrowRightLeft, Building2, Users, ShieldCheck, PackageSearch, ChevronDown, Receipt } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { SettingsModule } from './admin/SettingsModule';
 import { ExchangeRateModule } from './admin/ExchangeRateModule';
@@ -15,6 +15,7 @@ import { SellerModule } from './admin/SellerModule';
 import { WarehouseModule } from './admin/WarehouseModule';
 import WarehousePickingModule from './admin/WarehousePickingModule';
 import { SeriesModule } from './admin/SeriesModule';
+import { InvoiceModule } from './admin/InvoiceModule';
 import { PurchaseModule } from './admin/PurchaseModule';
 import { TransferModule } from './admin/TransferModule';
 import { SupplierModule } from './admin/SupplierModule';
@@ -37,6 +38,8 @@ import { SupplierForm } from './admin/forms/SupplierForm';
 import { TransferForm } from './admin/forms/TransferForm';
 import { MovementAssistantForm } from './admin/forms/MovementAssistantForm';
 import PaymentForm from './admin/forms/PaymentForm';
+import { InvoiceForm } from './admin/forms/InvoiceForm';
+import { OrderDetailModal } from './admin/OrderDetailModal';
 
 import axios from 'axios';
 import { getDeptId, getProvId, getDistId } from '../lib/ubigeoData';
@@ -64,6 +67,9 @@ export default function Admin() {
   const [shippingAgencies, setShippingAgencies] = useState<any[]>([]);
   const [shippingZones, setShippingZones] = useState<any[]>([]);
   const [documentTypes, setDocumentTypes] = useState<any[]>([]);
+  const [seriesDocTypes, setSeriesDocTypes] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [exchangeRates, setExchangeRates] = useState<any[]>([]);
   const [sellers, setSellers] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -83,6 +89,12 @@ export default function Admin() {
   const [openTabs, setOpenTabs] = useState<{id: string, label: string}[]>([{ id: 'dashboard', label: 'Resumen' }]);
   const [activeTabId, setActiveTabId] = useState<string>('dashboard');
   const view = activeTabId; // Alias for backward compatibility
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
+    ventas: false,
+    compras: false,
+    logistica: false,
+    general: false
+  });
 
   const handleOpenTab = (id: string, label: string) => {
     if (!openTabs.find(t => t.id === id)) {
@@ -157,6 +169,16 @@ export default function Admin() {
   const initialSimpleData = { name: '', slug: '', image: '', logo: '', symbol: '' };
   const initialAgencyData = { name: '', ruc: '', address: '', legalAddress: '', phone: '', email: '', contact: '', department: '', province: '', district: '', zoneId: '', isActive: true, branches: [] };
   const initialSeriesData = { documentType: 'COT', series: '', currentNumber: 0, warehouseId: '', isActive: true };
+  const initialInvoiceData = {
+    documentType: 'FACT', series: '', docSeries: '', docNumber: '', seriesId: '',
+    customerName: '', customerDocType: 'DNI', customerDocNumber: '', customerAddress: '',
+    customerEmail: '', customerPhone: '', customerId: '',
+    issueDate: new Date().toISOString().split('T')[0],
+    currency: 'PEN', exchangeRate: '1.000',
+    paymentCondition: 'CONTADO', operationType: '10',
+    includeIgv: true, priceIncludesIgv: true, igvPercent: 18,
+    sellerId: '', orderId: '', notes: '',
+  };
   const initialWarehouseData = { code: '', name: '', commercialName: '', address: '', ruc: '', ubigeo: '', observation: '', phones: '', type: '', validateStock: true, isActive: true, floors: [] };
 
   const [agencyFormData, setAgencyFormData] = useState(initialAgencyData);
@@ -167,6 +189,10 @@ export default function Admin() {
   const [productFormData, setProductFormData] = useState(initialProductData);
   const [customerFormData, setCustomerFormData] = useState(initialCustomerData);
   const [seriesFormData, setSeriesFormData] = useState(initialSeriesData);
+  const [invoiceFormData, setInvoiceFormData] = useState(initialInvoiceData);
+  const [invoiceItems, setInvoiceItems] = useState<any[]>([]);
+  const [orderDetail, setOrderDetail] = useState<any>(null);
+  const [isOrderDetailOpen, setIsOrderDetailOpen] = useState(false);
   const [purchaseFormData, setPurchaseFormData] = useState({
     supplierId: '', supplierName: '', docType: 'FACTURA', docSeries: '', docNumber: '',
     date: new Date().toISOString().split('T')[0], currency: 'PEN', exchangeRate: '1.00',
@@ -242,6 +268,7 @@ export default function Admin() {
         quantity: 1,
         discount: 0,
         unit: p.unit,
+        unitMeasure: p.unit?.symbol || 'UND',
         lot: oldestLot?.lotNumber || oldestLot?.lot || null,
         warehouseName: oldestLot?.warehouse?.name || 'S/A',
         expiryDate: oldestLot?.expiryDate || null,
@@ -271,7 +298,7 @@ export default function Admin() {
         '/api/orders', '/api/quotations', '/api/customers', '/api/shipping-agencies', 
         '/api/shipping-zones', '/api/sunat/document_type', '/api/stats', '/api/exchange-rates',
         '/api/sellers', '/api/warehouses', '/api/sunat/currency', 
-        '/api/sunat/payment_condition', '/api/sunat/operation_type', '/api/sunat/igv_affectation_type', '/api/sunat/doc_type', '/api/series', '/api/purchases', '/api/movements', '/api/suppliers', '/api/stock'
+        '/api/sunat/payment_condition', '/api/sunat/operation_type', '/api/sunat/igv_affectation_type', '/api/sunat/doc_type', '/api/series', '/api/purchases', '/api/movements', '/api/suppliers', '/api/stock', '/api/document-types', '/api/invoices'
       ];
       const responses = await Promise.all(endpoints.map(url => axios.get(url, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] }))));
       setCategories(responses[0].data); 
@@ -306,6 +333,8 @@ export default function Admin() {
       setMovements(responses[21].data);
       setSuppliers(responses[22].data);
       setStockDetails(responses[23].data);
+      setSeriesDocTypes(responses[24].data);
+      setInvoices(responses[25].data);
       
       const todayRate = responses[11].data[0]?.sell_rate;
       if (todayRate) setQuotationFormData((prev: any) => ({ ...prev, exchangeRate: todayRate }));
@@ -354,6 +383,76 @@ export default function Admin() {
     else if (type === 'series') {
       setSeriesFormData(item || initialSeriesData);
       setIsSeriesModalOpen(true);
+    }
+    else if (type === 'invoices') {
+      if (item) {
+        // item could be an existing invoice OR an order (for generating comprobante)
+        const isFromOrder = item.customerPhone !== undefined && item.totalAmount !== undefined && item.items !== undefined && item.docType === 'PED';
+        if (isFromOrder) {
+          // Populate from order
+          const customer = customers.find(c => c.id === item.customerId);
+          setQuotationFormData((prev: any) => ({ ...prev, ...item }));
+          setInvoiceFormData({
+            ...initialInvoiceData,
+            customerName: item.customerName || '',
+            customerDocType: item.customerDocType || 'DNI',
+            customerDocNumber: item.customerDocNumber || '',
+            customerAddress: item.customerAddress || '',
+            customerEmail: item.customerEmail || '',
+            customerPhone: item.customerPhone || '',
+            customerId: item.customerId?.toString() || '',
+            sellerId: item.sellerId?.toString() || '',
+            orderId: item.id,
+            paymentCondition: item.paymentCondition || 'CONTADO',
+            currency: item.currency || 'PEN',
+            operationType: item.operationType || '10',
+            exchangeRate: item.exchangeRate || '1.000',
+            issueDate: new Date().toISOString().split('T')[0],
+            notes: item.notes || '',
+            documentType: 'FACT',
+          });
+          setQuotationItems(item.items?.map((i: any) => ({
+            productId: i.productId,
+            name: i.product?.name || i.name || 'Producto',
+            code: i.product?.code || i.code || '',
+            price: Number(i.price || 0),
+            quantity: Number(i.quantity || 0),
+            discount: Number(i.discount || 0),
+            unitMeasure: i.product?.unit?.symbol || i.product?.unit?.name || 'UND',
+            priceType: i.priceType || 'PRICE1',
+            lotNumber: i.lotNumber || '',
+            unit: i.product?.unit || { symbol: 'UND' },
+          })) || []);
+        } else {
+          // Edit existing invoice
+          setInvoiceFormData({
+            ...initialInvoiceData,
+            ...item,
+            issueDate: item.issueDate?.split('T')[0] || new Date().toISOString().split('T')[0],
+            sellerId: item.sellerId?.toString() || '',
+            customerId: item.customerId?.toString() || '',
+          });
+          setQuotationItems(item.items?.map((i: any) => ({
+            productId: i.productId,
+            name: i.product?.name || i.name || 'Producto',
+            code: i.product?.code || i.code || '',
+            price: Number(i.price || 0),
+            quantity: Number(i.quantity || 0),
+            discount: Number(i.discount || 0),
+            unitMeasure: i.unitMeasure || 'UND',
+            priceType: i.priceType || 'PRICE1',
+            lotNumber: i.lotNumber || '',
+            unit: i.product?.unit || { symbol: 'UND' },
+          })) || []);
+        }
+      } else {
+        setInvoiceFormData({
+          ...initialInvoiceData,
+          issueDate: new Date().toISOString().split('T')[0],
+        });
+        setQuotationItems([]);
+      }
+      setIsInvoiceModalOpen(true);
     }
     else if (type === 'purchases') {
       const modeToSet = purchaseEntryMode || 'invoices';
@@ -424,7 +523,8 @@ export default function Admin() {
           price: Number(i.price || 0),
           quantity: Number(i.quantity || 0),
           discount: Number(i.discount || 0),
-          unit: i.product?.unit?.symbol || i.unit || 'UND',
+          unit: i.product?.unit,
+          unitMeasure: i.unitMeasure || i.product?.unit?.symbol || 'UND',
           lot: i.lotNumber || i.lot || null,
           warehouseName: i.warehouseName || null,
           expiryDate: i.expiryDate || null,
@@ -627,11 +727,46 @@ export default function Admin() {
     } catch (err) { alert('Error al guardar'); } finally { setLoading(false); }
   };
 
+  const handleSubmitInvoice = async (e: any) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const payload = {
+        ...invoiceFormData,
+        items: quotationItems.map((item: any) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitMeasure: item.unitMeasure || 'UND',
+          price: item.price,
+          discount: item.discount || 0,
+          priceType: item.priceType || 'PRICE1',
+          lotNumber: item.lotNumber || null,
+        })),
+        installments: invoiceFormData.paymentCondition === 'CREDITO' ? invoiceFormData.installments || [] : [],
+        totalAmount: quotationTotal,
+      };
+
+      if (editingItem) {
+        await axios.put(`/api/invoices/${editingItem.id}`, payload, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } else {
+        await axios.post('/api/invoices', payload, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+      setIsInvoiceModalOpen(false);
+      await fetchData();
+      showSuccess('Comprobante emitido correctamente');
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Error al emitir comprobante');
+    } finally { setLoading(false); }
+  };
+
   const handleSubmitSupplier = async (e: any) => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Sincronizar el código con el número de documento
       const payload = { ...supplierFormData, code: supplierFormData.docNumber };
       
       if (editingItem) await axios.put(`/api/suppliers/${editingItem.id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
@@ -847,31 +982,108 @@ export default function Admin() {
       <div className="flex flex-col lg:flex-row gap-6 h-full min-h-0">
         <aside className="w-full lg:w-64 shrink-0 space-y-2 h-full overflow-y-auto custom-scrollbar pr-2">
           <div className="px-4 py-4 mb-4 bg-blue-900 text-white rounded-3xl shadow-lg shadow-blue-100"><div className="flex items-center gap-3 mb-1"><div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold">C</div><span className="font-bold text-lg">Panel Admin</span></div><p className="text-[10px] text-blue-300 font-bold uppercase tracking-widest pl-11">{user?.name || 'Administrador'}</p></div>
-          {[
-            { id: 'dashboard', icon: LayoutDashboard, label: 'Resumen', permission: 'VIEW_DASHBOARD' }, 
-            { id: 'products', icon: Package, label: 'Productos', permission: 'VIEW_PRODUCTS' }, 
-            { id: 'quotations', icon: FileText, label: 'Cotizaciones', permission: 'VIEW_QUOTATIONS' }, 
-            { id: 'orders', icon: ShoppingCart, label: 'Pedidos', permission: 'VIEW_ORDERS' }, 
-            { id: 'inventory', icon: BarChart3, label: 'Inventario / Stock', permission: 'VIEW_INVENTORY' },
-            { id: 'picking', icon: PackageSearch, label: 'Picking / Almacén', permission: 'VIEW_PICKING' }, 
-            { id: 'purchases', icon: ShoppingCart, label: 'Compras', permission: 'VIEW_PURCHASES' },
-            { id: 'logistics', icon: Truck, label: 'Logística', permission: 'VIEW_LOGISTICS' },
-            { id: 'warehouses', icon: MapPin, label: 'Almacenes / Sedes', permission: 'VIEW_WAREHOUSES' },
-            { id: 'customers', icon: Star, label: 'Clientes', permission: 'VIEW_CUSTOMERS' }, 
-            { id: 'suppliers', icon: Building2, label: 'Proveedores', permission: 'VIEW_SUPPLIERS' },
-            { id: 'sellers', icon: User, label: 'Vendedores', permission: 'VIEW_SELLERS' },
-            { id: 'exchange-rates', icon: DollarSign, label: 'T. Cambio', permission: 'VIEW_EXCHANGE_RATES' }, 
-            { id: 'series', icon: Hash, label: 'Series', permission: 'VIEW_SERIES' }, 
-            { id: 'settings', icon: SettingsIcon, label: 'Ajustes', permission: 'VIEW_SETTINGS' },
-            { id: 'users', icon: Users, label: 'Usuarios', permission: 'ALL' },
-            { id: 'roles', icon: ShieldCheck, label: 'Roles', permission: 'ALL' },
-          ].map(item => {
-            const hasAccess = item.permission ? hasPermission?.(item.permission) : true;
-            if (!hasAccess) return null;
-            return (
-              <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl transition-all ${activeTabId === item.id || (item.id === 'products' && ['categories', 'brands', 'units'].includes(activeTabId)) ? 'bg-blue-100 text-blue-900 font-bold scale-105 shadow-sm' : 'hover:bg-slate-100'}`}><item.icon className="w-5 h-5" /> {item.label}</button>
-            );
-          })}
+          {/* --- MENU AGRUPADO --- */}
+          {/* Resumen (standalone) */}
+          <button onClick={() => handleOpenTab('dashboard', 'Resumen')} className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl transition-all ${activeTabId === 'dashboard' ? 'bg-blue-100 text-blue-900 font-bold scale-105 shadow-sm' : 'hover:bg-slate-100'}`}><LayoutDashboard className="w-5 h-5" /> Resumen</button>
+
+          {/* Ventas */}
+          <div className="space-y-0.5">
+            <button onClick={() => setCollapsedSections(prev => ({...prev, ventas: !prev.ventas}))} className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
+              Ventas
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsedSections.ventas ? '-rotate-90' : ''}`} />
+            </button>
+            {!collapsedSections.ventas && (
+              <div className="space-y-0.5 pl-2">
+                {[
+                  { id: 'quotations', icon: FileText, label: 'Cotizaciones', permission: 'VIEW_QUOTATIONS' },
+                  { id: 'orders', icon: ShoppingCart, label: 'Pedidos', permission: 'VIEW_ORDERS' },
+                  { id: 'invoices', icon: Receipt, label: 'Facturación', permission: 'VIEW_ORDERS' },
+                  { id: 'customers', icon: Star, label: 'Clientes', permission: 'VIEW_CUSTOMERS' },
+                  { id: 'sellers', icon: User, label: 'Vendedores', permission: 'VIEW_SELLERS' },
+                ].map(item => {
+                  const hasAccess = item.permission ? hasPermission?.(item.permission) : true;
+                  if (!hasAccess) return null;
+                  return (
+                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm transition-all ${activeTabId === item.id ? 'bg-blue-100 text-blue-900 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Productos (standalone) */}
+          <button onClick={() => handleOpenTab('products', 'Productos')} className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl transition-all ${activeTabId === 'products' || ['categories', 'brands', 'units'].includes(activeTabId) ? 'bg-blue-100 text-blue-900 font-bold scale-105 shadow-sm' : 'hover:bg-slate-100'}`}><Package className="w-5 h-5" /> Productos</button>
+
+          {/* Compras */}
+          <div className="space-y-0.5">
+            <button onClick={() => setCollapsedSections(prev => ({...prev, compras: !prev.compras}))} className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
+              Compras
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsedSections.compras ? '-rotate-90' : ''}`} />
+            </button>
+            {!collapsedSections.compras && (
+              <div className="space-y-0.5 pl-2">
+                {[
+                  { id: 'purchases', icon: ShoppingCart, label: 'Compras', permission: 'VIEW_PURCHASES' },
+                  { id: 'suppliers', icon: Building2, label: 'Proveedores', permission: 'VIEW_SUPPLIERS' },
+                ].map(item => {
+                  const hasAccess = item.permission ? hasPermission?.(item.permission) : true;
+                  if (!hasAccess) return null;
+                  return (
+                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm transition-all ${activeTabId === item.id ? 'bg-blue-100 text-blue-900 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Logística */}
+          <div className="space-y-0.5">
+            <button onClick={() => setCollapsedSections(prev => ({...prev, logistica: !prev.logistica}))} className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
+              Logística
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsedSections.logistica ? '-rotate-90' : ''}`} />
+            </button>
+            {!collapsedSections.logistica && (
+              <div className="space-y-0.5 pl-2">
+                {[
+                  { id: 'picking', icon: PackageSearch, label: 'Picking / Almacén', permission: 'VIEW_PICKING' },
+                  { id: 'inventory', icon: BarChart3, label: 'Inventario / Stock', permission: 'VIEW_INVENTORY' },
+                  { id: 'warehouses', icon: MapPin, label: 'Almacenes / Sedes', permission: 'VIEW_WAREHOUSES' },
+                  { id: 'logistics', icon: Truck, label: 'Logística', permission: 'VIEW_LOGISTICS' },
+                ].map(item => {
+                  const hasAccess = item.permission ? hasPermission?.(item.permission) : true;
+                  if (!hasAccess) return null;
+                  return (
+                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm transition-all ${activeTabId === item.id ? 'bg-blue-100 text-blue-900 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* General */}
+          <div className="space-y-0.5">
+            <button onClick={() => setCollapsedSections(prev => ({...prev, general: !prev.general}))} className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
+              General
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsedSections.general ? '-rotate-90' : ''}`} />
+            </button>
+            {!collapsedSections.general && (
+              <div className="space-y-0.5 pl-2">
+                {[
+                  { id: 'exchange-rates', icon: DollarSign, label: 'T. Cambio', permission: 'VIEW_EXCHANGE_RATES' },
+                  { id: 'series', icon: Hash, label: 'Series', permission: 'VIEW_SERIES' },
+                  { id: 'settings', icon: SettingsIcon, label: 'Ajustes', permission: 'VIEW_SETTINGS' },
+                  { id: 'users', icon: Users, label: 'Usuarios', permission: 'ALL' },
+                  { id: 'roles', icon: ShieldCheck, label: 'Roles', permission: 'ALL' },
+                ].map(item => {
+                  const hasAccess = item.permission ? hasPermission?.(item.permission) : true;
+                  if (!hasAccess) return null;
+                  return (
+                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm transition-all ${activeTabId === item.id ? 'bg-blue-100 text-blue-900 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <div className="pt-8 mt-8 border-t border-slate-100"><button onClick={logout} className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl text-red-600 hover:bg-red-50 transition-colors"><LogOut className="w-5 h-5" />Cerrar Sesión</button></div>
         </aside>
 
@@ -936,6 +1148,7 @@ export default function Admin() {
                             quantity: i.quantity,
                             discount: i.discount || 0,
                             unit: i.product?.unit,
+                            unitMeasure: i.unitMeasure || i.product?.unit?.symbol || 'UND',
                             lot: i.lotNumber || i.lot || null,
                             expiryDate: i.expiryDate || null,
                             warehouseName: i.warehouseName || null,
@@ -947,7 +1160,7 @@ export default function Admin() {
                         sunatCurrencies={sunatCurrencies}
                       />
                     )}
-                    {currentTab === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => {}} onEdit={(o) => openForm('orders', o)} onOpenPayment={handleOpenPayment} onNewDirectOrder={() => { handleResetQuotationForm(); setQuotationFormData(prev => ({...prev, docType: 'PED'})); setIsOrderModalOpen(true); }} onCancelDispatch={(id) => { if (confirm('¿Anular despacho? Se revertirá el stock y el pedido volverá a "Preparado" en picking.')) { axios.put(`/api/orders/${id}/status`, {status: 'PREPARING'}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData).catch(err => alert(err.response?.data?.error || 'Error al anular despacho')); } }} onCancelPayment={(id) => { if (confirm('¿Anular cobro? Se eliminarán los pagos y se devolverá el stock a los almacenes originales.')) { axios.post(`/api/orders/${id}/cancel-payment`, {}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData).catch(err => alert(err.response?.data?.error || 'Error al anular cobro')); } }} />}
+                    {currentTab === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => {}} onEdit={(o) => openForm('orders', o)} onOpenPayment={handleOpenPayment} onNewDirectOrder={() => { handleResetQuotationForm(); setQuotationFormData(prev => ({...prev, docType: 'PED'})); setIsOrderModalOpen(true); }} onCancelDispatch={(id) => { if (confirm('¿Anular despacho? Se revertirá el stock y el pedido volverá a "Preparado" en picking.')) { axios.put(`/api/orders/${id}/status`, {status: 'PREPARING'}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData).catch(err => alert(err.response?.data?.error || 'Error al anular despacho')); } }} onCancelPayment={(id) => { if (confirm('¿Anular cobro? Se eliminarán los pagos y se devolverá el stock a los almacenes originales.')) { axios.post(`/api/orders/${id}/cancel-payment`, {}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData).catch(err => alert(err.response?.data?.error || 'Error al anular cobro')); } }} onGenerateInvoice={(o) => openForm('invoices', {...o, docType: 'PED'})} onViewDetail={(o) => { setOrderDetail(o); setIsOrderDetailOpen(true); }} />}
                     {currentTab === 'inventory' && <InventoryModule products={products} stockDetails={stockDetails} movements={movements} onUpdateStock={(pid, s) => axios.put(`/api/products/${pid}/stock`, {stock:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onEdit={(p) => openForm('products', p)} onOpenAssistant={() => setIsMovementAssistantOpen(true)} token={token} onRefresh={fetchData} />}
                     {currentTab === 'customers' && <CustomerModule customers={customers} onEdit={(c) => openForm('customers', c)} onNew={() => openForm('customers')} onDelete={(id) => handleDelete('customers', id)} departments={[]} />}
                     {currentTab === 'exchange-rates' && <ExchangeRateModule token={token} exchangeRates={exchangeRates} onDelete={(id) => handleDelete('exchange-rates', id)} onSave={(d) => axios.post('/api/exchange-rates', d, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} loading={loading} />}
@@ -955,7 +1168,8 @@ export default function Admin() {
                     {currentTab === 'sellers' && <SellerModule sellers={sellers} onEdit={(s) => openForm('sellers', s)} onNew={() => openForm('sellers')} onDelete={(id) => handleDelete('sellers', id)} />}
                     {currentTab === 'warehouses' && <WarehouseModule warehouses={warehouses} onEdit={(w) => openForm('warehouses', w)} onNew={() => openForm('warehouses')} onDelete={(id) => handleDelete('warehouses', id)} />}
                     {currentTab === 'picking' && <WarehousePickingModule />}
-                    {currentTab === 'series' && <SeriesModule series={series} warehouses={warehouses} onEdit={(s) => openForm('series', s)} onNew={() => openForm('series')} onDelete={(id) => handleDelete('series', id)} />}
+                    {currentTab === 'series' && <SeriesModule series={series} warehouses={warehouses} documentTypes={seriesDocTypes} onEdit={(s) => openForm('series', s)} onNew={() => openForm('series')} onDelete={(id) => handleDelete('series', id)} />}
+                    {currentTab === 'invoices' && <InvoiceModule invoices={invoices} documentTypes={seriesDocTypes} onEdit={(inv) => openForm('invoices', inv)} onNew={() => openForm('invoices')} onDelete={(id) => handleDelete('invoices', id)} />}
                     {currentTab === 'purchases' && (
                       <PurchaseModule 
                         token={token || undefined} 
@@ -1049,8 +1263,43 @@ export default function Admin() {
               setFormData={setSeriesFormData}
               loading={loading}
               warehouses={warehouses}
+              documentTypes={seriesDocTypes}
             />
           </div>
+
+          <div style={{ display: (activeTabId === 'invoices' || isInvoiceModalOpen) ? 'block' : 'none' }}>
+            <InvoiceForm
+              isOpen={isInvoiceModalOpen}
+              onClose={() => setIsInvoiceModalOpen(false)}
+              onSubmit={handleSubmitInvoice}
+              formData={invoiceFormData}
+              setFormData={setInvoiceFormData}
+              editingItem={editingItem}
+              loading={loading}
+              customers={customers}
+              sellers={sellers}
+              documentTypes={seriesDocTypes}
+              sunatCurrencies={sunatCurrencies}
+              sunatPaymentConditions={sunatPaymentConditions}
+              sunatOperationTypes={sunatOperationTypes}
+              sunatIgvAffectations={sunatIgvAffectations}
+              searchResults={searchResults}
+              handleSearchProduct={handleSearchProduct}
+              quotationItems={quotationItems}
+              addQuotationItem={addQuotationItem}
+              updateQuotationItem={updateQuotationItem}
+              removeQuotationItem={removeQuotationItem}
+              quotationTotal={quotationTotal}
+              token={token}
+              series={series}
+            />
+          </div>
+
+          <OrderDetailModal
+            isOpen={isOrderDetailOpen}
+            onClose={() => setIsOrderDetailOpen(false)}
+            order={orderDetail}
+          />
 
           <div style={{ display: activeTabId === 'purchases' ? 'block' : 'none' }}>
             {purchaseMode === 'guides' ? (

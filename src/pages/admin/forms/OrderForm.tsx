@@ -503,7 +503,14 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                                 <td className="px-2 py-1 border-r border-slate-100 text-center text-[10px] font-bold text-emerald-700 bg-emerald-50/30">{item.lot || '---'}</td>
                                 <td className="px-2 py-1 border-r border-slate-100 font-bold truncate max-w-62.5">{item.name}</td>
                                 <td className="px-2 py-1 border-r border-slate-100"><input type="number" value={item.quantity} onChange={e => updateQuotationItem(item.productId, 'quantity', parseFloat(e.target.value) || 0)} className="w-full text-right bg-emerald-50/30 outline-none focus:bg-white font-black text-blue-800" /></td>
-                                <td className="px-2 py-1 border-r border-slate-100 text-center">{item.unit?.symbol || 'UND'}</td>
+                                <td className="px-2 py-1 border-r border-slate-100 text-center">
+                                  <input
+                                    type="text"
+                                    value={item.unitMeasure || item.unit?.symbol || 'UND'}
+                                    onChange={e => updateQuotationItem(item.productId, 'unitMeasure', e.target.value)}
+                                    className="w-full text-center bg-transparent outline-none focus:bg-white font-bold uppercase"
+                                  />
+                                </td>
                                 <td className="px-2 py-1 border-r border-slate-100"><input type="number" step="0.000001" value={item.price} onChange={e => updateQuotationItem(item.productId, 'price', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white font-bold" /></td>
                                 <td className="px-2 py-1 border-r border-slate-100 text-right font-bold text-slate-600">{formatNumber(valorLine)}</td>
                                 <td className="px-2 py-1 border-r border-slate-100 text-right text-slate-500">{formatNumber(igvLine)}</td>

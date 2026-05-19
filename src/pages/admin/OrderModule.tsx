@@ -3,7 +3,8 @@ import { motion } from 'motion/react';
 import { 
   ShoppingCart, Search, Filter, Edit2, Trash2, Phone, 
   MessageCircle, Truck, CreditCard, Clock, CheckCircle, 
-  XCircle, FileText, MoreVertical, Eye, DollarSign, Lock, Undo2
+  XCircle, FileText, MoreVertical, Eye, DollarSign, Lock, Undo2,
+  Receipt
 } from 'lucide-react';
 import { formatNumber, formatCurrency } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
@@ -38,11 +39,13 @@ interface OrderModuleProps {
   onUpdateStatus: (id: number, status: string) => void;
   onDelete: (id: number) => void;
   onViewGuide: (order: Order) => void;
+  onViewDetail: (order: Order) => void;
   onEdit: (order: Order) => void;
   onOpenPayment: (order: Order) => void;
   onNewDirectOrder: () => void;
   onCancelDispatch?: (id: number) => void;
   onCancelPayment?: (id: number) => void;
+  onGenerateInvoice?: (order: Order) => void;
 }
 
 export const OrderModule: React.FC<OrderModuleProps> = ({
@@ -50,11 +53,13 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
   onUpdateStatus,
   onDelete,
   onViewGuide,
+  onViewDetail,
   onEdit,
   onOpenPayment,
   onNewDirectOrder,
   onCancelDispatch,
-  onCancelPayment
+  onCancelPayment,
+  onGenerateInvoice
 }) => {
   const { hasPermission } = useAuth();
   const canWrite = hasPermission?.('WRITE_ORDERS') || hasPermission?.('ALL');
@@ -167,6 +172,13 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
                   <td className="px-6 py-4">
                     <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
+                        onClick={() => onViewDetail(order)}
+                        className="p-2.5 bg-sky-50 text-sky-600 rounded-xl hover:bg-sky-600 hover:text-white transition-all shadow-sm"
+                        title="Ver Detalle"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button 
                         onClick={() => window.open(`https://wa.me/${order.customerPhone}`, '_blank')}
                         className="p-2.5 bg-green-50 text-green-600 rounded-xl hover:bg-green-600 hover:text-white transition-all shadow-sm"
                         title="Contactar WhatsApp"
@@ -192,6 +204,21 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
                             >
                               <XCircle className="w-4 h-4" />
                             </button>
+                          )}
+                          {onGenerateInvoice && ['PREPARING', 'DISPATCHED', 'SHIPPED', 'DELIVERED'].includes(order.status) && (
+                            order.voucherNumber ? (
+                              <span className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl text-[9px] font-black" title={order.voucherNumber}>
+                                <FileText className="w-4 h-4" />
+                              </span>
+                            ) : (
+                              <button 
+                                onClick={() => onGenerateInvoice(order)}
+                                className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                                title="Generar Comprobante"
+                              >
+                                <Receipt className="w-4 h-4" />
+                              </button>
+                            )
                           )}
                           <button 
                             onClick={() => onOpenPayment(order)}

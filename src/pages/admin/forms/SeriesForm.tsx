@@ -2,6 +2,12 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Save, X, FileText, Hash, Building2, CheckCircle } from 'lucide-react';
 
+interface DocumentTypeOption {
+  id: number;
+  code: string;
+  name: string;
+}
+
 interface SeriesFormProps {
   isOpen: boolean;
   onClose: () => void;
@@ -10,10 +16,11 @@ interface SeriesFormProps {
   setFormData: (data: any) => void;
   loading: boolean;
   warehouses: any[];
+  documentTypes: DocumentTypeOption[];
 }
 
 export const SeriesForm: React.FC<SeriesFormProps> = ({
-  isOpen, onClose, onSubmit, formData, setFormData, loading, warehouses
+  isOpen, onClose, onSubmit, formData, setFormData, loading, warehouses, documentTypes
 }) => {
   return (
     <AnimatePresence>
@@ -48,10 +55,9 @@ export const SeriesForm: React.FC<SeriesFormProps> = ({
                     className="h-8 w-full border border-slate-300 rounded px-1 text-xs font-bold bg-white"
                   >
                     <option value="">--Seleccionar--</option>
-                    <option value="COT">COTIZACIÓN</option>
-                    <option value="PED">PEDIDO</option>
-                    <option value="FACT">FACTURA</option>
-                    <option value="BOOL">BOLETA</option>
+                    {documentTypes.map(dt => (
+                      <option key={dt.code} value={dt.code}>{dt.name}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="space-y-1">

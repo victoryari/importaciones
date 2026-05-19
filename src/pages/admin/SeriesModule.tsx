@@ -15,18 +15,29 @@ interface Series {
   warehouse: { name: string };
 }
 
+interface DocumentTypeOption {
+  id: number;
+  code: string;
+  name: string;
+}
+
 interface SeriesModuleProps {
   series: Series[];
   onEdit: (series: Series) => void;
   onNew: () => void;
   onDelete: (id: number) => void;
   warehouses: any[];
+  documentTypes: DocumentTypeOption[];
 }
 
 export const SeriesModule: React.FC<SeriesModuleProps> = ({
-  series, onEdit, onNew, onDelete, warehouses
+  series, onEdit, onNew, onDelete, warehouses, documentTypes
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+
+  const getDocTypeName = (code: string) => {
+    return documentTypes.find(dt => dt.code === code)?.name || code;
+  };
 
   const filteredSeries = series.filter(s => 
     s.series.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -79,7 +90,7 @@ export const SeriesModule: React.FC<SeriesModuleProps> = ({
                     <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
                       <FileText className="w-4 h-4" />
                     </div>
-                    <span className="font-bold text-slate-900">{s.documentType === 'COT' ? 'COTIZACIÓN' : s.documentType === 'PED' ? 'PEDIDO' : s.documentType}</span>
+                    <span className="font-bold text-slate-900">{getDocTypeName(s.documentType)}</span>
                   </div>
                 </td>
                 <td className="px-6 py-4">

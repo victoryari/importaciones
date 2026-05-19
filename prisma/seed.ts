@@ -32,6 +32,26 @@ async function main() {
 
   console.log(`User created: ${user.email}`);
   console.log(`Password: ${password}`);
+
+  // Tipos de documento para series (DocumentType)
+  const docTypes = [
+    { code: 'COT', name: 'COTIZACIÓN' },
+    { code: 'PED', name: 'PEDIDO' },
+    { code: 'FACT', name: 'FACTURA' },
+    { code: 'BOOL', name: 'BOLETA' },
+    { code: 'GREM', name: 'GUÍA DE REMISIÓN' },
+    { code: 'NCRE', name: 'NOTA DE CRÉDITO' },
+    { code: 'NDEB', name: 'NOTA DE DÉBITO' },
+  ];
+
+  for (const dt of docTypes) {
+    await prisma.documentType.upsert({
+      where: { code: dt.code },
+      update: { name: dt.name },
+      create: dt,
+    });
+  }
+  console.log(`Seeded ${docTypes.length} document types`);
 }
 
 main()

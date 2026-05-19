@@ -569,7 +569,14 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                               </td>
                               <td className="px-2 py-1 border-r border-slate-200 font-bold truncate max-w-62.5">{item.name}</td>
                               <td className="px-2 py-1 border-r border-slate-200"><input type="number" value={item.quantity} onChange={e => updateQuotationItem(item.productId, 'quantity', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white" /></td>
-                              <td className="px-2 py-1 border-r border-slate-200 text-center">{item.unit?.symbol || 'UND'}</td>
+                              <td className="px-2 py-1 border-r border-slate-200 text-center">
+                                <input
+                                  type="text"
+                                  value={item.unitMeasure || item.unit?.symbol || 'UND'}
+                                  onChange={e => updateQuotationItem(item.productId, 'unitMeasure', e.target.value)}
+                                  className="w-full text-center bg-transparent outline-none focus:bg-white font-bold uppercase"
+                                />
+                              </td>
                               <td className="px-2 py-1 border-r border-slate-200 text-center text-slate-400">--Seleccionar--</td>
                               <td className="px-2 py-1 border-r border-slate-200"><input type="number" step="0.000001" value={item.price} onChange={e => updateQuotationItem(item.productId, 'price', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white font-bold" /></td>
                               <td className="px-2 py-1 border-r border-slate-200"><input type="number" value={item.discount} onChange={e => updateQuotationItem(item.productId, 'discount', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white" /></td>
