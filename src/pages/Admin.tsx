@@ -976,19 +976,25 @@ export default function Admin() {
   };
 
   return (
-    <div className="w-full max-w-480 mx-auto px-4 py-4 md:px-6 h-screen flex flex-col">
+    <div className="w-full max-w-480 mx-auto px-4 py-4 md:px-6 h-screen flex flex-col bg-[#f8fafc]/30">
       <AnimatePresence>{successMsg && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="fixed top-24 right-10 z-50 bg-green-600 text-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-2"><CheckCircle className="w-5 h-5" /> <span className="font-bold">{successMsg}</span></motion.div>}</AnimatePresence>
 
       <div className="flex flex-col lg:flex-row gap-6 h-full min-h-0">
         <aside className="w-full lg:w-64 shrink-0 space-y-2 h-full overflow-y-auto custom-scrollbar pr-2">
-          <div className="px-4 py-4 mb-4 bg-blue-900 text-white rounded-3xl shadow-lg shadow-blue-100"><div className="flex items-center gap-3 mb-1"><div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold">C</div><span className="font-bold text-lg">Panel Admin</span></div><p className="text-[10px] text-blue-300 font-bold uppercase tracking-widest pl-11">{user?.name || 'Administrador'}</p></div>
+          <div className="px-5 py-4 mb-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-8 h-8 bg-gradient-to-tr from-cyan-400 to-sky-500 rounded-xl flex items-center justify-center font-black text-white shadow-md shadow-sky-100">C</div>
+              <span className="font-bold text-slate-800 text-base tracking-tight">Panel Admin</span>
+            </div>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest pl-11">{user?.name || 'Administrador'}</p>
+          </div>
           {/* --- MENU AGRUPADO --- */}
           {/* Resumen (standalone) */}
-          <button onClick={() => handleOpenTab('dashboard', 'Resumen')} className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl transition-all ${activeTabId === 'dashboard' ? 'bg-blue-100 text-blue-900 font-bold scale-105 shadow-sm' : 'hover:bg-slate-100'}`}><LayoutDashboard className="w-5 h-5" /> Resumen</button>
+          <button onClick={() => handleOpenTab('dashboard', 'Resumen')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all ${activeTabId === 'dashboard' ? 'bg-sky-500 text-white font-semibold shadow-md shadow-sky-100' : 'text-slate-600 hover:bg-slate-50'}`}><LayoutDashboard className="w-5 h-5" /> Resumen</button>
 
           {/* Ventas */}
           <div className="space-y-0.5">
-            <button onClick={() => setCollapsedSections(prev => ({...prev, ventas: !prev.ventas}))} className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
+            <button onClick={() => setCollapsedSections(prev => ({...prev, ventas: !prev.ventas}))} className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
               Ventas
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsedSections.ventas ? '-rotate-90' : ''}`} />
             </button>
@@ -1004,7 +1010,7 @@ export default function Admin() {
                   const hasAccess = item.permission ? hasPermission?.(item.permission) : true;
                   if (!hasAccess) return null;
                   return (
-                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm transition-all ${activeTabId === item.id ? 'bg-blue-100 text-blue-900 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
+                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all ${activeTabId === item.id ? 'bg-sky-500 text-white font-semibold shadow-md shadow-sky-100' : 'text-slate-600 hover:bg-slate-50'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
                   );
                 })}
               </div>
@@ -1012,11 +1018,11 @@ export default function Admin() {
           </div>
 
           {/* Productos (standalone) */}
-          <button onClick={() => handleOpenTab('products', 'Productos')} className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl transition-all ${activeTabId === 'products' || ['categories', 'brands', 'units'].includes(activeTabId) ? 'bg-blue-100 text-blue-900 font-bold scale-105 shadow-sm' : 'hover:bg-slate-100'}`}><Package className="w-5 h-5" /> Productos</button>
+          <button onClick={() => handleOpenTab('products', 'Productos')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all ${activeTabId === 'products' || ['categories', 'brands', 'units'].includes(activeTabId) ? 'bg-sky-500 text-white font-semibold shadow-md shadow-sky-100' : 'text-slate-600 hover:bg-slate-50'}`}><Package className="w-5 h-5" /> Productos</button>
 
           {/* Compras */}
           <div className="space-y-0.5">
-            <button onClick={() => setCollapsedSections(prev => ({...prev, compras: !prev.compras}))} className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
+            <button onClick={() => setCollapsedSections(prev => ({...prev, compras: !prev.compras}))} className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
               Compras
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsedSections.compras ? '-rotate-90' : ''}`} />
             </button>
@@ -1029,7 +1035,7 @@ export default function Admin() {
                   const hasAccess = item.permission ? hasPermission?.(item.permission) : true;
                   if (!hasAccess) return null;
                   return (
-                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm transition-all ${activeTabId === item.id ? 'bg-blue-100 text-blue-900 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
+                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all ${activeTabId === item.id ? 'bg-sky-500 text-white font-semibold shadow-md shadow-sky-100' : 'text-slate-600 hover:bg-slate-50'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
                   );
                 })}
               </div>
@@ -1038,7 +1044,7 @@ export default function Admin() {
 
           {/* Logística */}
           <div className="space-y-0.5">
-            <button onClick={() => setCollapsedSections(prev => ({...prev, logistica: !prev.logistica}))} className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
+            <button onClick={() => setCollapsedSections(prev => ({...prev, logistica: !prev.logistica}))} className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
               Logística
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsedSections.logistica ? '-rotate-90' : ''}`} />
             </button>
@@ -1053,7 +1059,7 @@ export default function Admin() {
                   const hasAccess = item.permission ? hasPermission?.(item.permission) : true;
                   if (!hasAccess) return null;
                   return (
-                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm transition-all ${activeTabId === item.id ? 'bg-blue-100 text-blue-900 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
+                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all ${activeTabId === item.id ? 'bg-sky-500 text-white font-semibold shadow-md shadow-sky-100' : 'text-slate-600 hover:bg-slate-50'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
                   );
                 })}
               </div>
@@ -1062,7 +1068,7 @@ export default function Admin() {
 
           {/* General */}
           <div className="space-y-0.5">
-            <button onClick={() => setCollapsedSections(prev => ({...prev, general: !prev.general}))} className="w-full flex items-center justify-between px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
+            <button onClick={() => setCollapsedSections(prev => ({...prev, general: !prev.general}))} className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
               General
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsedSections.general ? '-rotate-90' : ''}`} />
             </button>
@@ -1078,28 +1084,28 @@ export default function Admin() {
                   const hasAccess = item.permission ? hasPermission?.(item.permission) : true;
                   if (!hasAccess) return null;
                   return (
-                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm transition-all ${activeTabId === item.id ? 'bg-blue-100 text-blue-900 font-bold shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
+                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all ${activeTabId === item.id ? 'bg-sky-500 text-white font-semibold shadow-md shadow-sky-100' : 'text-slate-600 hover:bg-slate-50'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
                   );
                 })}
               </div>
             )}
           </div>
-          <div className="pt-8 mt-8 border-t border-slate-100"><button onClick={logout} className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl text-red-600 hover:bg-red-50 transition-colors"><LogOut className="w-5 h-5" />Cerrar Sesión</button></div>
+          <div className="pt-6 mt-6 border-t border-slate-100"><button onClick={logout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50/50 transition-colors"><LogOut className="w-5 h-5" />Cerrar Sesión</button></div>
         </aside>
 
-        <main className="flex-1 min-w-0 flex flex-col h-full bg-slate-50/50 rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <main className="flex-1 min-w-0 flex flex-col h-full bg-[#f8fafc] rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
           {/* Tab Bar */}
-          <div className="flex items-center gap-2 px-4 pt-4 pb-0 bg-transparent border-b border-slate-200 overflow-x-auto custom-scrollbar shrink-0">
+          <div className="flex items-center gap-2 px-4 pt-4 pb-0 bg-white border-b border-slate-100 overflow-x-auto custom-scrollbar shrink-0">
             {openTabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTabId(tab.id)}
-                className={`group flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTabId === tab.id ? 'border-blue-600 text-blue-600 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.02)]' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-white/50'}`}
+                className={`group flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTabId === tab.id ? 'border-sky-500 text-sky-500 bg-[#f8fafc]' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
               >
                 {tab.label}
                 {tab.id !== 'dashboard' && (
                   <X 
-                    className={`w-3.5 h-3.5 transition-all rounded-full p-0.5 ${activeTabId === tab.id ? 'text-blue-400 hover:text-white hover:bg-red-500' : 'opacity-0 group-hover:opacity-100 hover:text-white hover:bg-red-500'}`} 
+                    className={`w-3.5 h-3.5 transition-all rounded-full p-0.5 ${activeTabId === tab.id ? 'text-sky-400 hover:text-white hover:bg-red-500' : 'opacity-0 group-hover:opacity-100 hover:text-white hover:bg-red-500'}`} 
                     onClick={(e) => handleCloseTab(tab.id, e)} 
                   />
                 )}
