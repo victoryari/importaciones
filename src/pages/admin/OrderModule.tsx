@@ -19,6 +19,13 @@ interface OrderItem {
   };
 }
 
+interface Payment {
+  id: number;
+  amount: number;
+  method: string;
+  date: string;
+}
+
 interface Order {
   id: number;
   customerName: string;
@@ -32,6 +39,8 @@ interface Order {
     name: string;
     zone?: { name: string };
   };
+  voucherNumber?: string;
+  payments?: Payment[];
 }
 
 interface OrderModuleProps {
@@ -67,7 +76,8 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
 
   const filteredOrders = orders.filter(o => 
     o.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    o.id.toString().includes(searchTerm)
+    o.id.toString().includes(searchTerm) ||
+    o.voucherNumber?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -82,7 +92,7 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
           <input 
             type="text"
-            placeholder="Buscar por cliente o # pedido..."
+            placeholder="Buscar por cliente, pedido o comprobante..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all outline-none"
@@ -119,57 +129,87 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
                 <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400">Pedido</th>
                 <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400">Cliente</th>
                 <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400">Pago / Envío</th>
+                <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400">Comprobante</th>
                 <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400 text-right">Total</th>
+                <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400 text-right">Saldo</th>
                 <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {filteredOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-slate-50/80 transition-colors group">
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="font-black text-slate-900">#PED-{order.id}</span>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">{new Date(order.createdAt).toLocaleDateString()}</span>
-                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter ${
-                          (order as any).origin === 'WEB' 
-                            ? 'bg-blue-100 text-blue-700 border border-blue-200' 
-                            : 'bg-slate-100 text-slate-600 border border-slate-200'
+              {filteredOrders.map((order) => {
+                const totalPaid = order.payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+                const balance = Math.max(0, Number(order.totalAmount) - totalPaid);
+                const hasPayments = order.paymentStatus === 'PAID' || totalPaid > 0;
+                const isDispatchedOrBeyond = ['DISPATCHED', 'SHIPPED', 'DELIVERED'].includes(order.status);
+                const canDeleteOrder = !hasPayments && !isDispatchedOrBeyond;
+                return (
+                  <tr key={order.id} className="hover:bg-slate-50/80 transition-colors group">
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="font-black text-slate-900">#PED-{order.id}</span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase">{new Date(order.createdAt).toLocaleDateString()}</span>
+                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter ${
+                            (order as any).origin === 'WEB' 
+                              ? 'bg-blue-100 text-blue-700 border border-blue-200' 
+                              : 'bg-slate-100 text-slate-600 border border-slate-200'
+                          }`}>
+                            {(order as any).origin || 'ADMIN'}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-slate-800 leading-tight">{order.customerName}</span>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <Truck className="w-3 h-3 text-slate-300" />
+                          <span className="text-[10px] text-slate-400 font-medium">{order.agency?.name || 'Recojo en tienda'}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1.5">
+                        <span className={`w-fit px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                          order.paymentStatus === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                         }`}>
-                          {(order as any).origin || 'ADMIN'}
+                          {order.paymentStatus === 'PAID' ? 'Pagado' : 'Pendiente Pago'}
+                        </span>
+                        <span className={`w-fit px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                          order.status === 'SHIPPED' ? 'bg-blue-100 text-blue-700' : 
+                          order.status === 'DELIVERED' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {order.status === 'SHIPPED' ? 'En camino' : 
+                           order.status === 'DELIVERED' ? 'Entregado' : 'Procesando'}
                         </span>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="font-bold text-slate-800 leading-tight">{order.customerName}</span>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <Truck className="w-3 h-3 text-slate-300" />
-                        <span className="text-[10px] text-slate-400 font-medium">{order.agency?.name || 'Recojo en tienda'}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-1.5">
-                      <span className={`w-fit px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                        order.paymentStatus === 'PAID' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                    </td>
+                    <td className="px-6 py-4">
+                      {order.voucherNumber ? (
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-800 text-xs flex items-center gap-1">
+                            <Receipt className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            {order.voucherNumber}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">GENERADO</span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 font-semibold italic">Sin comprobante</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <span className="font-black text-slate-900">{formatCurrency(order.totalAmount)}</span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <span className={`font-bold text-xs px-2.5 py-1 rounded-lg border ${
+                        balance === 0 
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                          : 'bg-red-50 text-red-700 border-red-200'
                       }`}>
-                        {order.paymentStatus === 'PAID' ? 'Pagado' : 'Pendiente Pago'}
+                        {formatCurrency(balance)}
                       </span>
-                      <span className={`w-fit px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
-                        order.status === 'SHIPPED' ? 'bg-blue-100 text-blue-700' : 
-                        order.status === 'DELIVERED' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                      }`}>
-                        {order.status === 'SHIPPED' ? 'En camino' : 
-                         order.status === 'DELIVERED' ? 'Entregado' : 'Procesando'}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <span className="font-black text-slate-900">{formatCurrency(order.totalAmount)}</span>
-                  </td>
-                  <td className="px-6 py-4">
+                    </td>
+                    <td className="px-6 py-4">
                     <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={() => onViewDetail(order)}
@@ -264,21 +304,42 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
                               <Edit2 className="w-4 h-4" />
                             </button>
                           )}
-                          <button 
-                            onClick={() => onDelete(order.id)}
-                            className="p-2.5 text-slate-300 hover:text-red-500 transition-colors"
-                            title="Eliminar"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {canDeleteOrder ? (
+                            <button 
+                              onClick={() => onDelete(order.id)}
+                              className="p-2.5 text-slate-300 hover:text-red-500 transition-colors"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <span className="relative group">
+                              <button 
+                                disabled
+                                className="p-2.5 text-slate-200 cursor-not-allowed"
+                                title="Eliminar bloqueado"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                              <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block z-50">
+                                <div className="bg-slate-900 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap">
+                                  {hasPayments 
+                                    ? 'Anule el cobro para poder eliminar' 
+                                    : 'Anule el despacho para poder eliminar'}
+                                  <div className="absolute top-full right-3 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-900" />
+                                </div>
+                              </div>
+                            </span>
+                          )}
                         </>
                       )}
                       {!canWrite && <Lock className="w-4 h-4 text-slate-300" />}
                     </div>
                   </td>
                 </tr>
-              ))}
-            </tbody>
+              );
+            })}
+          </tbody>
           </table>
         </div>
       </div>

@@ -4,7 +4,7 @@ import {
   Save, X, FileText, Hash, Building2, User, DollarSign,
   Search, Trash2, Plus, Calendar, Calculator, RefreshCw,
   ShoppingBag, Percent, Receipt, ChevronDown, Truck, MapPin,
-  PlusCircle
+  PlusCircle, UserPlus
 } from 'lucide-react';
 import { ProductSearchModal } from './ProductSearchModal';
 import { formatNumber } from '../../../lib/utils';
@@ -39,6 +39,9 @@ interface InvoiceFormProps {
   quotationTotal: number;
   token: string;
   series: any[];
+  handleConsultCustomer?: (type: string, number: string) => Promise<any>;
+  handleQuickRegister?: (data: any) => Promise<void>;
+  onOpenCustomerForm?: (docNumber?: string) => void;
 }
 
 export const InvoiceForm: React.FC<InvoiceFormProps> = ({
@@ -47,9 +50,14 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
   sunatPaymentConditions, sunatOperationTypes, sunatIgvAffectations, searchResults,
   handleSearchProduct, quotationItems, addQuotationItem,
   updateQuotationItem, removeQuotationItem, quotationTotal,
-  token, series
+  token, series,
+  handleConsultCustomer, handleQuickRegister, onOpenCustomerForm
 }) => {
   const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
+  const [customerSearchResults, setCustomerSearchResults] = useState<any[]>([]);
+  const [docSearchResults, setDocSearchResults] = useState<any[]>([]);
+  const [isConsulting, setIsConsulting] = useState(false);
+  const [consultedData, setConsultedData] = useState<any>(null);
   const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
   const [showInstallments, setShowInstallments] = useState(formData.paymentCondition === 'CREDITO');
   const [installments, setInstallments] = useState<any[]>(formData.installments || []);
@@ -115,6 +123,109 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     }
   };
 
+  const handleDocPredictiveSearch = (q: string) => {
+    let docType = '';
+    if (q.length === 8) docType = 'DNI';
+    else if (q.length === 11) docType = 'RUC';
+    setFormData((prev: any) => ({
+      ...prev,
+      customerDocNumber: q,
+      customerDocType: docType || prev.customerDocType,
+      ...(q === '' ? {
+        customerName: '',
+        customerAddress: '',
+        customerEmail: '',
+        customerPhone: '',
+        customerId: null
+      } : {})
+    }));
+    if (q.length > 2) {
+      const filtered = customers.filter(c =>
+        c.docNumber?.includes(q) ||
+        (c.name && c.name.toLowerCase().includes(q.toLowerCase())) ||
+        (c.firstName && c.firstName.toLowerCase().includes(q.toLowerCase())) ||
+        (c.lastName && c.lastName.toLowerCase().includes(q.toLowerCase()))
+      );
+      setDocSearchResults(filtered);
+    } else {
+      setDocSearchResults([]);
+    }
+    if (q === '') setConsultedData(null);
+  };
+
+  const handleNamePredictiveSearch = (q: string) => {
+    setFormData((prev: any) => ({ ...prev, customerName: q }));
+    if (q.length > 2) {
+      const filtered = customers.filter(c =>
+        (c.name && c.name.toLowerCase().includes(q.toLowerCase())) ||
+        (c.firstName && c.firstName.toLowerCase().includes(q.toLowerCase())) ||
+        (c.lastName && c.lastName.toLowerCase().includes(q.toLowerCase())) ||
+        c.docNumber?.includes(q)
+      );
+      setCustomerSearchResults(filtered);
+    } else {
+      setCustomerSearchResults([]);
+    }
+  };
+
+  const selectCustomer = (c: any) => {
+    setFormData((prev: any) => ({
+      ...prev,
+      customerDocNumber: c.docNumber || '',
+      customerName: c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || '',
+      customerAddress: c.address || '',
+      customerEmail: c.email || '',
+      customerPhone: c.phone || '',
+      customerId: c.id || null
+    }));
+    setCustomerSearchResults([]);
+    setDocSearchResults([]);
+    setConsultedData(null);
+  };
+
+  const handleApiPeruSearch = async () => {
+    const docNum = formData.customerDocNumber;
+    if (!docNum) return;
+    setIsConsulting(true);
+    try {
+      const existing = customers.find(c => c.docNumber === docNum);
+      if (existing) {
+        selectCustomer(existing);
+        return;
+      }
+      const docType = docNum.length === 11 ? 'RUC' : 'DNI';
+      const data = await handleConsultCustomer?.(docType, docNum);
+      if (data) {
+        let name = '';
+        let address = '';
+        if (docType === 'RUC') {
+          name = data.nombre_o_razon_social || data.razonSocial || '';
+          address = data.direccion_completa || data.direccion || '';
+        } else {
+          name = `${data.nombres || ''} ${data.apellido_paterno || ''} ${data.apellido_materno || ''}`.trim();
+        }
+        setFormData((prev: any) => ({
+          ...prev,
+          customerName: name || prev.customerName,
+          customerAddress: address || prev.customerAddress,
+        }));
+        setConsultedData({
+          name,
+          address,
+          docNumber: docNum,
+          docType,
+          personType: docType === 'RUC' ? 'JURIDICA' : 'NATURAL',
+          firstName: data.nombres || '',
+          lastName: `${data.apellido_paterno || ''} ${data.apellido_materno || ''}`.trim(),
+        });
+      }
+    } catch (err) {
+      console.error('APIPeru search error:', err);
+    } finally {
+      setIsConsulting(false);
+    }
+  };
+
   const dsctoTotal = 0;
   const valorVenta = quotationTotal / 1.18;
   const igvTotal = quotationTotal - valorVenta;
@@ -130,14 +241,15 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
             exit={{ opacity: 0, scale: 0.98, y: 20 }}
             className="relative w-full h-full max-w-[98%] max-h-[98vh] bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-300"
           >
-            <div className="bg-slate-800 px-4 py-2 border-b border-slate-700 flex items-center justify-between shrink-0">
+            {/* --- BARRA DE TITULO ESTILO ERP --- */}
+            <div className="bg-slate-100 px-4 py-2 border-b border-slate-300 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
-                <Receipt className="w-4 h-4 text-emerald-400" />
-                <h2 className="text-sm font-bold text-white tracking-tight uppercase">
-                  {editingItem ? 'Editar Comprobante' : 'Nuevo Comprobante'}
+                <Receipt className="w-4 h-4 text-blue-800" />
+                <h2 className="text-sm font-bold text-slate-700 tracking-tight">
+                  {editingItem ? 'Editar Comprobante' : 'Nuevo Comprobante (Venta)'}
                 </h2>
               </div>
-              <button onClick={onClose} className="hover:bg-red-500 text-white p-1 rounded transition-colors"><X className="w-4 h-4" /></button>
+              <button onClick={onClose} className="hover:bg-red-500 hover:text-white p-1 rounded transition-colors text-slate-500"><X className="w-4 h-4" /></button>
             </div>
 
             <form
@@ -235,52 +347,68 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                 <fieldset className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
                   <legend className="text-[10px] font-bold text-blue-700 px-2 uppercase tracking-tighter">Cliente</legend>
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-x-4 gap-y-2">
-                    <div className="md:col-span-3 flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-600 w-16 text-right">Doc.:</span>
-                      <select
-                        value={formData.customerDocType || 'DNI'}
-                        onChange={e => setFormData((prev: any) => ({ ...prev, customerDocType: e.target.value }))}
-                        className="h-8 w-24 border border-slate-300 rounded px-1 text-xs font-bold bg-white"
-                      >
-                        <option value="DNI">DNI</option>
-                        <option value="RUC">RUC</option>
-                        <option value="CE">CE</option>
-                      </select>
+                    <div className="md:col-span-4 flex items-start gap-2">
+                      <span className="text-[11px] font-bold text-slate-600 w-16 text-right shrink-0 mt-2">RUC/DNI:</span>
+                      <div className="flex-1">
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={formData.customerDocNumber || ''}
+                            onChange={e => handleDocPredictiveSearch(e.target.value)}
+                            className="h-8 w-full border border-slate-300 rounded pl-2 pr-16 text-xs font-bold"
+                            placeholder="N° Documento"
+                          />
+                          {docSearchResults.length > 0 && (
+                            <div className="absolute top-full left-0 right-0 z-70 mt-1 bg-white shadow-2xl border border-slate-200 rounded-lg max-h-48 overflow-y-auto">
+                              {docSearchResults.map(c => (
+                                <div key={c.id} onClick={() => selectCustomer(c)} className="p-3 hover:bg-blue-50 cursor-pointer text-xs flex flex-col border-b border-slate-100">
+                                  <span className="font-bold text-slate-800">{c.docNumber}</span>
+                                  <span className="text-[10px] text-slate-500">{c.name || `${c.firstName} ${c.lastName}`}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                            <button type="button" onClick={() => onOpenCustomerForm?.(formData.customerDocNumber)} className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Registrar Nuevo Cliente">
+                              <UserPlus className="w-3.5 h-3.5" />
+                            </button>
+                            <button type="button" onClick={handleApiPeruSearch} disabled={isConsulting} className="p-1 text-slate-400 hover:text-blue-600 transition-colors disabled:opacity-50" title="Consultar API">
+                              {isConsulting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="md:col-span-8 flex items-start gap-2 pt-0.5">
+                      <span className="text-[11px] font-bold text-slate-600 shrink-0 mt-2">Razón Social:</span>
                       <div className="relative flex-1">
                         <input
                           type="text"
-                          value={formData.customerDocNumber || ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            const found = customers.find(c => c.docNumber === val);
-                            setFormData((prev: any) => ({
-                              ...prev,
-                              customerDocNumber: val,
-                              customerName: found ? (found.name || `${found.firstName || ''} ${found.lastName || ''}`.trim()) : prev.customerName,
-                              customerAddress: found?.address || prev.customerAddress,
-                              customerEmail: found?.email || prev.customerEmail,
-                              customerPhone: found?.phone || prev.customerPhone,
-                              customerId: found?.id || null
-                            }));
-                          }}
-                          className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold"
-                          placeholder="N° Documento"
+                          value={formData.customerName || ''}
+                          onChange={e => handleNamePredictiveSearch(e.target.value)}
+                          className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold bg-[#D9E9FF] text-[#004A99]"
+                          placeholder="RAZÓN SOCIAL"
+                          required
                         />
+                        {customerSearchResults.length > 0 && (
+                          <div className="absolute top-full left-0 right-0 z-70 mt-1 bg-white shadow-2xl border border-slate-200 rounded-lg max-h-48 overflow-y-auto">
+                            {customerSearchResults.map(c => (
+                              <div key={c.id} onClick={() => selectCustomer(c)} className="p-3 hover:bg-blue-50 cursor-pointer text-xs flex flex-col border-b border-slate-100">
+                                <span className="font-bold text-slate-800">{c.name || `${c.firstName} ${c.lastName}`}</span>
+                                <span className="text-[10px] text-slate-500">{c.docNumber} - {c.address}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
+                      {consultedData && (
+                        <button type="button" onClick={async () => { await handleQuickRegister?.(consultedData); setConsultedData(null); }} className="h-8 px-2 bg-emerald-600 text-white rounded text-[9px] font-black uppercase tracking-tighter flex items-center gap-1 shrink-0">
+                          <UserPlus className="w-3 h-3" /> Registrar
+                        </button>
+                      )}
                     </div>
-                    <div className="md:col-span-5 flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-600 shrink-0">Razón Social:</span>
-                      <input
-                        type="text"
-                        value={formData.customerName || ''}
-                        onChange={e => setFormData((prev: any) => ({ ...prev, customerName: e.target.value }))}
-                        className="h-8 flex-1 border border-slate-300 rounded px-2 text-xs font-bold bg-[#D9E9FF] text-[#004A99]"
-                        placeholder="RAZÓN SOCIAL"
-                        required
-                      />
-                    </div>
-                    <div className="md:col-span-4 flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-600 shrink-0">Dirección:</span>
+                    <div className="md:col-span-12 flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-slate-600 w-16 text-right shrink-0">Dirección:</span>
                       <input
                         type="text"
                         value={formData.customerAddress || ''}
@@ -507,17 +635,17 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
 
                 {/* --- GRILLA DE DETALLE --- */}
                 <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-75">
-                  <div className="bg-slate-800 border-b border-slate-700 px-3 py-1 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-white uppercase tracking-widest flex items-center gap-2">
-                      <ShoppingBag className="w-3.5 h-3.5 text-emerald-400" />
-                      Detalle de Ítems
+                  <div className="bg-slate-50 border-b border-slate-200 px-3 py-1 flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                      <ShoppingBag className="w-3.5 h-3.5 text-blue-600" />
+                      Detalle de Ítems del Comprobante
                     </span>
                     <div className="relative group w-96">
                       <input
                         type="text"
                         placeholder="Buscar producto por código o nombre..."
                         onChange={e => handleSearchProduct(e.target.value)}
-                        className="h-7 w-full border border-slate-600 bg-slate-700 text-white rounded px-8 text-xs outline-none focus:border-blue-400"
+                        className="h-7 w-full border border-slate-300 bg-white text-slate-800 rounded px-8 text-xs outline-none focus:border-blue-500"
                       />
                       <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
                       {searchResults.length > 0 && (
@@ -536,16 +664,16 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                   <div className="overflow-x-auto flex-1">
                     <table className="w-full text-[10px] border-collapse">
                       <thead>
-                        <tr className="bg-slate-100 text-slate-700 border-b border-slate-200">
-                          <th className="px-2 py-1 font-bold border-r border-slate-200 text-center w-8">#</th>
-                          <th className="px-2 py-1 font-bold border-r border-slate-200 w-20">Código</th>
-                          <th className="px-2 py-1 font-bold border-r border-slate-200 text-center w-28">Lote</th>
-                          <th className="px-2 py-1 font-bold border-r border-slate-200 min-w-50">Descripción</th>
-                          <th className="px-2 py-1 font-bold border-r border-slate-200 text-right w-16">Cant.</th>
-                          <th className="px-2 py-1 font-bold border-r border-slate-200 text-center w-16">U.M.</th>
-                          <th className="px-2 py-1 font-bold border-r border-slate-200 text-right w-20">Dscto.</th>
-                          <th className="px-2 py-1 font-bold border-r border-slate-200 text-right w-24">P. Unitario</th>
-                          <th className="px-2 py-1 border-r border-slate-200 text-right w-24">Total</th>
+                        <tr className="bg-[#E2E8F0] text-slate-700 border-b border-slate-300">
+                          <th className="px-2 py-1 font-bold border-r border-slate-300 text-center w-8">#</th>
+                          <th className="px-2 py-1 font-bold border-r border-slate-300 w-24">Código</th>
+                          <th className="px-2 py-1 font-bold border-r border-slate-300 text-center w-28">Lote</th>
+                          <th className="px-2 py-1 font-bold border-r border-slate-300 min-w-50">Descripción</th>
+                          <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-16">Cant.</th>
+                          <th className="px-2 py-1 font-bold border-r border-slate-300 text-center w-16">U.M.</th>
+                          <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-20">Dscto.</th>
+                          <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-24">P. Unitario</th>
+                          <th className="px-2 py-1 border-r border-slate-300 text-right w-24">Total</th>
                           <th className="px-2 py-1 w-10 text-center">Acción</th>
                         </tr>
                       </thead>
@@ -555,10 +683,10 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                           const discountAmt = subtotal * ((item.discount || 0) / 100);
                           const totalLine = subtotal - discountAmt;
                           return (
-                            <tr key={item.productId || index} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                              <td className="px-2 py-1 text-center font-bold text-slate-400 border-r border-slate-100">{index + 1}</td>
-                              <td className="px-2 py-1 border-r border-slate-100 font-bold">{item.code}</td>
-                              <td className="px-2 py-1 border-r border-slate-100 text-center">
+                            <tr key={item.productId || index} className="border-b border-slate-200 hover:bg-slate-50 transition-colors">
+                              <td className="px-2 py-1 text-center font-bold text-slate-400 border-r border-slate-200">{index + 1}</td>
+                              <td className="px-2 py-1 border-r border-slate-200 font-bold">{item.code}</td>
+                              <td className="px-2 py-1 border-r border-slate-200 text-center">
                                 <input
                                   type="text"
                                   value={item.lotNumber || ''}
@@ -566,17 +694,17 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                                   className="w-full text-center bg-transparent outline-none focus:bg-white font-bold text-xs"
                                 />
                               </td>
-                              <td className="px-2 py-1 border-r border-slate-100 font-bold truncate max-w-62.5">{item.name}</td>
-                              <td className="px-2 py-1 border-r border-slate-100">
+                              <td className="px-2 py-1 border-r border-slate-200 font-bold truncate max-w-62.5">{item.name}</td>
+                              <td className="px-2 py-1 border-r border-slate-200">
                                 <input
                                   type="number"
                                   value={item.quantity}
                                   onChange={e => updateQuotationItem(item.productId, 'quantity', parseFloat(e.target.value) || 0)}
-                                  className="w-full text-right bg-emerald-50/30 outline-none focus:bg-white font-black text-blue-800"
+                                  className="w-full text-right bg-transparent outline-none focus:bg-white font-bold"
                                 />
                               </td>
-                              <td className="px-2 py-1 border-r border-slate-100 text-center">{item.unitMeasure || item.unit?.symbol || 'UND'}</td>
-                              <td className="px-2 py-1 border-r border-slate-100 text-right">
+                              <td className="px-2 py-1 border-r border-slate-200 text-center">{item.unitMeasure || item.unit?.symbol || 'UND'}</td>
+                              <td className="px-2 py-1 border-r border-slate-200 text-right">
                                 <input
                                   type="number"
                                   step="0.01"
@@ -585,7 +713,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                                   className="w-full text-right bg-transparent outline-none focus:bg-white font-bold"
                                 />
                               </td>
-                              <td className="px-2 py-1 border-r border-slate-100">
+                              <td className="px-2 py-1 border-r border-slate-200">
                                 <input
                                   type="number"
                                   step="0.000001"
@@ -594,7 +722,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                                   className="w-full text-right bg-transparent outline-none focus:bg-white font-bold"
                                 />
                               </td>
-                              <td className="px-2 py-1 border-r border-slate-100 text-right font-black text-blue-900">{formatNumber(totalLine)}</td>
+                              <td className="px-2 py-1 border-r border-slate-200 text-right font-black text-blue-900">{formatNumber(totalLine)}</td>
                               <td className="px-2 py-1 text-center">
                                 <button type="button" onClick={() => removeQuotationItem(item.productId)} className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                               </td>
@@ -608,13 +736,13 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                     </table>
                   </div>
 
-                  <div className="bg-slate-50 p-2 border-t border-slate-200 flex items-center justify-between shrink-0">
+                  <div className="bg-slate-100 p-2 border-t border-slate-300 flex items-center justify-between shrink-0">
                     <button
                       type="button"
                       onClick={() => setIsProductSearchOpen(true)}
-                      className="h-7 px-3 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700 flex items-center gap-1 shadow-sm"
+                      className="h-7 px-3 bg-white border border-slate-300 rounded text-[10px] font-bold hover:bg-slate-50 flex items-center gap-1 shadow-sm"
                     >
-                      <PlusCircle className="w-3 h-3" /> Agregar Ítem
+                      <PlusCircle className="w-3 h-3 text-emerald-500" /> Agregar Ítem
                     </button>
                     <span className="text-[11px] font-bold text-slate-600">Total Ítems: {quotationItems.length}</span>
                   </div>
@@ -624,7 +752,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                 <div className="bg-white p-3 rounded-lg border border-slate-300 shadow-sm flex flex-col md:flex-row justify-between items-end gap-6">
                   <div className="flex gap-2">
                     <button type="button" onClick={onClose} className="h-10 px-4 bg-slate-50 border border-slate-300 rounded text-xs font-bold hover:bg-slate-100 flex items-center gap-2"><X className="w-4 h-4 text-red-500" /> Cancelar</button>
-                    <button type="submit" disabled={loading} className="h-10 px-12 bg-blue-800 text-white rounded shadow-lg shadow-blue-200 hover:bg-blue-900 flex items-center gap-2 text-xs font-black uppercase tracking-widest disabled:opacity-50 transition-all">
+                    <button type="submit" disabled={loading} className="h-10 px-8 bg-blue-800 text-white rounded shadow-lg shadow-blue-100 hover:bg-blue-900 flex items-center gap-2 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed">
                       {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                       {loading ? 'Procesando...' : (editingItem ? 'Actualizar' : 'Emitir Comprobante')}
                     </button>
@@ -632,9 +760,9 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                   <div className="flex items-center gap-6">
                     <div className="text-right"><p className="text-[10px] font-bold text-slate-400 mb-0">SUB TOTAL:</p><p className="text-xs font-bold text-slate-700">{formatNumber(valorVenta)}</p></div>
                     <div className="text-right"><p className="text-[10px] font-bold text-slate-400 mb-0">I.G.V.:</p><p className="text-xs font-bold text-slate-700">{formatNumber(igvTotal)}</p></div>
-                    <div className="text-right bg-blue-50 px-4 py-1 rounded border border-blue-100">
-                      <p className="text-[10px] font-black text-blue-500 mb-0">TOTAL:</p>
-                      <p className="text-xl font-black text-blue-900 tracking-tight">S/ {formatNumber(quotationTotal)}</p>
+                    <div className="text-right bg-[#D9E9FF] px-4 py-1 rounded border border-[#004A99]">
+                      <p className="text-[10px] font-black text-[#004A99] mb-0">TOTAL A PAGAR:</p>
+                      <p className="text-xl font-black text-[#004A99] tracking-tight">S/ {formatNumber(quotationTotal)}</p>
                     </div>
                   </div>
                 </div>

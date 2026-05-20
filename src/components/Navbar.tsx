@@ -113,9 +113,9 @@ export default function Navbar() {
 
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group shrink-0">
-            {settings.logo ? (
+            {(settings.company_logo || settings.logo) ? (
               <img
-                src={settings.logo}
+                src={settings.company_logo || settings.logo}
                 alt="Logo"
                 style={{ width: `${settings['logo-width'] || 150}px` }}
                 className="h-auto object-contain"

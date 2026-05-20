@@ -203,22 +203,25 @@ export const OrderForm: React.FC<OrderFormProps> = ({
               className="relative w-full h-full max-w-[98%] max-h-[98vh] bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-300"
             >
               {/* --- BARRA DE TITULO ESTILO ERP --- */}
-              <div className="bg-slate-800 px-4 py-2 border-b border-slate-700 flex items-center justify-between shrink-0">
+              <div className="bg-slate-100 px-4 py-2 border-b border-slate-300 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
-                  <ShoppingBag className="w-4 h-4 text-emerald-400" />
-                  <h2 className="text-sm font-bold text-white tracking-tight uppercase">Registro de Pedido Directo (Venta)</h2>
+                  <ShoppingBag className="w-4 h-4 text-blue-800" />
+                  <h2 className="text-sm font-bold text-slate-700 tracking-tight">Registro de Pedido Directo (Venta)</h2>
                 </div>
                 <div className="flex items-center gap-8">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-slate-300 uppercase">IGV:</span>
+                    <span className="text-[11px] font-bold text-slate-500">IGV:</span>
                     <input 
                       type="number" 
                       value={formData.igvPercent} 
                       onChange={e => setFormData({...formData, igvPercent: e.target.value})}
-                      className="w-16 h-7 bg-slate-700 border border-slate-600 text-right px-2 text-xs font-bold rounded text-white"
+                      className="w-16 h-7 bg-white border border-slate-300 text-right px-2 text-xs font-bold rounded"
                     />
+                    <HelpCircle className="w-4 h-4 text-blue-500 cursor-help" />
                   </div>
-                  <button onClick={onClose} className="hover:bg-red-500 text-white p-1 rounded transition-colors"><X className="w-4 h-4" /></button>
+                  <div className="flex gap-1">
+                    <button onClick={onClose} className="hover:bg-red-500 hover:text-white p-1 rounded transition-colors"><X className="w-4 h-4" /></button>
+                  </div>
                 </div>
               </div>
 
@@ -429,9 +432,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
 
                   {/* --- SECCIÓN 4: DETALLE TABLA --- */}
                   <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-75">
-                    <div className="bg-slate-800 border-b border-slate-700 px-3 py-1 flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-white uppercase tracking-widest flex items-center gap-2">
-                        <ClipboardList className="w-3.5 h-3.5 text-emerald-400" />
+                    <div className="bg-slate-50 border-b border-slate-200 px-3 py-1 flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                        <ClipboardList className="w-3.5 h-3.5 text-blue-600" />
                         Detalle de Ítems del Pedido
                       </span>
                       <div className="relative group w-96">
@@ -439,7 +442,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                           type="text" 
                           placeholder="F1: Buscar producto por código o nombre..." 
                           onChange={e => handleSearchProduct(e.target.value)}
-                          className="h-7 w-full border border-slate-600 bg-slate-700 text-white rounded px-8 text-xs outline-none focus:border-blue-400" 
+                          className="h-7 w-full border border-slate-300 bg-white text-slate-800 rounded px-8 text-xs outline-none focus:border-blue-500" 
                         />
                         <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
                         {searchResults.length > 0 && (
@@ -476,17 +479,17 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                     <div className="overflow-x-auto flex-1">
                       <table className="w-full text-[10px] border-collapse">
                         <thead>
-                          <tr className="bg-slate-100 text-slate-700 border-b border-slate-200">
-                            <th className="px-2 py-1 font-bold border-r border-slate-200 text-center w-8">#</th>
-                            <th className="px-2 py-1 font-bold border-r border-slate-200 w-24">Código</th>
-                            <th className="px-2 py-1 font-bold border-r border-slate-200 w-24 text-center">Lote</th>
-                            <th className="px-2 py-1 font-bold border-r border-slate-200 min-w-50">Descripción</th>
-                            <th className="px-2 py-1 font-bold border-r border-slate-200 text-right w-20">Cantidad</th>
-                            <th className="px-2 py-1 font-bold border-r border-slate-200 text-center w-20">U.M.</th>
-                            <th className="px-2 py-1 font-bold border-r border-slate-200 text-right w-24">P. Unitario</th>
-                            <th className="px-2 py-1 border-r border-slate-200 text-right w-24">Subtotal</th>
-                            <th className="px-2 py-1 border-r border-slate-200 text-right w-20">IGV</th>
-                            <th className="px-2 py-1 border-r border-slate-200 text-right w-24">Total</th>
+                          <tr className="bg-[#E2E8F0] text-slate-700 border-b border-slate-300">
+                            <th className="px-2 py-1 font-bold border-r border-slate-300 text-center w-8">#</th>
+                            <th className="px-2 py-1 font-bold border-r border-slate-300 w-24">Código</th>
+                            <th className="px-2 py-1 font-bold border-r border-slate-300 w-24 text-center">Lote</th>
+                            <th className="px-2 py-1 font-bold border-r border-slate-300 min-w-50">Descripción</th>
+                            <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-20">Cantidad</th>
+                            <th className="px-2 py-1 font-bold border-r border-slate-300 text-center w-20">U.M.</th>
+                            <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-24">P. Unitario</th>
+                            <th className="px-2 py-1 border-r border-slate-300 text-right w-24">Subtotal</th>
+                            <th className="px-2 py-1 border-r border-slate-300 text-right w-20">IGV</th>
+                            <th className="px-2 py-1 border-r border-slate-300 text-right w-24">Total</th>
                             <th className="px-2 py-1 w-10 text-center">Acción</th>
                           </tr>
                         </thead>
@@ -497,13 +500,23 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                             const valorLine = totalLine / 1.18;
                             const igvLine = totalLine - valorLine;
                             return (
-                              <tr key={item.productId} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                                <td className="px-2 py-1 text-center font-bold text-slate-400 border-r border-slate-100">{index + 1}</td>
-                                <td className="px-2 py-1 border-r border-slate-100 font-bold">{item.code}</td>
-                                <td className="px-2 py-1 border-r border-slate-100 text-center text-[10px] font-bold text-emerald-700 bg-emerald-50/30">{item.lot || '---'}</td>
-                                <td className="px-2 py-1 border-r border-slate-100 font-bold truncate max-w-62.5">{item.name}</td>
-                                <td className="px-2 py-1 border-r border-slate-100"><input type="number" value={item.quantity} onChange={e => updateQuotationItem(item.productId, 'quantity', parseFloat(e.target.value) || 0)} className="w-full text-right bg-emerald-50/30 outline-none focus:bg-white font-black text-blue-800" /></td>
-                                <td className="px-2 py-1 border-r border-slate-100 text-center">
+                              <tr key={item.productId} className="border-b border-slate-200 hover:bg-slate-50 transition-colors">
+                                <td className="px-2 py-1 text-center font-bold text-slate-400 border-r border-slate-200">{index + 1}</td>
+                                <td className="px-2 py-1 border-r border-slate-200 font-bold">{item.code}</td>
+                                <td className="px-2 py-1 border-r border-slate-200 text-center text-[10px] font-bold text-emerald-700 bg-emerald-50/30">
+                                  <div className="flex flex-col items-center">
+                                    <span className="uppercase tracking-tighter">{item.lot || '---'}</span>
+                                    {item.expiryDate && (
+                                      <span className="text-[8px] text-amber-600 flex items-center gap-0.5 mt-0.5 font-black leading-none">
+                                        <Calendar className="w-2 h-2 shrink-0" />
+                                        {new Date(item.expiryDate).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-2 py-1 border-r border-slate-200 font-bold truncate max-w-62.5">{item.name}</td>
+                                <td className="px-2 py-1 border-r border-slate-200"><input type="number" value={item.quantity} onChange={e => updateQuotationItem(item.productId, 'quantity', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white font-bold" /></td>
+                                <td className="px-2 py-1 border-r border-slate-200 text-center">
                                   <input
                                     type="text"
                                     value={item.unitMeasure || item.unit?.symbol || 'UND'}
@@ -511,10 +524,10 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                                     className="w-full text-center bg-transparent outline-none focus:bg-white font-bold uppercase"
                                   />
                                 </td>
-                                <td className="px-2 py-1 border-r border-slate-100"><input type="number" step="0.000001" value={item.price} onChange={e => updateQuotationItem(item.productId, 'price', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white font-bold" /></td>
-                                <td className="px-2 py-1 border-r border-slate-100 text-right font-bold text-slate-600">{formatNumber(valorLine)}</td>
-                                <td className="px-2 py-1 border-r border-slate-100 text-right text-slate-500">{formatNumber(igvLine)}</td>
-                                <td className="px-2 py-1 border-r border-slate-100 text-right font-black text-blue-900">{formatNumber(totalLine)}</td>
+                                <td className="px-2 py-1 border-r border-slate-200"><input type="number" step="0.000001" value={item.price} onChange={e => updateQuotationItem(item.productId, 'price', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white font-bold" /></td>
+                                <td className="px-2 py-1 border-r border-slate-200 text-right font-bold text-slate-600">{formatNumber(valorLine)}</td>
+                                <td className="px-2 py-1 border-r border-slate-200 text-right text-slate-500">{formatNumber(igvLine)}</td>
+                                <td className="px-2 py-1 border-r border-slate-200 text-right font-black text-blue-900">{formatNumber(totalLine)}</td>
                                 <td className="px-2 py-1 text-center">
                                   <button type="button" onClick={() => removeQuotationItem(item.productId)} className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                                 </td>
@@ -522,15 +535,16 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                             );
                           })}
                           {quotationItems.length === 0 && (
-                            <tr><td colSpan={10} className="h-64 text-center text-slate-300 italic">Pulse el buscador superior para agregar productos al pedido</td></tr>
+                            <tr><td colSpan={11} className="h-64 text-center text-slate-300 italic">Pulse el buscador superior para agregar productos al pedido</td></tr>
                           )}
                         </tbody>
                       </table>
                     </div>
 
-                    <div className="bg-slate-50 p-2 border-t border-slate-200 flex items-center justify-between shrink-0">
+                    <div className="bg-slate-100 p-2 border-t border-slate-300 flex items-center justify-between shrink-0">
                       <div className="flex gap-1">
-                        <button type="button" onClick={() => setIsProductSearchModalOpen(true)} className="h-7 px-3 bg-emerald-600 text-white rounded text-[10px] font-bold hover:bg-emerald-700 flex items-center gap-1 shadow-sm"><PlusCircle className="w-3 h-3" /> F2: Agregar Ítem</button>
+                        <button type="button" onClick={() => removeQuotationItem(-1)} className="h-7 px-3 bg-white border border-slate-300 rounded text-[10px] font-bold hover:bg-slate-50 flex items-center gap-1 shadow-sm"><Trash2 className="w-3 h-3" /> Eliminar Detalle</button>
+                        <button type="button" onClick={() => setIsProductSearchModalOpen(true)} className="h-7 px-3 bg-white border border-slate-300 rounded text-[10px] font-bold hover:bg-slate-50 flex items-center gap-1 shadow-sm"><PlusCircle className="w-3 h-3 text-emerald-500" /> Agregar Detalle</button>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] font-bold text-slate-600">Total Ítems: {quotationItems.length}</span>
@@ -542,7 +556,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                   <div className="bg-white p-3 rounded-lg border border-slate-300 shadow-sm flex flex-col md:flex-row justify-between items-end gap-6">
                     <div className="flex gap-2">
                       <button type="button" onClick={onClose} className="h-10 px-4 bg-slate-50 border border-slate-300 rounded text-xs font-bold hover:bg-slate-100 flex items-center gap-2"><X className="w-4 h-4 text-red-500" /> Cancelar</button>
-                      <button type="submit" disabled={loading} className="h-10 px-12 bg-blue-800 text-white rounded shadow-lg shadow-blue-200 hover:bg-blue-900 flex items-center gap-2 text-xs font-black uppercase tracking-widest disabled:opacity-50 transition-all">
+                      <button type="submit" disabled={loading} className="h-10 px-8 bg-blue-800 text-white rounded shadow-lg shadow-blue-100 hover:bg-blue-900 flex items-center gap-2 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed">
                         {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                         {loading ? 'Procesando...' : 'Guardar Pedido'}
                       </button>
@@ -551,9 +565,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                     <div className="flex items-center gap-6">
                       <div className="text-right"><p className="text-[10px] font-bold text-slate-400 mb-0">VALOR VENTA:</p><p className="text-xs font-bold text-slate-700">{formatNumber(valorVenta)}</p></div>
                       <div className="text-right"><p className="text-[10px] font-bold text-slate-400 mb-0">I.G.V. (18%):</p><p className="text-xs font-bold text-slate-700">{formatNumber(igvTotal)}</p></div>
-                      <div className="text-right bg-blue-50 px-4 py-1 rounded border border-blue-100">
-                        <p className="text-[10px] font-black text-blue-500 mb-0">TOTAL A PAGAR:</p>
-                        <p className="text-xl font-black text-blue-900 tracking-tight">S/ {formatNumber(quotationTotal)}</p>
+                      <div className="text-right bg-[#D9E9FF] px-4 py-1 rounded border border-[#004A99]">
+                        <p className="text-[10px] font-black text-[#004A99] mb-0">TOTAL A PAGAR:</p>
+                        <p className="text-xl font-black text-[#004A99] tracking-tight">S/ {formatNumber(quotationTotal)}</p>
                       </div>
                     </div>
                   </div>

@@ -68,7 +68,13 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
   };
 
   const handleChange = (key: string, value: string) => {
-    setSettings((prev: any) => ({ ...prev, [key]: value }));
+    setSettings((prev: any) => {
+      const updated = { ...prev, [key]: value };
+      if (key === 'company_logo') {
+        updated.logo = value;
+      }
+      return updated;
+    });
   };
 
   const handleSaveAll = async () => {

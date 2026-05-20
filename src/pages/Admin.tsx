@@ -174,10 +174,12 @@ export default function Admin() {
     customerName: '', customerDocType: 'DNI', customerDocNumber: '', customerAddress: '',
     customerEmail: '', customerPhone: '', customerId: '',
     issueDate: new Date().toISOString().split('T')[0],
+    dueDate: '',
     currency: 'PEN', exchangeRate: '1.000',
     paymentCondition: 'CONTADO', operationType: '10',
     includeIgv: true, priceIncludesIgv: true, igvPercent: 18,
     sellerId: '', orderId: '', notes: '',
+    installments: [] as any[],
   };
   const initialWarehouseData = { code: '', name: '', commercialName: '', address: '', ruc: '', ubigeo: '', observation: '', phones: '', type: '', validateStock: true, isActive: true, floors: [] };
 
@@ -389,7 +391,8 @@ export default function Admin() {
         // item could be an existing invoice OR an order (for generating comprobante)
         const isFromOrder = item.customerPhone !== undefined && item.totalAmount !== undefined && item.items !== undefined && item.docType === 'PED';
         if (isFromOrder) {
-          // Populate from order
+          // Populate from order (new comprobante mode, not edit)
+          setEditingItem(null);
           const customer = customers.find(c => c.id === item.customerId);
           setQuotationFormData((prev: any) => ({ ...prev, ...item }));
           setInvoiceFormData({
@@ -425,9 +428,13 @@ export default function Admin() {
           })) || []);
         } else {
           // Edit existing invoice
+          const matchingSeries = series.find(s => s.series === item.series && s.documentType === item.documentType);
           setInvoiceFormData({
             ...initialInvoiceData,
             ...item,
+            series: matchingSeries ? matchingSeries.id.toString() : '',
+            docSeries: item.series,
+            docNumber: item.number?.toString() || '',
             issueDate: item.issueDate?.split('T')[0] || new Date().toISOString().split('T')[0],
             sellerId: item.sellerId?.toString() || '',
             customerId: item.customerId?.toString() || '',
@@ -732,7 +739,28 @@ export default function Admin() {
     setLoading(true);
     try {
       const payload = {
-        ...invoiceFormData,
+        documentType: invoiceFormData.documentType || 'FACT',
+        series: invoiceFormData.docSeries,
+        number: parseInt(invoiceFormData.docNumber) || 0,
+        customerName: invoiceFormData.customerName || '',
+        customerDocType: invoiceFormData.customerDocType || 'DNI',
+        customerDocNumber: invoiceFormData.customerDocNumber || '',
+        customerAddress: invoiceFormData.customerAddress || '',
+        customerEmail: invoiceFormData.customerEmail || '',
+        customerPhone: invoiceFormData.customerPhone || '',
+        customerId: invoiceFormData.customerId ? parseInt(invoiceFormData.customerId) : null,
+        issueDate: invoiceFormData.issueDate,
+        dueDate: invoiceFormData.dueDate,
+        currency: invoiceFormData.currency || 'PEN',
+        exchangeRate: parseFloat(invoiceFormData.exchangeRate) || 1,
+        paymentCondition: invoiceFormData.paymentCondition || 'CONTADO',
+        operationType: invoiceFormData.operationType || '10',
+        includeIgv: invoiceFormData.includeIgv !== false,
+        priceIncludesIgv: invoiceFormData.priceIncludesIgv !== false,
+        igvPercent: Number(invoiceFormData.igvPercent) || 18,
+        sellerId: invoiceFormData.sellerId ? parseInt(invoiceFormData.sellerId) : null,
+        orderId: invoiceFormData.orderId ? parseInt(invoiceFormData.orderId) : null,
+        notes: invoiceFormData.notes || '',
         items: quotationItems.map((item: any) => ({
           productId: item.productId,
           quantity: item.quantity,
@@ -983,7 +1011,7 @@ export default function Admin() {
         <aside className="w-full lg:w-64 shrink-0 space-y-2 h-full overflow-y-auto custom-scrollbar pr-2">
           <div className="px-5 py-4 mb-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
             <div className="flex items-center gap-3 mb-1">
-              <div className="w-8 h-8 bg-gradient-to-tr from-cyan-400 to-sky-500 rounded-xl flex items-center justify-center font-black text-white shadow-md shadow-sky-100">C</div>
+              <div className="w-8 h-8 bg-linear-to-tr from-cyan-400 to-sky-500 rounded-xl flex items-center justify-center font-black text-white shadow-md shadow-sky-100">C</div>
               <span className="font-bold text-slate-800 text-base tracking-tight">Panel Admin</span>
             </div>
             <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest pl-11">{user?.name || 'Administrador'}</p>
@@ -1248,7 +1276,7 @@ export default function Admin() {
             <WarehouseForm isOpen={isWarehouseModalOpen} onClose={() => setIsWarehouseModalOpen(false)} onSubmit={handleSubmitWarehouse} formData={warehouseFormData} setFormData={setWarehouseFormData} loading={loading} token={token} refreshData={fetchData} />
           </div>
 
-          <div style={{ display: activeTabId === 'customers' ? 'block' : 'none' }}>
+          <div style={{ display: activeTabId === 'customers' || isCustomerModalOpen ? 'block' : 'none' }}>
             <CustomerForm isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} onSubmit={handleSubmitCustomer} formData={customerFormData} setFormData={setCustomerFormData} editingItem={editingItem} loading={loading} documentTypes={documentTypes} handleConsultDocument={handleConsultForQuotation} />
           </div>
 
@@ -1273,7 +1301,7 @@ export default function Admin() {
             />
           </div>
 
-          <div style={{ display: activeTabId === 'invoices' ? 'block' : 'none' }}>
+          <div style={{ display: activeTabId === 'invoices' || isInvoiceModalOpen ? 'block' : 'none' }}>
             <InvoiceForm
               isOpen={isInvoiceModalOpen}
               onClose={() => setIsInvoiceModalOpen(false)}
@@ -1298,6 +1326,9 @@ export default function Admin() {
               quotationTotal={quotationTotal}
               token={token}
               series={series}
+              handleConsultCustomer={handleConsultForQuotation}
+              handleQuickRegister={handleQuickRegisterCustomer}
+              onOpenCustomerForm={(doc) => { setCustomerFormData({ ...initialCustomerData, docNumber: doc }); setIsCustomerModalOpen(true); }}
             />
           </div>
 

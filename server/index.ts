@@ -2845,7 +2845,7 @@ app.post('/api/orders/:id/cancel-payment', authenticateToken, async (req, res) =
 app.get('/api/invoices', authenticateToken, async (req, res) => {
   try {
     const invoices = await prisma.invoice.findMany({
-      include: { items: { include: { product: true } }, installments: true, seller: true, customer: true },
+      include: { items: { include: { product: true } }, installments: true, seller: true, customer: true, order: true },
       orderBy: { id: 'desc' }
     });
     res.json(invoices);
@@ -2859,7 +2859,7 @@ app.get('/api/invoices/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const invoice = await prisma.invoice.findUnique({
       where: { id: parseInt(id) },
-      include: { items: { include: { product: true } }, installments: true, seller: true, customer: true }
+      include: { items: { include: { product: true } }, installments: true, seller: true, customer: true, order: true }
     });
     if (!invoice) return res.status(404).json({ error: 'Factura no encontrada' });
     res.json(invoice);
@@ -2882,6 +2882,7 @@ app.post('/api/invoices', authenticateToken, async (req, res) => {
     // Calculate totals
     let subtotal = 0;
     let totalIgv = 0;
+    let totalAmount = 0;
     const igvRate = (igvPercent || 18) / 100;
 
     const invoiceItems = items.map((item: any) => {
@@ -2891,7 +2892,6 @@ app.post('/api/invoices', authenticateToken, async (req, res) => {
       const itemTotal = qty * price;
       const itemDiscount = itemTotal * (discount / 100);
       const itemFinal = itemTotal - itemDiscount;
-      subtotal += itemFinal;
       return {
         productId: parseInt(item.productId),
         quantity: qty,
@@ -2904,8 +2904,21 @@ app.post('/api/invoices', authenticateToken, async (req, res) => {
       };
     });
 
-    totalIgv = includeIgv !== false ? subtotal * igvRate : 0;
-    const totalAmount = subtotal + totalIgv;
+    const sumOfItems = invoiceItems.reduce((acc: number, item: any) => acc + item.total, 0);
+
+    if (priceIncludesIgv !== false && includeIgv !== false) {
+      totalAmount = sumOfItems;
+      subtotal = totalAmount / (1 + igvRate);
+      totalIgv = totalAmount - subtotal;
+    } else if (includeIgv !== false) {
+      subtotal = sumOfItems;
+      totalIgv = subtotal * igvRate;
+      totalAmount = subtotal + totalIgv;
+    } else {
+      subtotal = sumOfItems;
+      totalIgv = 0;
+      totalAmount = sumOfItems;
+    }
 
     const invoice = await prisma.$transaction(async (tx) => {
       // Update series counter
@@ -2944,7 +2957,7 @@ app.post('/api/invoices', authenticateToken, async (req, res) => {
             }))
           } : undefined
         },
-        include: { items: { include: { product: true } }, installments: true, seller: true, customer: true }
+        include: { items: { include: { product: true } }, installments: true, seller: true, customer: true, order: true }
       });
     });
 
@@ -2977,6 +2990,7 @@ app.put('/api/invoices/:id', authenticateToken, async (req, res) => {
       // Recalculate totals
       let subtotal = 0;
       let totalIgv = 0;
+      let totalAmount = 0;
       const igvRate = (data.igvPercent || 18) / 100;
 
       const invoiceItems = (items || []).map((item: any) => {
@@ -2986,7 +3000,6 @@ app.put('/api/invoices/:id', authenticateToken, async (req, res) => {
         const itemTotal = qty * price;
         const itemDiscount = itemTotal * (discount / 100);
         const itemFinal = itemTotal - itemDiscount;
-        subtotal += itemFinal;
         return {
           productId: parseInt(item.productId),
           quantity: qty,
@@ -2999,13 +3012,32 @@ app.put('/api/invoices/:id', authenticateToken, async (req, res) => {
         };
       });
 
-      totalIgv = data.includeIgv !== false ? subtotal * igvRate : 0;
-      const totalAmount = subtotal + totalIgv;
+      const sumOfItems = invoiceItems.reduce((acc: number, item: any) => acc + item.total, 0);
+
+      if (data.priceIncludesIgv !== false && data.includeIgv !== false) {
+        totalAmount = sumOfItems;
+        subtotal = totalAmount / (1 + igvRate);
+        totalIgv = totalAmount - subtotal;
+      } else if (data.includeIgv !== false) {
+        subtotal = sumOfItems;
+        totalIgv = subtotal * igvRate;
+        totalAmount = subtotal + totalIgv;
+      } else {
+        subtotal = sumOfItems;
+        totalIgv = 0;
+        totalAmount = sumOfItems;
+      }
+
+      let numberFormatted = data.numberFormatted;
+      if (data.series && data.number) {
+        numberFormatted = `${data.series}-${String(data.number).padStart(8, '0')}`;
+      }
 
       return await tx.invoice.update({
         where: { id: invoiceId },
         data: {
           ...data,
+          numberFormatted,
           customerId: data.customerId ? parseInt(data.customerId) : null,
           sellerId: data.sellerId ? parseInt(data.sellerId) : null,
           exchangeRate: parseFloat(data.exchangeRate) || 1,
@@ -3022,7 +3054,7 @@ app.put('/api/invoices/:id', authenticateToken, async (req, res) => {
             }))
           } : undefined
         },
-        include: { items: { include: { product: true } }, installments: true, seller: true, customer: true }
+        include: { items: { include: { product: true } }, installments: true, seller: true, customer: true, order: true }
       });
     });
 
@@ -3140,13 +3172,23 @@ app.delete('/api/orders/:id', authenticateToken, async (req, res) => {
   
   try {
     await prisma.$transaction(async (tx) => {
-      // 0. Get order with movements to check for quotationId and reverse stock
+      // 0. Get order with movements and payments to check constraints
       const order = await tx.order.findUnique({ 
         where: { id: orderId },
-        include: { movements: true }
+        include: { movements: true, payments: true }
       });
 
       if (order) {
+        // Validation: No se puede eliminar si ya fue cobrado o tiene pagos registrados
+        if (order.paymentStatus === 'PAID' || order.payments.length > 0) {
+          throw new Error('No se puede eliminar un pedido que ya cuenta con cobros o pagos registrados. Debe anular los cobros primero.');
+        }
+
+        // Validation: No se puede eliminar si ya fue despachado, enviado o entregado
+        if (['DISPATCHED', 'SHIPPED', 'DELIVERED'].includes(order.status)) {
+          throw new Error('No se puede eliminar un pedido que ya ha sido despachado, enviado o entregado. Debe anular el despacho primero.');
+        }
+
         // 1. Reverse stock if there were movements
         const DESPACHO_NAME = 'A1.CUZCO.1048 - DESPACHO';
         const despacho = await tx.warehouse.findUnique({ where: { name: DESPACHO_NAME } });

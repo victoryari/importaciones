@@ -16,14 +16,14 @@ export default function Footer() {
           {/* Company Info */}
           <div className="space-y-6">
             <Link to="/" className="flex items-center gap-2">
-              {settings.logo ? (
-                <img src={settings.logo} alt="Logo" className="h-10 w-auto object-contain brightness-0 invert" />
+              {(settings.company_logo || settings.logo) ? (
+                <img src={settings.company_logo || settings.logo} alt="Logo" className="h-10 w-auto object-contain brightness-0 invert" />
               ) : (
                 <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">
                   C
                 </div>
               )}
-              {!settings.logo && (
+              {!(settings.company_logo || settings.logo) && (
                 <div>
                   <span className="text-xl font-bold text-white block leading-tight">{settings['business-name'] || 'Carmelita'}</span>
                   <span className="text-xs uppercase tracking-widest text-blue-500 font-semibold">{settings['business-tagline'] || 'Del Norte'}</span>

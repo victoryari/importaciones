@@ -76,6 +76,8 @@ export default function WarehousePickingModule() {
   const [operators, setOperators] = useState<Operator[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<PickingOrder | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [printOrder, setPrintOrder] = useState<PickingOrder | null>(null);
@@ -224,12 +226,18 @@ export default function WarehousePickingModule() {
     }
   };
 
-  const filtered = orders.filter(o =>
-    !search ||
-    o.id.toString().includes(search) ||
-    o.customerName?.toLowerCase().includes(search.toLowerCase()) ||
-    o.docNumber?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = orders.filter(o => {
+    const matchesSearch = !search ||
+      o.id.toString().includes(search) ||
+      o.customerName?.toLowerCase().includes(search.toLowerCase()) ||
+      o.docNumber?.toLowerCase().includes(search.toLowerCase());
+
+    const orderDate = o.createdAt?.split('T')[0] || '';
+    const matchesFrom = !dateFrom || orderDate >= dateFrom;
+    const matchesTo = !dateTo || orderDate <= dateTo;
+
+    return matchesSearch && matchesFrom && matchesTo;
+  });
 
   const totalPaid = (order: PickingOrder) =>
     order.payments?.reduce((s, p) => s + Number(p.amount), 0) || 0;
@@ -349,15 +357,44 @@ export default function WarehousePickingModule() {
 
       {activeView === 'tray' && (
         <>
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por # pedido, cliente o documento..."
-            className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium"
-          />
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar por # pedido, cliente o documento..."
+              className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              className="px-3 py-3.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm font-medium"
+              title="Desde"
+            />
+            <span className="text-slate-300 font-bold">–</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              className="px-3 py-3.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm font-medium"
+              title="Hasta"
+            />
+            {(dateFrom || dateTo) && (
+              <button
+                onClick={() => { setDateFrom(''); setDateTo(''); }}
+                className="p-3.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                title="Limpiar filtro"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {loading ? (
