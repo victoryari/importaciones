@@ -35,10 +35,21 @@ export default function CartDrawer() {
       const response = await fetch(`/api/web/consult/${type}/${formData.docNumber}`);
       const data = await response.json();
       
-      if (data.nombre || data.razonSocial) {
+      if (data.ruc || data.dni || data.razonSocial || data.nombres || data.nombre || data.nombre_o_razon_social || data.success) {
+        const d = data.data || data;
+        let fullName = '';
+        if (type === 'ruc') {
+          fullName = d.razonSocial || d.nombre_o_razon_social || d.nombre || '';
+        } else {
+          const rawNames = d.nombres || d.nombre || '';
+          const apePat = d.apellidoPaterno || d.apellido_paterno || '';
+          const apeMat = d.apellidoMaterno || d.apellido_materno || '';
+          fullName = `${rawNames} ${apePat} ${apeMat}`.trim();
+        }
+
         setFormData(prev => ({
           ...prev,
-          name: data.razonSocial || data.nombre || data.nombreCompleto || ''
+          name: fullName || d.nombreCompleto || ''
         }));
       }
     } catch (error) {
@@ -57,7 +68,7 @@ export default function CartDrawer() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch('/api/orders', {
+      const response = await fetch('/api/quotations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -68,6 +79,7 @@ export default function CartDrawer() {
           customerCity: formData.city,
           customerAddress: formData.address,
           notes: formData.notes,
+          docType: 'COT',
           origin: 'WEB',
           items: items.map(item => ({
             productId: parseInt(item.id.toString()),
@@ -78,14 +90,14 @@ export default function CartDrawer() {
         })
       });
 
-      if (!response.ok) throw new Error('Error al guardar el pedido');
+      if (!response.ok) throw new Error('Error al guardar la cotización');
       
-      const order = await response.json();
+      const quotation = await response.json();
 
       // Open WhatsApp
       const message = encodeURIComponent(
         `¡Hola Carmelita del Norte! 👋\n\n` +
-        `He realizado un nuevo pedido *#${order.id}* desde la web:\n\n` +
+        `He solicitado una cotización *#${quotation.id}* desde la web:\n\n` +
         `👤 *Cliente:* ${formData.name}\n` +
         `🆔 *${formData.docType}:* ${formData.docNumber}\n` +
         `📞 *Teléfono:* ${formData.phone}\n` +

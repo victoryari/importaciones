@@ -14,34 +14,23 @@ const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const catalogs = [
-    // Catalog 09: Tipo de Nota de Crédito
+    // Catalog 09: Tipo de Nota de Crédito → TABLA_10 (filtrar code 07)
     {
-      tableName: 'credit_note_type',
+      tableName: 'TABLA_10',
       data: [
-        { code: '01', name: 'Anulación de la operación' },
-        { code: '02', name: 'Anulación por error en el RUC' },
-        { code: '03', name: 'Corrección por error en la descripción' },
-        { code: '04', name: 'Descuento global' },
-        { code: '05', name: 'Descuento por ítem' },
-        { code: '06', name: 'Devolución total' },
-        { code: '07', name: 'Devolución por ítem' },
-        { code: '08', name: 'Bonificación' },
-        { code: '09', name: 'Disminución en el valor' },
-        { code: '10', name: 'Otros Conceptos' },
+        { code: '07', name: 'Nota de crédito' },
       ]
     },
-    // Catalog 10: Tipo de Nota de Débito
+    // Catalog 10: Tipo de Nota de Débito → TABLA_10 (filtrar code 08)
     {
-      tableName: 'debit_note_type',
+      tableName: 'TABLA_10',
       data: [
-        { code: '01', name: 'Intereses por mora' },
-        { code: '02', name: 'Aumento en el valor' },
-        { code: '03', name: 'Penalidades/ otros conceptos' },
+        { code: '08', name: 'Nota de débito' },
       ]
     },
     // Table 05: Tipo de Existencia
     {
-      tableName: 'existence_type',
+      tableName: 'TABLA_05',
       data: [
         { code: '01', name: 'MERCADERÍAS' },
         { code: '02', name: 'PRODUCTOS TERMINADOS' },
@@ -66,7 +55,7 @@ async function main() {
     },
     // Table 12: Tipo de Operación
     {
-      tableName: 'operation_type',
+      tableName: 'TABLA_12',
       data: [
         { code: '01', name: 'VENTA NACIONAL' },
         { code: '02', name: 'COMPRA NACIONAL' },
@@ -119,7 +108,7 @@ async function main() {
     },
     // Table 14: Método de Valuación
     {
-      tableName: 'valuation_method',
+      tableName: 'TABLA_14',
       data: [
         { code: '1', name: 'PROMEDIO PONDERADO' },
         { code: '2', name: 'PRIMERAS ENTRADAS, PRIMERAS SALIDAS' },
@@ -129,29 +118,32 @@ async function main() {
         { code: '9', name: 'OTROS' },
       ]
     },
-    // Other tables already present but maybe need checking
+    // Table 02: Tipo de Documento de Identidad
     {
-      tableName: 'document_type',
+      tableName: 'TABLA_02',
       data: [
-        { code: '01', name: 'DNI' },
-        { code: '06', name: 'RUC' },
-        { code: '04', name: 'CARNET EXTRANJERIA' },
-        { code: '07', name: 'PASAPORTE' },
-        { code: '00', name: 'OTROS' }
+        { code: '0', name: 'OTROS TIPOS DE DOCUMENTOS' },
+        { code: '1', name: 'DOCUMENTO NACIONAL DE IDENTIDAD (DNI)' },
+        { code: '4', name: 'CARNET DE EXTRANJERÍA' },
+        { code: '6', name: 'REGISTRO ÚNICO DE CONTRIBUYENTES' },
+        { code: '7', name: 'PASAPORTE' },
+        { code: 'A', name: 'CÉDULA DIPLOMÁTICA DE IDENTIDAD' }
       ]
     },
+    // Table 04: Tipo de Moneda
     {
-      tableName: 'currency',
+      tableName: 'TABLA_04',
       data: [
         { code: 'PEN', name: 'SOLES' },
-        { code: 'USD', name: 'DOLARES' }
+        { code: 'USD', name: 'DÓLARES' }
       ]
     },
+    // Condiciones de Pago (interno del sistema)
     {
-      tableName: 'payment_condition',
+      tableName: 'CAT_PAY',
       data: [
         { code: 'CONTADO', name: 'CONTADO' },
-        { code: 'CREDITO', name: 'CREDITO' }
+        { code: 'CREDITO', name: 'CRÉDITO' }
       ]
     }
   ];

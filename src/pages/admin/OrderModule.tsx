@@ -39,6 +39,8 @@ interface Order {
     name: string;
     zone?: { name: string };
   };
+  docSeries?: string;
+  docNumber?: string;
   voucherNumber?: string;
   payments?: Payment[];
 }
@@ -146,7 +148,7 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
                   <tr key={order.id} className="hover:bg-slate-50/80 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="font-black text-slate-900">#PED-{order.id}</span>
+                        <span className="font-black text-slate-900">#PED-{order.docSeries || ''}{order.docNumber ? `-${order.docNumber}` : order.id}</span>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-[10px] text-slate-400 font-bold uppercase">{new Date(order.createdAt).toLocaleDateString()}</span>
                           <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter ${

@@ -256,7 +256,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                     >
                       <option value="">--SERIE--</option>
                       {series.filter(s => s.documentType === (formData.docType || 'COT')).map(s => (
-                        <option key={s.id} value={s.id}>{s.series} ({s.warehouse?.name || 'S/A'})</option>
+                        <option key={s.id} value={s.id}>{s.series}</option>
                       ))}
                     </select>
                     <span className="text-slate-400">-</span>
@@ -437,7 +437,19 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                         <span className="text-[11px] font-bold text-slate-600 w-20 text-right">Agencia:</span>
                         <div className="flex flex-1 gap-1">
                           <div className="w-10 h-8 bg-slate-100 rounded border border-slate-300 flex items-center justify-center"><Truck className="w-4 h-4 text-slate-500" /></div>
-                          <select value={formData.agencyId} onChange={e => setFormData({...formData, agencyId: e.target.value})} className="h-8 flex-1 border border-slate-300 rounded px-2 text-xs font-bold bg-white">
+                          <select 
+                            value={formData.agencyId} 
+                            onChange={e => {
+                              const selectedAgency = shippingAgencies.find(a => a.id === parseInt(e.target.value));
+                              const mainBranch = selectedAgency?.branches?.find((b: any) => b.isMain) || selectedAgency?.branches?.[0];
+                              setFormData({
+                                ...formData, 
+                                agencyId: e.target.value,
+                                branchId: mainBranch?.id?.toString() || ''
+                              });
+                            }} 
+                            className="h-8 flex-1 border border-slate-300 rounded px-2 text-xs font-bold bg-white"
+                          >
                             <option value="">--Seleccionar Agencia--</option>
                             {shippingAgencies.map(a => (
                               <option key={a.id} value={a.id}>{a.name}</option>
@@ -445,6 +457,28 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                           </select>
                         </div>
                       </div>
+                      {formData.agencyId && (() => {
+                        const selectedAgency = shippingAgencies.find(a => a.id === parseInt(formData.agencyId));
+                        const branches = selectedAgency?.branches || [];
+                        if (branches.length > 1) {
+                          return (
+                            <div className="flex-1 flex items-center gap-2">
+                              <span className="text-[11px] font-bold text-slate-600 w-20 text-right">Sucursal:</span>
+                              <select 
+                                value={formData.branchId || ''} 
+                                onChange={e => setFormData({...formData, branchId: e.target.value})} 
+                                className="h-8 flex-1 border border-slate-300 rounded px-2 text-xs font-bold bg-white"
+                              >
+                                <option value="">--Seleccionar Sucursal--</option>
+                                {branches.map((b: any) => (
+                                  <option key={b.id} value={b.id}>{b.address?.substring(0, 40)}{b.isMain ? ' (Principal)' : ''}</option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                       <div className="w-48 flex items-center gap-2">
                         <span className="text-[11px] font-bold text-slate-600 whitespace-nowrap">Estado Fact.:</span>
                         <select value={formData.billingStatus} onChange={e => setFormData({...formData, billingStatus: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold bg-white text-slate-400 italic">
@@ -570,12 +604,19 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                               <td className="px-2 py-1 border-r border-slate-200 font-bold truncate max-w-62.5">{item.name}</td>
                               <td className="px-2 py-1 border-r border-slate-200"><input type="number" value={item.quantity} onChange={e => updateQuotationItem(item.productId, 'quantity', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white" /></td>
                               <td className="px-2 py-1 border-r border-slate-200 text-center">
-                                <input
-                                  type="text"
-                                  value={item.unitMeasure || item.unit?.symbol || 'UND'}
+                                <select
+                                  value={item.unitMeasure || item.package?.symbol || item.subPackage?.symbol || item.unit?.symbol || 'UND'}
                                   onChange={e => updateQuotationItem(item.productId, 'unitMeasure', e.target.value)}
-                                  className="w-full text-center bg-transparent outline-none focus:bg-white font-bold uppercase"
-                                />
+                                  className="w-full text-center bg-transparent outline-none focus:bg-white font-bold uppercase text-[10px] cursor-pointer"
+                                >
+                                  {item.unitOptions && item.unitOptions.length > 0 ? (
+                                    item.unitOptions.map((u: any, i: number) => (
+                                      <option key={i} value={u.symbol}>{u.symbol}</option>
+                                    ))
+                                  ) : (
+                                    <option value={item.unitMeasure || 'UND'}>{item.unitMeasure || 'UND'}</option>
+                                  )}
+                                </select>
                               </td>
                               <td className="px-2 py-1 border-r border-slate-200 text-center text-slate-400">--Seleccionar--</td>
                               <td className="px-2 py-1 border-r border-slate-200"><input type="number" step="0.000001" value={item.price} onChange={e => updateQuotationItem(item.productId, 'price', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white font-bold" /></td>

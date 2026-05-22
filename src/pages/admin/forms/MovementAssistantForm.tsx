@@ -28,6 +28,7 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
   const [items, setItems] = useState<any[]>([]);
   const [isExtractionModalOpen, setIsExtractionModalOpen] = useState(false);
   const [sunatOperations, setSunatOperations] = useState<any[]>([]);
+  const [sunatCurrencies, setSunatCurrencies] = useState<any[]>([]);
   const [showCustomerResults, setShowCustomerResults] = useState(false);
   const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
   
@@ -50,8 +51,12 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
         .then(res => setExchangeRate(res.data?.sell_rate || '1.0000'))
         .catch(() => setExchangeRate('1.0000'));
       
-      axios.get('/api/sunat/operation_type', { headers: { Authorization: `Bearer ${token}` } })
+      axios.get('/api/sunat/CAT_51', { headers: { Authorization: `Bearer ${token}` } })
         .then(res => setSunatOperations(res.data))
+        .catch(() => {});
+
+      axios.get('/api/sunat/TABLA_04', { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => setSunatCurrencies(res.data))
         .catch(() => {});
     }
   }, [date, isOpen, token]);
@@ -71,7 +76,7 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
       if (prod) {
         item.productName = prod.name || '';
         item.productCode = prod.code || '';
-        item.unit = prod.unit?.symbol || 'UN.';
+        item.unit = prod.package?.symbol || prod.subPackage?.symbol || prod.unit?.symbol || 'UN.';
       }
     }
     
@@ -103,7 +108,7 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
         productId: prod.id, 
         productName: prod.name || 'Producto Sin Nombre', 
         productCode: prod.code || '',
-        unit: prod.unit?.symbol || 'UN.',
+        unit: prod.package?.symbol || prod.subPackage?.symbol || prod.unit?.symbol || 'UN.',
         fromWarehouseId: '', 
         fromZoneId: '', 
         toWarehouseId: '', 
@@ -130,7 +135,7 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
       guideNumber: '',
       docType: '',
       docNumber: '',
-      unit: product.unit?.symbol || 'UN.',
+      unit: product.package?.symbol || product.subPackage?.symbol || product.unit?.symbol || 'UN.',
       lotNumber: '',
       expiryDate: ''
     }]);
@@ -151,7 +156,7 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
       guideNumber: '',
       docType: sourceInfo.docType || '50',
       docNumber: `${sourceInfo.docSeries}-${sourceInfo.docNumber}`,
-      unit: item.unitSymbol || item.product?.unit?.symbol || 'UN.'
+      unit: item.unitSymbol || item.product?.package?.symbol || item.product?.subPackage?.symbol || item.product?.unit?.symbol || 'UN.'
     }));
     setItems([...items, ...extractedItems]);
     setObservation(`Extracción de ${sourceInfo.docType} ${sourceInfo.docSeries}-${sourceInfo.docNumber}`);
@@ -343,8 +348,9 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
                         onChange={(e) => setCurrency(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 text-[10px] font-black text-slate-700 outline-none"
                       >
-                        <option value="PEN">SOLES</option>
-                        <option value="USD">DOLARES</option>
+                        {sunatCurrencies.map(c => (
+                          <option key={c.code} value={c.code}>{c.name}</option>
+                        ))}
                       </select>
                     </div>
 

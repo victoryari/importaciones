@@ -3,9 +3,9 @@ import { motion } from 'motion/react';
 import { 
   Package, Layers, Tag, Scale, PlusCircle, Search, 
   Edit2, Trash2, Eye, Filter, ChevronRight, LayoutGrid, 
-  List, MoreVertical, Image as ImageIcon, Globe, Calendar, Power, Lock, Sparkles
+  List, MoreVertical, Image as ImageIcon, Globe, Calendar, Power, Lock, Sparkles, Box
 } from 'lucide-react';
-import { formatNumber } from '../../lib/utils';
+import { formatNumber, calculateTotalUnitsPerPackage, convertFromBaseUnits } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 
 interface Category {
@@ -38,13 +38,19 @@ interface Product {
   images?: string[];
   category?: { name: string };
   brand?: { name: string };
-  unit?: { symbol: string };
+  unit?: { name?: string; symbol?: string };
+  package?: { name?: string; symbol?: string };
+  subPackage?: { name?: string; symbol?: string };
+  quantityPerPackage?: number;
+  quantityPerSubPackage?: number;
   isActive: boolean;
   showInWeb: boolean;
   manageLots: boolean;
   useExpiryDate: boolean;
   isOnSale?: boolean;
   discountPercent?: number;
+  weight?: number;
+  volume?: number;
 }
 
 interface ProductModuleProps {
@@ -159,6 +165,7 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
                   <>
                     <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400">Producto</th>
                     <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400">Categoría / Marca</th>
+                    <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400">Empaque</th>
                     <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400 text-center">Stock</th>
                     <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400 text-right">Precio</th>
                   </>
@@ -229,6 +236,44 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
                           <span className="text-[10px] text-slate-400 font-medium uppercase">{item.brand?.name || 'S/M'}</span>
                         </div>
                       </td>
+                      <td className="px-6 py-4">
+                        {item.package?.name ? (
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1">
+                              <Box className="w-3 h-3 text-blue-500" />
+                              <span className="text-[10px] font-bold text-blue-700">1 {item.package.name}</span>
+                              <span className="text-[9px] text-slate-400">=</span>
+                              <span className="text-[10px] font-bold text-slate-600">{item.quantityPerPackage || 1}</span>
+                              <span className="text-[10px] text-slate-500">{item.subPackage?.name || item.unit?.name || 'un.'}</span>
+                            </div>
+                            {item.subPackage?.name && (
+                              <div className="flex items-center gap-1">
+                                <Layers className="w-3 h-3 text-amber-500" />
+                                <span className="text-[10px] font-bold text-amber-700">1 {item.subPackage.name}</span>
+                                <span className="text-[9px] text-slate-400">=</span>
+                                <span className="text-[10px] font-bold text-slate-600">{item.quantityPerSubPackage || 1}</span>
+                                <span className="text-[10px] text-slate-500">{item.unit?.name || 'un.'}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1 pt-0.5 border-t border-slate-100 mt-0.5">
+                              <Package className="w-3 h-3 text-emerald-500" />
+                              <span className="text-[9px] font-black text-emerald-600">Total: {calculateTotalUnitsPerPackage({ quantityPerPackage: item.quantityPerPackage, quantityPerSubPackage: item.quantityPerSubPackage })} {item.unit?.name || 'un.'}</span>
+                            </div>
+                          </div>
+                        ) : item.subPackage?.name ? (
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1">
+                              <Layers className="w-3 h-3 text-amber-500" />
+                              <span className="text-[10px] font-bold text-amber-700">1 {item.subPackage.name}</span>
+                              <span className="text-[9px] text-slate-400">=</span>
+                              <span className="text-[10px] font-bold text-slate-600">{item.quantityPerSubPackage || 1}</span>
+                              <span className="text-[10px] text-slate-500">{item.unit?.name || 'un.'}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 italic">Sin empaque</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-center">
                         {(() => {
                           const totalStock = (item.stockRecords || []).reduce((acc: number, s: any) => {
@@ -242,14 +287,35 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
                             if (isInternal) return acc;
                             return acc + s.quantity;
                           }, 0);
+                          const hasPackaging = item.package?.name || item.subPackage?.name;
+                          const breakdown = hasPackaging ? convertFromBaseUnits(totalStock, {
+                            quantityPerPackage: item.quantityPerPackage,
+                            quantityPerSubPackage: item.quantityPerSubPackage,
+                          }) : null;
+
                           return (
-                            <span className={`px-3 py-1 rounded-full text-[10px] font-black border ${
-                              totalStock <= 0 ? 'bg-red-50 text-red-600 border-red-100' :
-                              totalStock <= 10 ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                              'bg-emerald-50 text-emerald-600 border-emerald-100'
-                            }`}>
-                              {totalStock} {item.unit?.symbol || 'un.'}
-                            </span>
+                            <div className="flex flex-col items-center gap-1">
+                              <span className={`px-3 py-1 rounded-full text-[10px] font-black border ${
+                                totalStock <= 0 ? 'bg-red-50 text-red-600 border-red-100' :
+                                totalStock <= 10 ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                                'bg-emerald-50 text-emerald-600 border-emerald-100'
+                              }`}>
+                                {totalStock} {item.unit?.symbol || 'un.'}
+                              </span>
+                              {breakdown && (item.package?.name || item.subPackage?.name) && (
+                                <div className="text-[9px] font-bold text-slate-500 flex items-center gap-1">
+                                  {breakdown.packages > 0 && item.package?.name && (
+                                    <span>{breakdown.packages} {item.package.name}</span>
+                                  )}
+                                  {breakdown.subPackages > 0 && item.subPackage?.name && (
+                                    <span>{breakdown.subPackages} {item.subPackage.name}</span>
+                                  )}
+                                  {breakdown.units > 0 && (
+                                    <span>{breakdown.units} {item.unit?.symbol || 'un.'}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           );
                         })()}
                       </td>

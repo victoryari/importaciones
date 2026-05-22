@@ -1,8 +1,8 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { PlusCircle, Edit2, Save, X, Image as ImageIcon, Upload, Trash2, Globe, Package, Calendar, Power, Info, Sparkles } from 'lucide-react';
-
+import { PlusCircle, Edit2, Save, X, Image as ImageIcon, Upload, Trash2, Globe, Package, Calendar, Power, Info, Sparkles, Layers, Box, AlertCircle, ChevronRight } from 'lucide-react';
 import axios from 'axios';
+import { validatePackagingConfig, calculateTotalUnitsPerPackage, convertFromBaseUnits } from '../../../lib/utils';
 
 interface ProductFormProps {
   isOpen: boolean;
@@ -37,17 +37,39 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 }) => {
   const [existenceTypes, setExistenceTypes] = React.useState<any[]>([]);
   const [valuationMethods, setValuationMethods] = React.useState<any[]>([]);
+  const [packagingErrors, setPackagingErrors] = React.useState<string[]>([]);
+  const [showPackagingPreview, setShowPackagingPreview] = React.useState(false);
 
   React.useEffect(() => {
     if (isOpen && token) {
-      axios.get('/api/sunat/existence_type', { headers: { Authorization: `Bearer ${token}` } })
+      axios.get('/api/sunat/TABLA_05', { headers: { Authorization: `Bearer ${token}` } })
         .then(res => setExistenceTypes(res.data))
         .catch(() => {});
-      axios.get('/api/sunat/valuation_method', { headers: { Authorization: `Bearer ${token}` } })
+      axios.get('/api/sunat/TABLA_14', { headers: { Authorization: `Bearer ${token}` } })
         .then(res => setValuationMethods(res.data))
         .catch(() => {});
     }
   }, [isOpen, token]);
+
+  React.useEffect(() => {
+    const errors = validatePackagingConfig({
+      packageId: formData.packageId ? parseInt(formData.packageId) : null,
+      quantityPerPackage: formData.quantityPerPackage,
+      subPackageId: formData.subPackageId ? parseInt(formData.subPackageId) : null,
+      quantityPerSubPackage: formData.quantityPerSubPackage,
+      unitId: formData.unitId ? parseInt(formData.unitId) : null,
+    });
+    setPackagingErrors(errors);
+  }, [formData.packageId, formData.quantityPerPackage, formData.subPackageId, formData.quantityPerSubPackage, formData.unitId]);
+
+  const getUnitById = (id: string | number) => units.find(u => u.id === parseInt(String(id)));
+  const selectedUnit = getUnitById(formData.unitId);
+  const selectedPackage = getUnitById(formData.packageId);
+  const selectedSubPackage = getUnitById(formData.subPackageId);
+  const totalUnitsPerPackage = calculateTotalUnitsPerPackage({
+    quantityPerPackage: formData.quantityPerPackage,
+    quantityPerSubPackage: formData.quantityPerSubPackage,
+  });
 
   return (
     <AnimatePresence>
@@ -99,25 +121,18 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                           <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold bg-blue-50 text-blue-900" />
                         </div>
                         
-                        <div className="md:col-span-4 space-y-1">
+                        <div className="md:col-span-6 space-y-1">
                           <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Categoría</label>
                           <select value={formData.categoryId} onChange={e => setFormData({...formData, categoryId: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-1 text-xs font-bold bg-white">
                             <option value="">--Seleccionar--</option>
                             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </select>
                         </div>
-                        <div className="md:col-span-4 space-y-1">
+                        <div className="md:col-span-6 space-y-1">
                           <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Marca</label>
                           <select value={formData.brandId} onChange={e => setFormData({...formData, brandId: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-1 text-xs font-bold bg-white">
                             <option value="">--Seleccionar--</option>
                             {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                          </select>
-                        </div>
-                        <div className="md:col-span-4 space-y-1">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Unidad Base</label>
-                          <select value={formData.unitId} onChange={e => setFormData({...formData, unitId: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-1 text-xs font-bold bg-white">
-                            <option value="">--Seleccionar--</option>
-                            {units.map(u => <option key={u.id} value={u.id}>{u.name} ({u.symbol || u.abbreviation})</option>)}
                           </select>
                         </div>
 
@@ -138,29 +153,157 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                     </fieldset>
 
                     <fieldset className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
-                      <legend className="text-[10px] font-bold text-emerald-700 px-2 uppercase tracking-tighter">Logística y Empaque</legend>
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-x-4 gap-y-2">
-                        <div className="md:col-span-4 space-y-1">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Empaque Mayor</label>
-                          <select value={formData.packageId || ''} onChange={e => setFormData({...formData, packageId: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-1 text-xs font-bold bg-white">
-                            <option value="">--Ninguno--</option>
-                            {units.map(u => <option key={u.id} value={u.id}>{u.name} ({u.symbol || u.abbreviation})</option>)}
-                          </select>
+                      <legend className="text-[10px] font-bold text-emerald-700 px-2 uppercase tracking-tighter flex items-center gap-2">
+                        <Layers className="w-3 h-3" /> Jerarquía de Empaque (3 Niveles)
+                      </legend>
+                      
+                      {/* Nivel 1: Empaque Mayor */}
+                      <div className="mb-3 p-2 bg-blue-50/50 rounded-lg border border-blue-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Box className="w-3.5 h-3.5 text-blue-600" />
+                          <span className="text-[10px] font-black text-blue-700 uppercase tracking-wider">Nivel 1 - Empaque Mayor</span>
                         </div>
-                        <div className="md:col-span-2 space-y-1">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Cant. Base</label>
-                          <input type="number" min="1" value={formData.quantityPerPackage || 1} onChange={e => setFormData({...formData, quantityPerPackage: parseInt(e.target.value) || 1})} className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold text-center" />
+                        <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
+                          <div className="md:col-span-4 space-y-1">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Tipo de Empaque</label>
+                            <select value={formData.packageId || ''} onChange={e => setFormData({...formData, packageId: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-1 text-xs font-bold bg-white">
+                              <option value="">--Sin empaque mayor--</option>
+                              {units.map(u => <option key={u.id} value={u.id}>{u.name} ({u.symbol || u.abbreviation})</option>)}
+                            </select>
+                          </div>
+                          <div className="md:col-span-2 space-y-1">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Contiene ({formData.subPackageId ? 'Nivel 2' : 'Unidad Base'})</label>
+                            <input 
+                              type="number" 
+                              min="1" 
+                              step="1"
+                              value={formData.quantityPerPackage || ''} 
+                              onChange={e => {
+                                const val = parseInt(e.target.value);
+                                setFormData({...formData, quantityPerPackage: val > 0 ? val : ''});
+                              }} 
+                              className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-black text-center bg-blue-50" 
+                              placeholder="Ej: 10"
+                            />
+                          </div>
                         </div>
-                        <div className="md:col-span-4 space-y-1 border-l border-slate-100 pl-4">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Sub Empaque</label>
-                          <select value={formData.subPackageId || ''} onChange={e => setFormData({...formData, subPackageId: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-1 text-xs font-bold bg-white">
-                            <option value="">--Ninguno--</option>
-                            {units.map(u => <option key={u.id} value={u.id}>{u.name} ({u.symbol || u.abbreviation})</option>)}
-                          </select>
+                      </div>
+
+                      {/* Nivel 2: Sub Empaque */}
+                      <div className="mb-3 p-2 bg-amber-50/50 rounded-lg border border-amber-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Layers className="w-3.5 h-3.5 text-amber-600" />
+                          <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider">Nivel 2 - Sub Empaque</span>
                         </div>
-                        <div className="md:col-span-2 space-y-1">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Cant. Sub</label>
-                          <input type="number" min="1" value={formData.quantityPerSubPackage || 1} onChange={e => setFormData({...formData, quantityPerSubPackage: parseInt(e.target.value) || 1})} className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold text-center" />
+                        <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
+                          <div className="md:col-span-4 space-y-1">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Tipo de Sub Empaque</label>
+                            <select value={formData.subPackageId || ''} onChange={e => setFormData({...formData, subPackageId: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-1 text-xs font-bold bg-white">
+                              <option value="">--Sin sub empaque--</option>
+                              {units.map(u => <option key={u.id} value={u.id}>{u.name} ({u.symbol || u.abbreviation})</option>)}
+                            </select>
+                          </div>
+                          <div className="md:col-span-2 space-y-1">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Contiene (Unidad Base)</label>
+                            <input 
+                              type="number" 
+                              min="1" 
+                              step="1"
+                              value={formData.quantityPerSubPackage || ''} 
+                              onChange={e => {
+                                const val = parseInt(e.target.value);
+                                setFormData({...formData, quantityPerSubPackage: val > 0 ? val : ''});
+                              }} 
+                              className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-black text-center bg-amber-50" 
+                              placeholder="Ej: 100"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Nivel 3: Unidad Base */}
+                      <div className="mb-3 p-2 bg-emerald-50/50 rounded-lg border border-emerald-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Package className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="text-[10px] font-black text-emerald-700 uppercase tracking-wider">Nivel 3 - Unidad Base</span>
+                          <span className="text-[9px] text-emerald-500 font-bold ml-auto">(Stock se maneja en esta unidad)</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
+                          <div className="md:col-span-6 space-y-1">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Unidad de Medida Base</label>
+                            <select value={formData.unitId} onChange={e => setFormData({...formData, unitId: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-1 text-xs font-bold bg-white">
+                              <option value="">--Seleccionar--</option>
+                              {units.map(u => <option key={u.id} value={u.id}>{u.name} ({u.symbol || u.abbreviation})</option>)}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Preview de conversión */}
+                      {(formData.packageId || formData.subPackageId) && (
+                        <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                          <button 
+                            type="button"
+                            onClick={() => setShowPackagingPreview(!showPackagingPreview)}
+                            className="w-full flex items-center justify-between text-[10px] font-black text-slate-600 uppercase tracking-wider"
+                          >
+                            <span className="flex items-center gap-2">
+                              <ChevronRight className={`w-3 h-3 transition-transform ${showPackagingPreview ? 'rotate-90' : ''}`} />
+                              Vista previa de conversión
+                            </span>
+                          </button>
+                          {showPackagingPreview && (
+                            <div className="mt-2 space-y-2 pt-2 border-t border-slate-200">
+                              <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                                {selectedPackage && (
+                                  <>
+                                    <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded">1 {selectedPackage.name}</span>
+                                    <ChevronRight className="w-3 h-3 text-slate-400" />
+                                    <span className="text-slate-500">=</span>
+                                    <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{formData.quantityPerPackage || 1} {selectedSubPackage?.name || selectedUnit?.name || 'un.'}</span>
+                                  </>
+                                )}
+                              </div>
+                              {selectedSubPackage && (
+                                <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                                  <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded">1 {selectedSubPackage.name}</span>
+                                  <ChevronRight className="w-3 h-3 text-slate-400" />
+                                  <span className="text-slate-500">=</span>
+                                  <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded">{formData.quantityPerSubPackage || 1} {selectedUnit?.name || 'un.'}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2 text-xs font-bold text-slate-700 pt-1 border-t border-slate-200">
+                                <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">Total:</span>
+                                <span>1 {selectedPackage?.name || selectedSubPackage?.name || 'empaque'} = </span>
+                                <span className="text-emerald-600 font-black text-base">{totalUnitsPerPackage}</span>
+                                <span>{selectedUnit?.name || 'unidades base'}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Errores de validación */}
+                      {packagingErrors.length > 0 && (
+                        <div className="mt-3 p-2 bg-red-50 rounded-lg border border-red-200 flex items-start gap-2">
+                          <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
+                          <div className="space-y-0.5">
+                            {packagingErrors.map((err, i) => (
+                              <p key={i} className="text-[9px] font-bold text-red-600">{err}</p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Peso y Volumen */}
+                      <div className="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 mt-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Peso (kg)</label>
+                          <input type="number" step="0.0001" min="0" value={formData.weight || ''} onChange={e => setFormData({...formData, weight: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold text-center bg-slate-50" placeholder="0.0000" />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Volumen (m³)</label>
+                          <input type="number" step="0.0001" min="0" value={formData.volume || ''} onChange={e => setFormData({...formData, volume: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold text-center bg-slate-50" placeholder="0.0000" />
                         </div>
                       </div>
                     </fieldset>

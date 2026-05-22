@@ -15,7 +15,7 @@ interface CustomerFormProps {
   editingItem: any;
   loading: boolean;
   documentTypes: any[];
-  handleConsultDocument: (type: string, number: string) => Promise<any>;
+  handleConsultDocument: () => Promise<void>;
 }
 
 export const CustomerForm: React.FC<CustomerFormProps> = ({
@@ -28,51 +28,7 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
     if (!formData.docNumber) return;
     setIsConsulting(true);
     try {
-      const data = await handleConsultDocument(formData.docType, formData.docNumber);
-      if (data) {
-        if (formData.docType === 'RUC') {
-          const address = data.direccion || data.direccion_completa || '';
-          let dept = data.departamento || data.department || '';
-          let prov = data.provincia || data.province || '';
-          let dist = data.distrito || data.district || '';
-
-          // Si los campos de ubicación vienen vacíos, intentar extraerlos del final de la dirección
-          // Formato común: "... LIMA LIMA COMAS"
-          if (!dept && address) {
-            const parts = address.trim().split(/\s+/);
-            if (parts.length >= 3) {
-              // Asumimos que los últimos 3 elementos son Dept, Prov, Dist
-              // Nota: Esto es heurístico para Perú
-              const potentialDist = parts[parts.length - 1].toUpperCase();
-              const potentialProv = parts[parts.length - 2].toUpperCase();
-              const potentialDept = parts[parts.length - 3].toUpperCase();
-
-              // Validar si al menos el departamento existe en nuestra data
-              if (DEPARTMENTS.some(d => d.name.toUpperCase() === potentialDept)) {
-                dept = potentialDept;
-                prov = potentialProv;
-                dist = potentialDist;
-              }
-            }
-          }
-
-          setFormData({
-            ...formData,
-            name: (data.razonSocial || data.nombre_o_razon_social || '').toUpperCase(),
-            address: address.toUpperCase(),
-            department: dept.toUpperCase(),
-            province: prov.toUpperCase(),
-            district: dist.toUpperCase()
-          });
-        } else {
-          setFormData({
-            ...formData,
-            firstName: (data.nombres || '').toUpperCase(),
-            lastName: `${data.apellidoPaterno || data.apellido_paterno || ''} ${data.apellidoMaterno || data.apellido_materno || ''}`.trim().toUpperCase(),
-            name: `${data.nombres || ''} ${data.apellidoPaterno || data.apellido_paterno || ''} ${data.apellidoMaterno || data.apellido_materno || ''}`.trim().toUpperCase()
-          });
-        }
-      }
+      await handleConsultDocument();
     } catch (err) {
       console.error(err);
     } finally {
@@ -167,9 +123,9 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
                     onChange={e => setFormData({...formData, docType: e.target.value})}
                     className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
                   >
-                    <option value="DNI">DNI (DOCUMENTO NACIONAL DE IDENTIDAD)</option>
-                    <option value="RUC">RUC (REGISTRO ÚNICO DE CONTRIBUYENTES)</option>
-                    <option value="CE">C.E. (CARNET DE EXTRANJERÍA)</option>
+                    {documentTypes.map(dt => (
+                      <option key={dt.code} value={dt.code}>{dt.code} - {dt.name}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="md:col-span-2 space-y-1.5">
@@ -313,13 +269,15 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
                     <select 
                       value={(() => {
                         const deptId = DEPARTMENTS.find(d => d.name.toUpperCase() === (formData.department || '').toUpperCase())?.id;
-                        const provId = deptId ? PROVINCES[deptId]?.find(p => p.name.toUpperCase() === (formData.province || '').toUpperCase())?.id : null;
-                        return provId ? (DISTRICTS[provId]?.find(d => d.name.toUpperCase() === (formData.district || '').toUpperCase())?.id || '') : '';
+                        const prov = deptId ? PROVINCES[deptId]?.find(p => p.name.toUpperCase() === (formData.province || '').toUpperCase()) : null;
+                        const fullProvId = deptId && prov ? deptId + prov.id : null;
+                        return fullProvId ? (DISTRICTS[fullProvId]?.find(d => d.name.toUpperCase() === (formData.district || '').toUpperCase())?.id || '') : '';
                       })()}
                       onChange={e => {
                         const deptId = DEPARTMENTS.find(d => d.name.toUpperCase() === (formData.department || '').toUpperCase())?.id;
-                        const provId = deptId ? PROVINCES[deptId]?.find(p => p.name.toUpperCase() === (formData.province || '').toUpperCase())?.id : null;
-                        const dist = provId ? DISTRICTS[provId]?.find(d => d.id === e.target.value) : null;
+                        const prov = deptId ? PROVINCES[deptId]?.find(p => p.name.toUpperCase() === (formData.province || '').toUpperCase()) : null;
+                        const fullProvId = deptId && prov ? deptId + prov.id : null;
+                        const dist = fullProvId ? DISTRICTS[fullProvId]?.find(d => d.id === e.target.value) : null;
                         setFormData({...formData, district: dist?.name || ''});
                       }}
                       className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded text-[11px] font-bold outline-none uppercase transition-all focus:border-blue-400"
@@ -328,8 +286,9 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({
                       <option value="">-- SELECCIONE --</option>
                       {(() => {
                         const deptId = DEPARTMENTS.find(d => d.name.toUpperCase() === (formData.department || '').toUpperCase())?.id;
-                        const provId = deptId ? PROVINCES[deptId]?.find(p => p.name.toUpperCase() === (formData.province || '').toUpperCase())?.id : null;
-                        return provId ? DISTRICTS[provId]?.map(d => <option key={d.id} value={d.id}>{d.name.toUpperCase()}</option>) : [];
+                        const prov = deptId ? PROVINCES[deptId]?.find(p => p.name.toUpperCase() === (formData.province || '').toUpperCase()) : null;
+                        const fullProvId = deptId && prov ? deptId + prov.id : null;
+                        return fullProvId ? DISTRICTS[fullProvId]?.map(d => <option key={d.id} value={d.id}>{d.name.toUpperCase()}</option>) : [];
                       })()}
                     </select>
                   </div>

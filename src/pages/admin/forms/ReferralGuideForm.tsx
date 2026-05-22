@@ -67,8 +67,8 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({ isOpen, on
         axios.get('/api/suppliers', config).catch(() => ({ data: [] })),
         axios.get('/api/products', config).catch(() => ({ data: [] })),
         axios.get('/api/warehouses', config).catch(() => ({ data: [] })),
-        axios.get('/api/sunat/doc_type', config).catch(() => ({ data: [] })),
-        axios.get('/api/sunat/currency', config).catch(() => ({ data: [] }))
+        axios.get('/api/sunat/TABLA_02', config).catch(() => ({ data: [] })),
+        axios.get('/api/sunat/TABLA_04', config).catch(() => ({ data: [] }))
       ]);
       
       setSuppliers(Array.isArray(sRes.data) ? sRes.data : []);
@@ -118,7 +118,7 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({ isOpen, on
     setFormData((prev: any) => ({
       ...prev,
       items: [...(prev.items || []), { 
-        productId: p.id, name: p.name, code: p.code, unitSymbol: p.unit?.symbol || 'UND',
+        productId: p.id, name: p.name, code: p.code, unitSymbol: p.package?.symbol || p.subPackage?.symbol || p.unit?.symbol || 'UND',
         quantity: 1, 
         price: p.costPrice || 0, // Guía puede tener costo referencial
         lotNumber: '', 
@@ -230,9 +230,7 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({ isOpen, on
                 <div className="col-span-12 lg:col-span-3 flex flex-col gap-1">
                   <label className="font-black text-slate-500 uppercase text-[9px]">Moneda:</label>
                   <select value={formData.currency} onChange={e => setFormData({...formData, currency: e.target.value})} className="w-full h-7 bg-slate-50 border border-slate-200 px-2 outline-none font-black text-blue-600">
-                    <option value="PEN">SOLES</option>
-                    <option value="USD">DÓLARES</option>
-                    {currencies.filter(c => c.code !== 'PEN' && c.code !== 'USD').map(c => <option key={c.code} value={c.code}>{c.name.toUpperCase()}</option>)}
+                    {currencies.map(c => <option key={c.code} value={c.code}>{c.name.toUpperCase()}</option>)}
                   </select>
                 </div>
 

@@ -51,7 +51,7 @@ export default function PickingTicketPrint({ order }: { order: PickingOrder }) {
     doc.write(`
       <html>
       <head>
-        <title>Ticket Picking #PED-${order.id}</title>
+        <title>Ticket Picking #PED-${order.docSeries || ''}${order.docNumber ? '-' + order.docNumber : order.id}</title>
         <style>
           @page { margin: 10mm; }
           body { font-family: 'Courier New', monospace; margin: 0; padding: 12px; font-size: 12px; color: #111; }
@@ -74,7 +74,7 @@ export default function PickingTicketPrint({ order }: { order: PickingOrder }) {
       <body>
         <div class="header">
           <h1>🎯 Ticket de Picking</h1>
-          <div class="meta">#PED-${order.id}${order.docSeries ? ' / ' + order.docSeries + '-' + order.docNumber : ''}</div>
+          <div class="meta">#PED-${order.docSeries || ''}${order.docNumber ? '-' + order.docNumber : order.id}</div>
           <div class="badge">PREPARACIÓN DE PEDIDO</div>
         </div>
 

@@ -68,8 +68,8 @@ export const AgencyForm: React.FC<AgencyFormProps> = ({
         const diName = data.distrito || data.district || '';
         
         const deptId = getDeptId(dName);
-        const provId = getProvId(deptId, pName);
-        const distId = getDistId(provId, diName);
+        const provId = getProvId(pName);
+        const distId = getDistId(diName);
 
         setFormData({
           ...formData,

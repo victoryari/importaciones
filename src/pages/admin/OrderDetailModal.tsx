@@ -43,7 +43,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ isOpen, onCl
           >
             <div className="bg-blue-800 px-6 py-4 flex items-center justify-between">
               <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5" /> Pedido #PED-{order.id}
+                <ShoppingCart className="w-5 h-5" /> Pedido #PED-{order.docSeries || ''}{order.docNumber ? `-${order.docNumber}` : order.id}
               </h2>
               <button onClick={onClose} className="hover:bg-red-500 text-white p-1.5 rounded-lg transition-colors"><X className="w-5 h-5" /></button>
             </div>

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Heart, Eye, SearchX, X, ChevronRight, Loader2, CheckCircle2 } from 'lucide-react';
+import { ShoppingCart, Heart, Eye, SearchX, X, ChevronRight, Loader2, CheckCircle2, Box, Layers } from 'lucide-react';
 import ProductCard from './ProductCard';
-import { cn } from '../lib/utils';
+import { cn, calculateTotalUnitsPerPackage } from '../lib/utils';
 import { PRODUCTS as STATIC_PRODUCTS } from '../constants';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCart } from '../context/CartContext';
@@ -19,9 +19,15 @@ interface Product {
   isActive?: boolean;
   showInWeb?: boolean;
   brand?: { name: string };
-  unit?: { symbol: string };
+  unit?: { name?: string; symbol?: string };
+  package?: { name?: string; symbol?: string };
+  subPackage?: { name?: string; symbol?: string };
+  quantityPerPackage?: number;
+  quantityPerSubPackage?: number;
   description?: string;
   features?: string;
+  weight?: number;
+  volume?: number;
 }
 
 interface ProductGridProps {
@@ -251,6 +257,54 @@ export default function ProductGrid({ forceCategory, limit, maxPrice, hideHeader
                         <p className="text-sm text-slate-500 font-medium mt-2 flex items-center gap-2">
                           Marca: <span className="font-bold text-slate-800">{selectedProduct.brand.name}</span>
                         </p>
+                      )}
+                      {(selectedProduct.package?.name || selectedProduct.subPackage?.name) && (
+                        <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <Box className="w-3 h-3" />
+                            Empaque
+                          </p>
+                          <div className="space-y-1">
+                            {selectedProduct.package?.name && (
+                              <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                                <Box className="w-3.5 h-3.5 text-blue-500" />
+                                <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded">1 {selectedProduct.package.name}</span>
+                                <span className="text-slate-400">=</span>
+                                <span className="text-blue-600">{selectedProduct.quantityPerPackage || 1}</span>
+                                <span>{selectedProduct.subPackage?.name || selectedProduct.unit?.name || 'un.'}</span>
+                              </div>
+                            )}
+                            {selectedProduct.subPackage?.name && (
+                              <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                                <Layers className="w-3.5 h-3.5 text-amber-500" />
+                                <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded">1 {selectedProduct.subPackage.name}</span>
+                                <span className="text-slate-400">=</span>
+                                <span className="text-amber-600">{selectedProduct.quantityPerSubPackage || 1}</span>
+                                <span>{selectedProduct.unit?.name || 'un.'}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2 pt-1 border-t border-slate-200 mt-1">
+                              <span className="text-[10px] font-black text-emerald-600">Total:</span>
+                              <span className="text-xs font-black text-emerald-600">
+                                1 {selectedProduct.package?.name || selectedProduct.subPackage?.name || 'empaque'} = {calculateTotalUnitsPerPackage({ quantityPerPackage: selectedProduct.quantityPerPackage, quantityPerSubPackage: selectedProduct.quantityPerSubPackage })} {selectedProduct.unit?.name || 'un.'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {(selectedProduct.weight || selectedProduct.volume) && (
+                        <div className="flex gap-4 mt-3">
+                          {selectedProduct.weight && (
+                            <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+                              Peso: {Number(selectedProduct.weight).toFixed(4)} kg
+                            </span>
+                          )}
+                          {selectedProduct.volume && (
+                            <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+                              Volumen: {Number(selectedProduct.volume).toFixed(4)} m³
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
 

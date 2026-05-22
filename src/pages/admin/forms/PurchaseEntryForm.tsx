@@ -78,8 +78,8 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({ isOpen, onClose
         axios.get('/api/suppliers', config).catch(() => ({ data: [] })),
         axios.get('/api/products', config).catch(() => ({ data: [] })),
         axios.get('/api/warehouses', config).catch(() => ({ data: [] })),
-        axios.get('/api/sunat/doc_type', config).catch(() => ({ data: [] })),
-        axios.get('/api/sunat/currency', config).catch(() => ({ data: [] }))
+        axios.get('/api/sunat/TABLA_02', config).catch(() => ({ data: [] })),
+        axios.get('/api/sunat/TABLA_04', config).catch(() => ({ data: [] }))
       ]);
       
       setSuppliers(Array.isArray(sRes.data) ? sRes.data : []);
@@ -139,7 +139,7 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({ isOpen, onClose
               productId: it.productId,
               name: it.product?.name || it.name || 'PRODUCTO SIN NOMBRE',
               code: it.product?.code || it.code || 'S/C',
-              unitSymbol: it.unitSymbol || it.product?.unit?.symbol || 'UND',
+              unitSymbol: it.unitSymbol || it.product?.package?.symbol || it.product?.subPackage?.symbol || it.product?.unit?.symbol || 'UND',
               quantity: it.quantity,
               price: formData.afectoIgv ? (formData.preciosIncluyenIgv ? price : valor + igv) : valor,
               valorCompra: valor,
@@ -193,7 +193,7 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({ isOpen, onClose
     setFormData((prev: any) => ({
       ...prev,
       items: [...(prev.items || []), { 
-        productId: p.id, name: p.name, code: p.code, unitSymbol: p.unit?.symbol || 'UND',
+        productId: p.id, name: p.name, code: p.code, unitSymbol: p.package?.symbol || p.subPackage?.symbol || p.unit?.symbol || 'UND',
         quantity: 1, 
         price: precio,
         valorCompra: valor,

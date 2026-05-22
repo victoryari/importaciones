@@ -15,6 +15,8 @@ interface Order {
   id: number;
   customerName: string;
   totalAmount: number;
+  docSeries?: string;
+  docNumber?: string;
   payments?: Payment[];
 }
 
@@ -78,7 +80,7 @@ export default function PaymentForm({ isOpen, onClose, order, onSubmit, onDelete
             <div className="p-6 bg-blue-900 text-white flex justify-between items-center">
               <div>
                 <h2 className="text-xl font-black">Gestionar Cobros</h2>
-                <p className="text-blue-300 text-xs font-bold uppercase tracking-widest">Pedido #PED-{order.id} • {order.customerName}</p>
+                <p className="text-blue-300 text-xs font-bold uppercase tracking-widest">Pedido #PED-{order.docSeries || ''}{order.docNumber ? `-${order.docNumber}` : order.id} • {order.customerName}</p>
               </div>
               <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
                 <X className="w-6 h-6" />

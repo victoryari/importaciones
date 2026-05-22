@@ -68,6 +68,8 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
   IN_PICKING: { label: 'En Preparación', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: PackageSearch },
   PICKED: { label: 'Preparado', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
   DISPATCHED: { label: 'Despachado', color: 'bg-slate-100 text-slate-700 border-slate-200', icon: Truck },
+  IN_TRANSIT: { label: 'En Tránsito', color: 'bg-purple-100 text-purple-700 border-purple-200', icon: Truck },
+  DELIVERED: { label: 'Entregado', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
 };
 
 export default function WarehousePickingModule() {
@@ -289,6 +291,12 @@ export default function WarehousePickingModule() {
           {orders.filter(o => o.warehouseStatus === 'IN_PICKING').length} en preparación
           {' · '}
           {orders.filter(o => o.warehouseStatus === 'PICKED').length} preparados
+          {' · '}
+          {orders.filter(o => o.warehouseStatus === 'DISPATCHED').length} despachados
+          {' · '}
+          {orders.filter(o => o.warehouseStatus === 'IN_TRANSIT').length} en tránsito
+          {' · '}
+          {orders.filter(o => o.warehouseStatus === 'DELIVERED').length} entregados
         </p>
       )}
 
@@ -424,7 +432,7 @@ export default function WarehousePickingModule() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className="text-lg font-black text-slate-800">#PED-{order.id}</span>
+                      <span className="text-lg font-black text-slate-800">#PED-{order.docSeries || ''}{order.docNumber ? `-${order.docNumber}` : order.id}</span>
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${cfg.color}`}>
                         <StatusIcon className="w-3.5 h-3.5" />
                         {cfg.label}
@@ -522,7 +530,7 @@ export default function WarehousePickingModule() {
                 <div>
                   <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
                     <Package className="w-6 h-6 text-blue-600" />
-                    Pedido #PED-{selectedOrder.id}
+                    Pedido #PED-{selectedOrder.docSeries || ''}{selectedOrder.docNumber ? `-${selectedOrder.docNumber}` : selectedOrder.id}
                   </h2>
                   <p className="text-sm text-slate-500">{formatDate(selectedOrder.createdAt)}</p>
                 </div>
@@ -559,12 +567,12 @@ export default function WarehousePickingModule() {
                       <div className="flex items-center gap-2 text-sm">
                         <FileText className="w-4 h-4 text-slate-400 shrink-0" />
                         <span className="text-slate-500">Pedido:</span>
-                        <span className="font-bold text-slate-800">#PED-{selectedOrder.id}</span>
+                        <span className="font-bold text-slate-800">#PED-{selectedOrder.docSeries || ''}{selectedOrder.docNumber ? `-${selectedOrder.docNumber}` : selectedOrder.id}</span>
                       </div>
                       {(selectedOrder.docSeries || selectedOrder.docNumber) && (
                         <div className="flex items-center gap-2 text-sm">
                           <ScrollText className="w-4 h-4 text-slate-400 shrink-0" />
-                          <span className="text-slate-500">{selectedOrder.docType === 'FACT' ? 'Factura' : 'Documento'}:</span>
+                          <span className="text-slate-500">{selectedOrder.docType === '01' ? 'Factura' : 'Documento'}:</span>
                           <span className="font-bold text-slate-800">{selectedOrder.docSeries || ''}{selectedOrder.docNumber ? `-${selectedOrder.docNumber}` : ''}</span>
                         </div>
                       )}
@@ -741,7 +749,7 @@ export default function WarehousePickingModule() {
               <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
                 <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
                   <Truck className="w-5 h-5 text-orange-600" />
-                  Despachar Pedido #PED-{dispatchModal.id}
+                  Despachar Pedido #PED-{dispatchModal.docSeries || ''}{dispatchModal.docNumber ? `-${dispatchModal.docNumber}` : dispatchModal.id}
                 </h3>
                 <button
                   onClick={() => setDispatchModal(null)}

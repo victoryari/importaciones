@@ -3,6 +3,16 @@ import autoTable from 'jspdf-autotable';
 import axios from 'axios';
 import { formatNumber } from './utils';
 
+const currencyNames: Record<string, string> = {
+  'PEN': 'SOLES',
+  'USD': 'DÓLARES AMERICANOS',
+  'EUR': 'EUROS',
+  'GBP': 'LIBRAS ESTERLINAS',
+  'CNY': 'YUAN CHINO'
+};
+
+const getCurrencyName = (code: string) => currencyNames[code] || code;
+
 export const generateQuotationPDF = async (quotation: any, items: any[], action: 'save' | 'print' = 'save') => {
   console.log(`Iniciando generación de PDF Profesional (${action})...`);
   try {
@@ -91,7 +101,7 @@ export const generateQuotationPDF = async (quotation: any, items: any[], action:
     doc.setFont("helvetica", "bold");
     doc.text("Moneda:", pageWidth - 80, 79);
     doc.setFont("helvetica", "normal");
-    doc.text(quotation.currency === 'USD' ? 'DÓLARES AMERICANOS' : 'SOLES', pageWidth - 45, 79);
+    doc.text(getCurrencyName(quotation.currency), pageWidth - 45, 79);
 
     // --- TABLA DE PRODUCTOS ---
     const tableData = (items || []).map((item, index) => [
@@ -395,9 +405,9 @@ export const generateInvoicePDF = async (invoice: any, items: any[], action: 'sa
     doc.text(`R.U.C. ${settings.company_ruc || "20126500603"}`, boxX + boxW / 2, boxY + 6.5, { align: 'center' });
     
     let docTypeName = 'COMPROBANTE ELECTRÓNICO';
-    if (invoice.documentType === 'FACT') docTypeName = 'FACTURA ELECTRÓNICA';
-    else if (invoice.documentType === 'BOOL') docTypeName = 'BOLETA DE VENTA ELECTRÓNICA';
-    else if (invoice.documentType === 'NCRE') docTypeName = 'NOTA DE CRÉDITO ELECTRÓNICA';
+    if (invoice.documentType === '01') docTypeName = 'FACTURA ELECTRÓNICA';
+    else if (invoice.documentType === '03') docTypeName = 'BOLETA DE VENTA ELECTRÓNICA';
+    else if (invoice.documentType === '07') docTypeName = 'NOTA DE CRÉDITO ELECTRÓNICA';
     
     doc.setFontSize(8);
     doc.text(docTypeName, boxX + boxW / 2, boxY + 13, { align: 'center' });
@@ -473,7 +483,7 @@ export const generateInvoicePDF = async (invoice: any, items: any[], action: 'sa
     // Valores Fila 2 (y = 76.5)
     doc.text(new Date(invoice.issueDate || Date.now()).toLocaleDateString(), margin + 20, 76.5, { align: 'center' });
     
-    const currencyLabel = invoice.currency === 'USD' || invoice.currency === '2' ? 'DÓLARES' : 'SOLES';
+    const currencyLabel = getCurrencyName(invoice.currency === '2' ? 'USD' : invoice.currency);
     doc.text(currencyLabel.toUpperCase(), margin + 55, 76.5, { align: 'center' });
     
     const sellerName = invoice.seller?.name || invoice.sellerName || "-";
@@ -552,7 +562,7 @@ export const generateInvoicePDF = async (invoice: any, items: any[], action: 'sa
     const discount = Number(invoice.totalDiscount || 0);
     const igvPercent = Number(invoice.igvPercent || 18);
 
-    const currencyText = invoice.currency === 'USD' || invoice.currency === '2' ? 'DÓLARES AMERICANOS' : 'SOLES';
+    const currencyText = getCurrencyName(invoice.currency === '2' ? 'USD' : invoice.currency);
     const letters = `SON : ${numeroALetras(total)} ${currencyText}`;
     
     doc.setDrawColor(120, 120, 120);
@@ -577,7 +587,7 @@ export const generateInvoicePDF = async (invoice: any, items: any[], action: 'sa
     const labelW = 26;
     const valueW = 35;
     const rowH = 6.2;
-    const currencySymbol = invoice.currency === 'USD' || invoice.currency === '2' ? '$' : 'S/';
+    const currencySymbol = (invoice.currency === '2' ? 'USD' : invoice.currency) === 'USD' ? '$' : 'S/';
     
     const totalsList = [
       { label: "DESCUENTOS", value: `${currencySymbol} ${formatNumber(discount)}` },

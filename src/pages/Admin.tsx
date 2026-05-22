@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, Package, Save, Image as ImageIcon, Settings as SettingsIcon, LogOut, Trash2, X, CheckCircle, FileText, BarChart3, Star, ShoppingCart, Truck, DollarSign, User, MapPin, Hash, ArrowRightLeft, Building2, Users, ShieldCheck, PackageSearch, ChevronDown, Receipt } from 'lucide-react';
+import { LayoutDashboard, Package, Save, Image as ImageIcon, Settings as SettingsIcon, LogOut, Trash2, X, CheckCircle, AlertCircle, FileText, BarChart3, Star, ShoppingCart, Truck, DollarSign, User, MapPin, Hash, ArrowRightLeft, Building2, Users, ShieldCheck, PackageSearch, ChevronDown, Receipt } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { SettingsModule } from './admin/SettingsModule';
 import { ExchangeRateModule } from './admin/ExchangeRateModule';
@@ -21,6 +21,7 @@ import { TransferModule } from './admin/TransferModule';
 import { SupplierModule } from './admin/SupplierModule';
 import { RoleModule } from './admin/RoleModule';
 import { UserModule } from './admin/UserModule';
+import { AdvancedLogisticsModule } from './admin/AdvancedLogisticsModule';
 
 // Formularios
 import { QuotationForm } from './admin/forms/QuotationForm';
@@ -48,7 +49,7 @@ import { getDeptId, getProvId, getDistId } from '../lib/ubigeoData';
 interface Category { id: number; name: string; slug: string; image?: string; isFeatured: boolean; _count?: { products: number }; }
 interface Brand { id: number; name: string; logo?: string; _count?: { products: number }; }
 interface Unit { id: number; name: string; symbol: string; }
-interface Product { id: number; code?: string; name: string; slug: string; weight?: string; description?: string; features?: string; sanitaryRegister?: string; certificate?: string; igv: number; costPrice: number; salePrice: number; minSalePrice?: number; maxSalePrice?: number; stock: number; images?: string[]; isActive: boolean; categoryId: number; category?: { name: string }; brandId?: number; brand?: { name: string }; unitId?: number; unit?: { name: string; symbol: string }; showInWeb: boolean; manageLots: boolean; useExpiryDate: boolean; }
+interface Product { id: number; code?: string; name: string; slug: string; weight?: number; volume?: number; description?: string; features?: string; sanitaryRegister?: string; certificate?: string; igv: number; costPrice: number; salePrice: number; minSalePrice?: number; maxSalePrice?: number; stock: number; images?: string[]; isActive: boolean; categoryId: number; category?: { name: string }; brandId?: number; brand?: { name: string }; unitId?: number; unit?: { name?: string; symbol?: string }; packageId?: number; package?: { name?: string; symbol?: string }; subPackageId?: number; subPackage?: { name?: string; symbol?: string }; quantityPerPackage?: number; quantityPerSubPackage?: number; showInWeb: boolean; manageLots: boolean; useExpiryDate: boolean; }
 interface Order { id: number; customerName: string; customerEmail?: string; customerPhone: string; totalAmount: number; status: string; createdAt: string; items: any[]; paymentStatus: string; }
 interface Customer { id: number; code?: string; name: string; personType: string; docType: string; docNumber: string; address?: string; phone?: string; email?: string; country: string; department?: string; province?: string; district?: string; firstName?: string; lastName?: string; }
 interface Quotation { id: number; customerName: string; totalAmount: number; status: string; createdAt: string; items: any[]; exchangeRate: number; docSeries?: string; docNumber?: string; customerDocNumber?: string; customerPhone?: string; customerAddress?: string; currency?: string; pickupPlace?: string; sellerId?: number; customerId?: number; }
@@ -115,6 +116,7 @@ export default function Admin() {
   };
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   const [editingItem, setEditingItem] = useState<any>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -157,6 +159,7 @@ export default function Admin() {
     globalDiscount: 0,
     billingStatus: 'SIN FACTURAR',
     agencyId: '',
+    branchId: '',
     purchaseOrder: '',
     requirementNumber: '',
     priceIncludesIgv: true,
@@ -170,7 +173,7 @@ export default function Admin() {
   const initialAgencyData = { name: '', ruc: '', address: '', legalAddress: '', phone: '', email: '', contact: '', department: '', province: '', district: '', zoneId: '', isActive: true, branches: [] };
   const initialSeriesData = { documentType: 'COT', series: '', currentNumber: 0, warehouseId: '', isActive: true };
   const initialInvoiceData = {
-    documentType: 'FACT', series: '', docSeries: '', docNumber: '', seriesId: '',
+    documentType: '01', series: '', docSeries: '', docNumber: '', seriesId: '',
     customerName: '', customerDocType: 'DNI', customerDocNumber: '', customerAddress: '',
     customerEmail: '', customerPhone: '', customerId: '',
     issueDate: new Date().toISOString().split('T')[0],
@@ -233,6 +236,7 @@ export default function Admin() {
   }, [quotationFormData.date, isQuotationModalOpen, view, quotationFormData.currency]);
 
   const showSuccess = (msg: string) => { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(''), 3000); };
+  const showError = (msg: string) => { setErrorMsg(msg); setTimeout(() => setErrorMsg(''), 4000); };
 
   const handleResetQuotationForm = () => {
     setQuotationFormData(initialQuotationData);
@@ -253,14 +257,24 @@ export default function Admin() {
 
   const addQuotationItem = (p: any) => {
     if (!quotationItems.find(i => i.productId === p.id)) {
-      // --- Lógica PEPS (FIFO) Global (Solo Almacenes Principales) ---
       const validRecords = (p.stockRecords || []).filter((sr: any) => {
         const isTransitory = sr.warehouseId === 6 || sr.warehouse?.type?.toUpperCase() === 'TRANSITORIO';
         return sr.quantity > 0 && !isTransitory;
       });
       
-      // Ordenar por ID (FIFO)
       const oldestLot = validRecords.sort((a: any, b: any) => a.id - b.id)[0];
+
+      // Construir lista de unidades de medida jerárquicas
+      const unitOptions: any[] = [];
+      if (p.subPackage) {
+        unitOptions.push({ symbol: p.subPackage.symbol, name: p.subPackage.name, qtyPerBase: p.quantityPerSubPackage * p.quantityPerPackage });
+      }
+      if (p.package) {
+        unitOptions.push({ symbol: p.package.symbol, name: p.package.name, qtyPerBase: p.quantityPerPackage });
+      }
+      if (p.unit) {
+        unitOptions.push({ symbol: p.unit.symbol, name: p.unit.name, qtyPerBase: 1 });
+      }
 
       setQuotationItems([...quotationItems, {
         productId: p.id,
@@ -270,7 +284,12 @@ export default function Admin() {
         quantity: 1,
         discount: 0,
         unit: p.unit,
-        unitMeasure: p.unit?.symbol || 'UND',
+        package: p.package,
+        subPackage: p.subPackage,
+        quantityPerPackage: p.quantityPerPackage || 1,
+        quantityPerSubPackage: p.quantityPerSubPackage || 1,
+        unitMeasure: p.package?.symbol || p.subPackage?.symbol || p.unit?.symbol || 'UND',
+        unitOptions,
         lot: oldestLot?.lotNumber || oldestLot?.lot || null,
         warehouseName: oldestLot?.warehouse?.name || 'S/A',
         expiryDate: oldestLot?.expiryDate || null,
@@ -298,9 +317,9 @@ export default function Admin() {
       const endpoints = [
         '/api/categories', '/api/brands', '/api/units', '/api/products', 
         '/api/orders', '/api/quotations', '/api/customers', '/api/shipping-agencies', 
-        '/api/shipping-zones', '/api/sunat/document_type', '/api/stats', '/api/exchange-rates',
-        '/api/sellers', '/api/warehouses', '/api/sunat/currency', 
-        '/api/sunat/payment_condition', '/api/sunat/operation_type', '/api/sunat/igv_affectation_type', '/api/sunat/doc_type', '/api/series', '/api/purchases', '/api/movements', '/api/suppliers', '/api/stock', '/api/document-types', '/api/invoices'
+        '/api/shipping-zones', '/api/sunat/TABLA_02', '/api/stats', '/api/exchange-rates',
+        '/api/sellers', '/api/warehouses', '/api/sunat/TABLA_04', 
+        '/api/sunat/CAT_PAY', '/api/sunat/CAT_51', '/api/sunat/TABLA_12', '/api/sunat/TABLA_10', '/api/series', '/api/purchases', '/api/movements', '/api/suppliers', '/api/stock', '/api/document-types', '/api/invoices'
       ];
       const responses = await Promise.all(endpoints.map(url => axios.get(url, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] }))));
       setCategories(responses[0].data); 
@@ -412,20 +431,34 @@ export default function Admin() {
             exchangeRate: item.exchangeRate || '1.000',
             issueDate: new Date().toISOString().split('T')[0],
             notes: item.notes || '',
-            documentType: 'FACT',
+            documentType: '01',
           });
-          setQuotationItems(item.items?.map((i: any) => ({
-            productId: i.productId,
-            name: i.product?.name || i.name || 'Producto',
-            code: i.product?.code || i.code || '',
-            price: Number(i.price || 0),
-            quantity: Number(i.quantity || 0),
-            discount: Number(i.discount || 0),
-            unitMeasure: i.product?.unit?.symbol || i.product?.unit?.name || 'UND',
-            priceType: i.priceType || 'PRICE1',
-            lotNumber: i.lotNumber || '',
-            unit: i.product?.unit || { symbol: 'UND' },
-          })) || []);
+          setQuotationItems(item.items?.map((i: any) => {
+            const prod = i.product || {};
+            const unitOptions: any[] = [];
+            if (prod.subPackage) {
+              unitOptions.push({ symbol: prod.subPackage.symbol, name: prod.subPackage.name, qtyPerBase: (prod.quantityPerSubPackage || 1) * (prod.quantityPerPackage || 1) });
+            }
+            if (prod.package) {
+              unitOptions.push({ symbol: prod.package.symbol, name: prod.package.name, qtyPerBase: prod.quantityPerPackage || 1 });
+            }
+            if (prod.unit) {
+              unitOptions.push({ symbol: prod.unit.symbol, name: prod.unit.name, qtyPerBase: 1 });
+            }
+            return {
+              productId: i.productId,
+              name: prod.name || i.name || 'Producto',
+              code: prod.code || i.code || '',
+              price: Number(i.price || 0),
+              quantity: Number(i.quantity || 0),
+              discount: Number(i.discount || 0),
+              unitOptions,
+              unitMeasure: i.unitMeasure || prod.package?.symbol || prod.subPackage?.symbol || prod.unit?.symbol || 'UND',
+              priceType: i.priceType || 'PRICE1',
+              lotNumber: i.lotNumber || '',
+              unit: prod.unit || { symbol: 'UND' },
+            };
+          }) || []);
         } else {
           // Edit existing invoice
           const matchingSeries = series.find(s => s.series === item.series && s.documentType === item.documentType);
@@ -439,18 +472,32 @@ export default function Admin() {
             sellerId: item.sellerId?.toString() || '',
             customerId: item.customerId?.toString() || '',
           });
-          setQuotationItems(item.items?.map((i: any) => ({
-            productId: i.productId,
-            name: i.product?.name || i.name || 'Producto',
-            code: i.product?.code || i.code || '',
-            price: Number(i.price || 0),
-            quantity: Number(i.quantity || 0),
-            discount: Number(i.discount || 0),
-            unitMeasure: i.unitMeasure || 'UND',
-            priceType: i.priceType || 'PRICE1',
-            lotNumber: i.lotNumber || '',
-            unit: i.product?.unit || { symbol: 'UND' },
-          })) || []);
+          setQuotationItems(item.items?.map((i: any) => {
+            const prod = i.product || {};
+            const unitOptions: any[] = [];
+            if (prod.subPackage) {
+              unitOptions.push({ symbol: prod.subPackage.symbol, name: prod.subPackage.name, qtyPerBase: (prod.quantityPerSubPackage || 1) * (prod.quantityPerPackage || 1) });
+            }
+            if (prod.package) {
+              unitOptions.push({ symbol: prod.package.symbol, name: prod.package.name, qtyPerBase: prod.quantityPerPackage || 1 });
+            }
+            if (prod.unit) {
+              unitOptions.push({ symbol: prod.unit.symbol, name: prod.unit.name, qtyPerBase: 1 });
+            }
+            return {
+              productId: i.productId,
+              name: prod.name || i.name || 'Producto',
+              code: prod.code || i.code || '',
+              price: Number(i.price || 0),
+              quantity: Number(i.quantity || 0),
+              discount: Number(i.discount || 0),
+              unitOptions,
+              unitMeasure: i.unitMeasure || prod.package?.symbol || prod.subPackage?.symbol || prod.unit?.symbol || 'UND',
+              priceType: i.priceType || 'PRICE1',
+              lotNumber: i.lotNumber || '',
+              unit: prod.unit || { symbol: 'UND' },
+            };
+          }) || []);
         }
       } else {
         setInvoiceFormData({
@@ -474,10 +521,13 @@ export default function Admin() {
             productId: i.productId,
             name: i.product?.name || 'Producto',
             code: i.product?.code || '',
-            unitSymbol: i.product?.unit?.symbol || 'UND',
+            unitSymbol: i.unitSymbol || i.product?.package?.symbol || i.product?.subPackage?.symbol || i.product?.unit?.symbol || 'UND',
             quantity: i.quantity,
             price: i.price,
-            lotNumber: i.lotNumber || ''
+            lotNumber: i.lotNumber || '',
+            seriesNumber: i.seriesNumber || '',
+            expiryDate: i.expiryDate ? i.expiryDate.split('T')[0] : '',
+            observation: i.observation || ''
           })) || []
         });
       } else {
@@ -500,9 +550,8 @@ export default function Admin() {
       });
       setIsTransferModalOpen(true);
     }
-    else if (type === 'quotations' || type === 'orders') { 
+    else if (type === 'quotations') { 
       if (item) {
-        // Mapeo explícito para asegurar que los campos coincidan con lo que QuotationForm espera
         setQuotationFormData({
           ...initialQuotationData,
           ...item,
@@ -518,33 +567,108 @@ export default function Admin() {
           sellerId: item.sellerId?.toString() || '',
           customerId: item.customerId?.toString() || '',
           agencyId: item.agencyId?.toString() || '',
-          docType: type === 'quotations' ? 'COT' : (type === 'orders' ? 'PED' : (item.docType || 'COT')),
+          docType: 'COT',
           date: item.createdAt?.split('T')[0] || item.date || new Date().toISOString().split('T')[0],
           expiryDate: item.dueDate?.split('T')[0] || item.expiryDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         });
         
-        setQuotationItems(item.items?.map((i: any) => ({
-          productId: i.productId,
-          name: i.product?.name || i.name || 'Producto',
-          code: i.product?.code || i.code || '',
-          price: Number(i.price || 0),
-          quantity: Number(i.quantity || 0),
-          discount: Number(i.discount || 0),
-          unit: i.product?.unit,
-          unitMeasure: i.unitMeasure || i.product?.unit?.symbol || 'UND',
-          lot: i.lotNumber || i.lot || null,
-          warehouseName: i.warehouseName || null,
-          expiryDate: i.expiryDate || null,
-          stockRecords: i.product?.stockRecords || []
-        })) || []);
+        setQuotationItems(item.items?.map((i: any) => {
+          const prod = i.product || {};
+          const unitOptions: any[] = [];
+          if (prod.subPackage) {
+            unitOptions.push({ symbol: prod.subPackage.symbol, name: prod.subPackage.name, qtyPerBase: (prod.quantityPerSubPackage || 1) * (prod.quantityPerPackage || 1) });
+          }
+          if (prod.package) {
+            unitOptions.push({ symbol: prod.package.symbol, name: prod.package.name, qtyPerBase: prod.quantityPerPackage || 1 });
+          }
+          if (prod.unit) {
+            unitOptions.push({ symbol: prod.unit.symbol, name: prod.unit.name, qtyPerBase: 1 });
+          }
+          return {
+            productId: i.productId,
+            name: prod.name || i.name || 'Producto',
+            code: prod.code || i.code || '',
+            price: Number(i.price || 0),
+            quantity: Number(i.quantity || 0),
+            discount: Number(i.discount || 0),
+            unit: prod.unit,
+            package: prod.package,
+            subPackage: prod.subPackage,
+            quantityPerPackage: prod.quantityPerPackage || 1,
+            quantityPerSubPackage: prod.quantityPerSubPackage || 1,
+            unitOptions,
+            unitMeasure: i.unitMeasure || prod.package?.symbol || prod.subPackage?.symbol || prod.unit?.symbol || 'UND',
+            lot: i.lotNumber || i.lot || null,
+            warehouseName: i.warehouseName || null,
+            expiryDate: i.expiryDate || null,
+            stockRecords: prod.stockRecords || []
+          };
+        }) || []);
       } else {
-        setQuotationFormData({
-          ...initialQuotationData,
-          docType: type === 'quotations' ? 'COT' : (type === 'orders' ? 'PED' : 'COT')
-        });
+        setQuotationFormData({ ...initialQuotationData, docType: 'COT' });
         setQuotationItems([]);
       }
       setIsQuotationModalOpen(true); 
+    }
+    else if (type === 'orders') { 
+      if (item) {
+        setQuotationFormData({
+          ...initialQuotationData,
+          ...item,
+          id: item.id,
+          ruc: item.customerDocNumber || item.ruc || '',
+          razonSocial: item.customerName || item.razonSocial || '',
+          address: item.customerAddress || item.address || '',
+          observation: item.notes || item.observation || '',
+          flete: item.shippingCost || item.flete || 0,
+          igvPercent: item.igvPercent || 18,
+          pickupPlace: item.pickupPlace?.toString() || '',
+          currency: item.currency || '1',
+          sellerId: item.sellerId?.toString() || '',
+          customerId: item.customerId?.toString() || '',
+          agencyId: item.agencyId?.toString() || '',
+          docType: 'PED',
+          date: item.createdAt?.split('T')[0] || item.date || new Date().toISOString().split('T')[0],
+          expiryDate: item.dueDate?.split('T')[0] || item.expiryDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        });
+        
+        setQuotationItems(item.items?.map((i: any) => {
+          const prod = i.product || {};
+          const unitOptions: any[] = [];
+          if (prod.subPackage) {
+            unitOptions.push({ symbol: prod.subPackage.symbol, name: prod.subPackage.name, qtyPerBase: (prod.quantityPerSubPackage || 1) * (prod.quantityPerPackage || 1) });
+          }
+          if (prod.package) {
+            unitOptions.push({ symbol: prod.package.symbol, name: prod.package.name, qtyPerBase: prod.quantityPerPackage || 1 });
+          }
+          if (prod.unit) {
+            unitOptions.push({ symbol: prod.unit.symbol, name: prod.unit.name, qtyPerBase: 1 });
+          }
+          return {
+            productId: i.productId,
+            name: prod.name || i.name || 'Producto',
+            code: prod.code || i.code || '',
+            price: Number(i.price || 0),
+            quantity: Number(i.quantity || 0),
+            discount: Number(i.discount || 0),
+            unit: prod.unit,
+            package: prod.package,
+            subPackage: prod.subPackage,
+            quantityPerPackage: prod.quantityPerPackage || 1,
+            quantityPerSubPackage: prod.quantityPerSubPackage || 1,
+            unitOptions,
+            unitMeasure: i.unitMeasure || prod.package?.symbol || prod.subPackage?.symbol || prod.unit?.symbol || 'UND',
+            lot: i.lotNumber || i.lot || null,
+            warehouseName: i.warehouseName || null,
+            expiryDate: i.expiryDate || null,
+            stockRecords: prod.stockRecords || []
+          };
+        }) || []);
+      } else {
+        setQuotationFormData({ ...initialQuotationData, docType: 'PED' });
+        setQuotationItems([]);
+      }
+      setIsOrderModalOpen(true); 
     }
   };
 
@@ -683,7 +807,8 @@ export default function Admin() {
         sellerName: selectedSeller?.name || quotationFormData.sellerName,
         dueDate: quotationFormData.expiryDate,
         items: quotationItems, 
-        totalAmount: quotationTotal 
+        totalAmount: quotationTotal,
+        warehouseStatus: editingItem?.warehouseStatus || null
       };
       const isOrder = quotationFormData.docType === 'PED';
       
@@ -739,7 +864,7 @@ export default function Admin() {
     setLoading(true);
     try {
       const payload = {
-        documentType: invoiceFormData.documentType || 'FACT',
+        documentType: invoiceFormData.documentType || '01',
         series: invoiceFormData.docSeries,
         number: parseInt(invoiceFormData.docNumber) || 0,
         customerName: invoiceFormData.customerName || '',
@@ -912,22 +1037,30 @@ export default function Admin() {
     if (!customerFormData.docNumber) return;
     setLoading(true);
     try {
-      const res = await axios.get(`/api/consult/${customerFormData.docType.toLowerCase()}/${customerFormData.docNumber.trim()}`, { headers: { Authorization: `Bearer ${token}` } });
+      // Normalizar tipo de documento: SUNAT usa '1'/'6', API espera 'dni'/'ruc'
+      const typeMap: Record<string, string> = { '1': 'dni', '6': 'ruc', 'DNI': 'dni', 'RUC': 'ruc', 'dni': 'dni', 'ruc': 'ruc' };
+      const apiType = typeMap[customerFormData.docType] || customerFormData.docType.toLowerCase();
+      
+      const res = await axios.get(`/api/consult/${apiType}/${customerFormData.docNumber.trim()}`, { headers: { Authorization: `Bearer ${token}` } });
       const d = res.data;
       
-      // La API devuelve el objeto directamente (ruc, razonSocial, nombres, etc.)
-      if (d.ruc || d.dni || d.razonSocial || d.nombres || d.nombre_o_razon_social || d.success) {
-        // Normalizar respuesta si viene envuelta en .data
+      if (d.success === false || d.message) {
+        showError(d.message || 'No se encontró información para el número ingresado');
+        return;
+      }
+      
+      if (d.ruc || d.dni || d.razonSocial || d.nombres || d.nombre_o_razon_social) {
         const data = d.data || d;
+        const isRuc = customerFormData.docType === '6' || customerFormData.docType === 'RUC';
         
-        if (customerFormData.docType === 'RUC') {
+        if (isRuc) {
           const dName = data.departamento || data.department || '';
           const pName = data.provincia || data.province || '';
           const diName = data.distrito || data.district || '';
           
           const deptId = getDeptId(dName);
-          const provId = getProvId(deptId, pName);
-          const distId = getDistId(provId, diName);
+          const provId = getProvId(pName);
+          const distId = getDistId(diName);
 
           setCustomerFormData({ 
             ...customerFormData, 
@@ -938,7 +1071,6 @@ export default function Admin() {
             district: distId
           });
         } else {
-          // Para DNI, manejar camelCase y snake_case, y separar nombres
           const rawNames = data.nombres || '';
           const nameParts = rawNames.trim().split(/\s+/);
           const firstName = nameParts[0] || '';
@@ -952,8 +1084,8 @@ export default function Admin() {
           const diName = data.distrito || data.district || '';
           
           const deptId = getDeptId(dName);
-          const provId = getProvId(deptId, pName);
-          const distId = getDistId(provId, diName);
+          const provId = getProvId(pName);
+          const distId = getDistId(diName);
 
           setCustomerFormData({ 
             ...customerFormData, 
@@ -970,11 +1102,12 @@ export default function Admin() {
         }
         showSuccess('Datos recuperados correctamente');
       } else {
-        alert('No se encontró información para el número ingresado');
+        showError('No se encontró información para el número ingresado. Verifique que sea un DNI/RUC válido registrado en SUNAT.');
       }
-    } catch (err) { 
+    } catch (err: any) { 
       console.error(err);
-      alert('Error en el servicio de consulta. Verifique que el número de documento sea válido.');
+      const errMsg = err.response?.data?.error || err.response?.data?.message || 'Error en el servicio de consulta. Verifique que el número de documento sea válido.';
+      showError(errMsg);
     } finally { setLoading(false); }
   };
 
@@ -1005,7 +1138,10 @@ export default function Admin() {
 
   return (
     <div className="w-full max-w-480 mx-auto px-4 py-4 md:px-6 h-screen flex flex-col bg-[#f8fafc]/30">
-      <AnimatePresence>{successMsg && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="fixed top-24 right-10 z-50 bg-green-600 text-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-2"><CheckCircle className="w-5 h-5" /> <span className="font-bold">{successMsg}</span></motion.div>}</AnimatePresence>
+      <AnimatePresence>
+        {successMsg && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="fixed top-24 right-10 z-300 bg-green-600 text-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-2"><CheckCircle className="w-5 h-5" /> <span className="font-bold">{successMsg}</span></motion.div>}
+        {errorMsg && <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="fixed top-24 right-10 z-300 bg-red-600 text-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-2"><AlertCircle className="w-5 h-5" /> <span className="font-bold">{errorMsg}</span></motion.div>}
+      </AnimatePresence>
 
       <div className="flex flex-col lg:flex-row gap-6 h-full min-h-0">
         <aside className="w-full lg:w-64 shrink-0 space-y-2 h-full overflow-y-auto custom-scrollbar pr-2">
@@ -1082,7 +1218,8 @@ export default function Admin() {
                   { id: 'picking', icon: PackageSearch, label: 'Picking / Almacén', permission: 'VIEW_PICKING' },
                   { id: 'inventory', icon: BarChart3, label: 'Inventario / Stock', permission: 'VIEW_INVENTORY' },
                   { id: 'warehouses', icon: MapPin, label: 'Almacenes / Sedes', permission: 'VIEW_WAREHOUSES' },
-                  { id: 'logistics', icon: Truck, label: 'Logística', permission: 'VIEW_LOGISTICS' },
+                  { id: 'shipping', icon: Truck, label: 'Agencias', permission: 'VIEW_LOGISTICS' },
+                  { id: 'logistics', icon: Truck, label: 'Config. Logística', permission: 'VIEW_LOGISTICS' },
                 ].map(item => {
                   const hasAccess = item.permission ? hasPermission?.(item.permission) : true;
                   if (!hasAccess) return null;
@@ -1197,8 +1334,9 @@ export default function Admin() {
                     {currentTab === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => {}} onEdit={(o) => openForm('orders', o)} onOpenPayment={handleOpenPayment} onNewDirectOrder={() => { handleResetQuotationForm(); setQuotationFormData(prev => ({...prev, docType: 'PED'})); setIsOrderModalOpen(true); }} onCancelDispatch={(id) => { if (confirm('¿Anular despacho? Se revertirá el stock y el pedido volverá a "Preparado" en picking.')) { axios.put(`/api/orders/${id}/status`, {status: 'PREPARING'}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData).catch(err => alert(err.response?.data?.error || 'Error al anular despacho')); } }} onCancelPayment={(id) => { if (confirm('¿Anular cobro? Se eliminarán los pagos y se devolverá el stock a los almacenes originales.')) { axios.post(`/api/orders/${id}/cancel-payment`, {}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData).catch(err => alert(err.response?.data?.error || 'Error al anular cobro')); } }} onGenerateInvoice={(o) => openForm('invoices', {...o, docType: 'PED'})} onViewDetail={(o) => { setOrderDetail(o); setIsOrderDetailOpen(true); }} />}
                     {currentTab === 'inventory' && <InventoryModule products={products} stockDetails={stockDetails} movements={movements} onUpdateStock={(pid, s) => axios.put(`/api/products/${pid}/stock`, {stock:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onEdit={(p) => openForm('products', p)} onOpenAssistant={() => setIsMovementAssistantOpen(true)} token={token} onRefresh={fetchData} />}
                     {currentTab === 'customers' && <CustomerModule customers={customers} onEdit={(c) => openForm('customers', c)} onNew={() => openForm('customers')} onDelete={(id) => handleDelete('customers', id)} departments={[]} />}
-                    {currentTab === 'exchange-rates' && <ExchangeRateModule token={token} exchangeRates={exchangeRates} onDelete={(id) => handleDelete('exchange-rates', id)} onSave={(d) => axios.post('/api/exchange-rates', d, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} loading={loading} />}
-                    {currentTab === 'logistics' && <LogisticsModule logisticsTab={logisticsTab} setLogisticsTab={setLogisticsTab} shippingAgencies={shippingAgencies} shippingZones={shippingZones} openEditModal={(item) => openForm(logisticsTab === 'agencies' ? 'shipping-agencies' : 'shipping-zones', item)} handleDelete={(t,id) => handleDelete(t,id)} />}
+                    {currentTab === 'exchange-rates' && <ExchangeRateModule token={token} exchangeRates={exchangeRates} onDelete={(id) => handleDelete('exchange-rates', id)} onSave={(d) => axios.post('/api/exchange-rates', d, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} loading={loading} isActive={activeTabId === tab.id} />}
+                    {currentTab === 'shipping' && <LogisticsModule logisticsTab={logisticsTab} setLogisticsTab={setLogisticsTab} shippingAgencies={shippingAgencies} shippingZones={shippingZones} openEditModal={(item) => openForm(logisticsTab === 'agencies' ? 'shipping-agencies' : 'shipping-zones', item)} handleDelete={(t,id) => handleDelete(t,id)} />}
+                    {currentTab === 'logistics' && <AdvancedLogisticsModule token={token} />}
                     {currentTab === 'sellers' && <SellerModule sellers={sellers} onEdit={(s) => openForm('sellers', s)} onNew={() => openForm('sellers')} onDelete={(id) => handleDelete('sellers', id)} />}
                     {currentTab === 'warehouses' && <WarehouseModule warehouses={warehouses} onEdit={(w) => openForm('warehouses', w)} onNew={() => openForm('warehouses')} onDelete={(id) => handleDelete('warehouses', id)} />}
                     {currentTab === 'picking' && <WarehousePickingModule />}
@@ -1268,7 +1406,7 @@ export default function Admin() {
             <ProductForm isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)} onSubmit={handleSubmitProduct} formData={productFormData} setFormData={setProductFormData} editingItem={editingItem} loading={loading} categories={categories} brands={brands} units={units} handleFileUpload={handleFileUpload} setLoading={setLoading} token={token || undefined} />
           </div>
 
-          <div style={{ display: activeTabId === 'logistics' ? 'block' : 'none' }}>
+          <div style={{ display: activeTabId === 'shipping' ? 'block' : 'none' }}>
             <AgencyForm isOpen={isAgencyModalOpen} onClose={() => setIsAgencyModalOpen(false)} onSubmit={handleSubmitAgency} formData={agencyFormData} setFormData={setAgencyFormData} editingItem={editingItem} loading={loading} shippingZones={shippingZones} handleConsultDocument={handleConsultForQuotation} />
           </div>
 
@@ -1277,7 +1415,7 @@ export default function Admin() {
           </div>
 
           <div style={{ display: activeTabId === 'customers' || isCustomerModalOpen ? 'block' : 'none' }}>
-            <CustomerForm isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} onSubmit={handleSubmitCustomer} formData={customerFormData} setFormData={setCustomerFormData} editingItem={editingItem} loading={loading} documentTypes={documentTypes} handleConsultDocument={handleConsultForQuotation} />
+            <CustomerForm isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} onSubmit={handleSubmitCustomer} formData={customerFormData} setFormData={setCustomerFormData} editingItem={editingItem} loading={loading} documentTypes={documentTypes} handleConsultDocument={handleConsultDocument} />
           </div>
 
           <div style={{ display: activeTabId === 'sellers' ? 'block' : 'none' }}>
@@ -1301,7 +1439,7 @@ export default function Admin() {
             />
           </div>
 
-          <div style={{ display: activeTabId === 'invoices' || isInvoiceModalOpen ? 'block' : 'none' }}>
+          <div style={{ display: ['invoices', 'orders'].includes(activeTabId) ? 'block' : 'none' }}>
             <InvoiceForm
               isOpen={isInvoiceModalOpen}
               onClose={() => setIsInvoiceModalOpen(false)}

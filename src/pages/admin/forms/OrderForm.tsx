@@ -250,7 +250,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       >
                         <option value="">--SERIE--</option>
                         {series.filter(s => s.documentType === 'PED').map(s => (
-                          <option key={s.id} value={s.id}>{s.series} ({s.warehouse?.name || 'S/A'})</option>
+                          <option key={s.id} value={s.id}>{s.series}</option>
                         ))}
                       </select>
                       <span className="text-slate-400">-</span>
@@ -394,12 +394,46 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                         <div className="flex-1 flex items-center gap-2">
                           <span className="text-[11px] font-bold text-slate-600 w-20 text-right">Agencia:</span>
                           <div className="flex flex-1 gap-1">
-                            <select value={formData.agencyId} onChange={e => setFormData({...formData, agencyId: e.target.value})} className="h-8 flex-1 border border-slate-300 rounded px-2 text-xs font-bold bg-white">
+                            <select 
+                              value={formData.agencyId} 
+                              onChange={e => {
+                                const selectedAgency = shippingAgencies.find(a => a.id === parseInt(e.target.value));
+                                const mainBranch = selectedAgency?.branches?.find((b: any) => b.isMain) || selectedAgency?.branches?.[0];
+                                setFormData({
+                                  ...formData, 
+                                  agencyId: e.target.value,
+                                  branchId: mainBranch?.id?.toString() || ''
+                                });
+                              }} 
+                              className="h-8 flex-1 border border-slate-300 rounded px-2 text-xs font-bold bg-white"
+                            >
                               <option value="">--Seleccionar Agencia de Transporte--</option>
                               {shippingAgencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                             </select>
                           </div>
                         </div>
+                        {formData.agencyId && (() => {
+                          const selectedAgency = shippingAgencies.find(a => a.id === parseInt(formData.agencyId));
+                          const branches = selectedAgency?.branches || [];
+                          if (branches.length > 1) {
+                            return (
+                              <div className="flex-1 flex items-center gap-2">
+                                <span className="text-[11px] font-bold text-slate-600 w-20 text-right">Sucursal:</span>
+                                <select 
+                                  value={formData.branchId || ''} 
+                                  onChange={e => setFormData({...formData, branchId: e.target.value})} 
+                                  className="h-8 flex-1 border border-slate-300 rounded px-2 text-xs font-bold bg-white"
+                                >
+                                  <option value="">--Seleccionar Sucursal--</option>
+                                  {branches.map((b: any) => (
+                                    <option key={b.id} value={b.id}>{b.address?.substring(0, 40)}{b.isMain ? ' (Principal)' : ''}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                         <div className="w-64 flex items-center gap-2">
                           <span className="text-[11px] font-bold text-slate-600 shrink-0">Lugar Recojo:</span>
                           <select 
@@ -517,12 +551,19 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                                 <td className="px-2 py-1 border-r border-slate-200 font-bold truncate max-w-62.5">{item.name}</td>
                                 <td className="px-2 py-1 border-r border-slate-200"><input type="number" value={item.quantity} onChange={e => updateQuotationItem(item.productId, 'quantity', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white font-bold" /></td>
                                 <td className="px-2 py-1 border-r border-slate-200 text-center">
-                                  <input
-                                    type="text"
-                                    value={item.unitMeasure || item.unit?.symbol || 'UND'}
+                                  <select
+                                    value={item.unitMeasure || item.package?.symbol || item.subPackage?.symbol || item.unit?.symbol || 'UND'}
                                     onChange={e => updateQuotationItem(item.productId, 'unitMeasure', e.target.value)}
-                                    className="w-full text-center bg-transparent outline-none focus:bg-white font-bold uppercase"
-                                  />
+                                    className="w-full text-center bg-transparent outline-none focus:bg-white font-bold uppercase text-[10px] cursor-pointer"
+                                  >
+                                    {item.unitOptions && item.unitOptions.length > 0 ? (
+                                      item.unitOptions.map((u: any, i: number) => (
+                                        <option key={i} value={u.symbol}>{u.symbol}</option>
+                                      ))
+                                    ) : (
+                                      <option value={item.unitMeasure || 'UND'}>{item.unitMeasure || 'UND'}</option>
+                                    )}
+                                  </select>
                                 </td>
                                 <td className="px-2 py-1 border-r border-slate-200"><input type="number" step="0.000001" value={item.price} onChange={e => updateQuotationItem(item.productId, 'price', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white font-bold" /></td>
                                 <td className="px-2 py-1 border-r border-slate-200 text-right font-bold text-slate-600">{formatNumber(valorLine)}</td>

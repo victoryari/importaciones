@@ -146,7 +146,7 @@ export const ExtractionModal: React.FC<ExtractionModalProps> = ({ isOpen, onClos
                     <tbody className="divide-y divide-slate-100">
                       {results.map((item) => {
                         const totalQty = item.items?.reduce((acc: number, it: any) => acc + (it.quantity || 0), 0);
-                        const uniqueUnits = [...new Set(item.items?.map((it: any) => it.product?.unit?.symbol || 'UND'))];
+                        const uniqueUnits = [...new Set(item.items?.map((it: any) => it.unitSymbol || it.unitMeasure || it.product?.package?.symbol || it.product?.subPackage?.symbol || it.product?.unit?.symbol || 'UND'))];
                         const displayUnit = (uniqueUnits.length === 1 ? uniqueUnits[0] : 'ÍTEMS') as string;
                         
                         return (

@@ -49,7 +49,8 @@ export function UbigeoSelector({ department, province, district, onChange, class
   };
 
   const availableProvinces = selectedDept ? PROVINCES[selectedDept] || [] : [];
-  const availableDistricts = selectedProv ? DISTRICTS[selectedProv] || [] : [];
+  const fullProvId = selectedDept && selectedProv ? selectedDept + selectedProv : "";
+  const availableDistricts = fullProvId ? DISTRICTS[fullProvId] || [] : [];
 
   return (
     <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 ${className}`}>

@@ -16,6 +16,7 @@ interface ExchangeRateModuleProps {
   onDelete: (id: string) => void;
   onSave: (data: { date: string, buy_rate: string, sell_rate: string }) => Promise<void>;
   loading: boolean;
+  isActive?: boolean;
 }
 
 export const ExchangeRateModule: React.FC<ExchangeRateModuleProps> = ({ 
@@ -23,7 +24,8 @@ export const ExchangeRateModule: React.FC<ExchangeRateModuleProps> = ({
   exchangeRates, 
   onDelete, 
   onSave,
-  loading 
+  loading,
+  isActive = true
 }) => {
   const currentDate = new Date();
   const [filterYear, setFilterYear] = useState(currentDate.getFullYear());
@@ -63,10 +65,16 @@ export const ExchangeRateModule: React.FC<ExchangeRateModuleProps> = ({
     });
   };
 
+  React.useEffect(() => {
+    if (!isActive) {
+      handleNew();
+    }
+  }, [isActive]);
+
   const fetchFromSunat = async () => {
     setIsFetchingSunat(true);
     try {
-      const res = await fetch('/api/exchange-rates/fetch-sunat', {
+      const res = await fetch(`/api/exchange-rates/fetch-sunat?date=${formData.date}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -97,6 +105,7 @@ export const ExchangeRateModule: React.FC<ExchangeRateModuleProps> = ({
       buy_rate: formData.buy,
       sell_rate: formData.sell
     });
+    handleNew();
   };
 
   const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];

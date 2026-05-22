@@ -1,4 +1,4 @@
-import { Heart, Eye, ShoppingCart, Sparkles } from 'lucide-react';
+import { Heart, Eye, ShoppingCart, Sparkles, Box, Layers } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useCart } from '../context/CartContext';
@@ -14,6 +14,13 @@ export interface Product {
   isOnSale?: boolean;
   discountPercent?: number;
   images?: string[];
+  weight?: number;
+  volume?: number;
+  package?: { name?: string; symbol?: string };
+  subPackage?: { name?: string; symbol?: string };
+  unit?: { name?: string; symbol?: string };
+  quantityPerPackage?: number;
+  quantityPerSubPackage?: number;
 }
 
 interface ProductCardProps {
@@ -106,6 +113,22 @@ export default function ProductCard({
             {product.code}
           </div>
         )}
+
+        {/* Peso y Volumen */}
+        {(product.weight || product.volume) && (
+          <div className="absolute top-4 right-4 flex flex-col gap-1">
+            {product.weight && (
+              <span className="bg-white/90 backdrop-blur-sm text-slate-700 text-[9px] font-black px-2 py-0.5 rounded-full shadow-sm">
+                {Number(product.weight).toFixed(4)} kg
+              </span>
+            )}
+            {product.volume && (
+              <span className="bg-white/90 backdrop-blur-sm text-slate-700 text-[9px] font-black px-2 py-0.5 rounded-full shadow-sm">
+                {Number(product.volume).toFixed(4)} m³
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="p-6 flex flex-col flex-1">
@@ -115,6 +138,23 @@ export default function ProductCard({
         <h3 className="text-lg font-bold text-slate-800 mb-1 line-clamp-2 flex-1">
           {product.name}
         </h3>
+        
+        {(product.package?.name || product.subPackage?.name) && (
+          <div className="mt-2 space-y-0.5">
+            {product.package?.name && (
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                <Box className="w-3 h-3 text-blue-500" />
+                <span>1 {product.package.name} = {product.quantityPerPackage || 1} {product.subPackage?.name || product.unit?.name || 'un.'}</span>
+              </div>
+            )}
+            {product.subPackage?.name && (
+              <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                <Layers className="w-3 h-3 text-amber-500" />
+                <span>1 {product.subPackage.name} = {product.quantityPerSubPackage || 1} {product.unit?.name || 'un.'}</span>
+              </div>
+            )}
+          </div>
+        )}
         
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-50">
           <div className="flex flex-col">

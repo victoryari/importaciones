@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { motion } from 'motion/react';
 import { 
   BarChart3, Search, Package, AlertTriangle, X, 
   ArrowUpRight, ArrowDownLeft, Edit2, Filter, 
   ChevronRight, RefreshCcw, Download, ArrowRightLeft,
-  History, Boxes, Calendar, FileText, MapPin, Lock
+  History, Boxes, Calendar, FileText, MapPin, Lock,
+  FileInput, FileOutput, Plus
 } from 'lucide-react';
-import { formatNumber } from '../../lib/utils';
+import { formatNumber, ENTRY_NOTE_STATUSES } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
+import { EntryNoteList } from './forms/EntryNoteList';
+import { EntryNoteForm } from './forms/EntryNoteForm';
 
 interface Product {
   id: number;
@@ -17,7 +20,7 @@ interface Product {
   stock: number;
   images?: string[];
   category?: { name: string };
-  unit?: { symbol: string };
+  unit?: { name?: string; symbol?: string };
   isActive: boolean;
 }
 
@@ -45,7 +48,86 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
   const { hasPermission } = useAuth();
   const canWrite = hasPermission?.('WRITE_INVENTORY') || hasPermission?.('ALL');
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeSubTab, setActiveSubTab] = useState<'stock' | 'history'>('stock');
+  const [activeSubTab, setActiveSubTab] = useState<'stock' | 'history' | 'entryNotes' | 'exitNotes'>('stock');
+  const [entryNotes, setEntryNotes] = useState<any[]>([]);
+  const [loadingEntryNotes, setLoadingEntryNotes] = useState(false);
+  const [entryNotesError, setEntryNotesError] = useState<string | null>(null);
+  const [isEntryNoteFormOpen, setIsEntryNoteFormOpen] = useState(false);
+  const [editingEntryNote, setEditingEntryNote] = useState<any>(null);
+
+  useEffect(() => {
+    if (activeSubTab === 'entryNotes' && token) {
+      loadEntryNotes();
+    }
+  }, [activeSubTab, token]);
+
+  const loadEntryNotes = async () => {
+    setLoadingEntryNotes(true);
+    setEntryNotesError(null);
+    try {
+      const res = await axios.get('/api/entry-notes', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setEntryNotes(Array.isArray(res.data) ? res.data : []);
+    } catch (error: any) {
+      const msg = error.response?.data?.error || error.message || 'Error desconocido';
+      setEntryNotesError(msg);
+      setEntryNotes([]);
+    } finally {
+      setLoadingEntryNotes(false);
+    }
+  };
+
+  const handleNewEntryNote = () => {
+    setEditingEntryNote(null);
+    setIsEntryNoteFormOpen(true);
+  };
+
+  const handleEditEntryNote = (note: any) => {
+    setEditingEntryNote(note);
+    setIsEntryNoteFormOpen(true);
+  };
+
+  const handleCloseEntryNoteForm = () => {
+    setIsEntryNoteFormOpen(false);
+    setEditingEntryNote(null);
+  };
+
+  const handleDeleteEntryNote = async (id: number) => {
+    if (!window.confirm('¿Está seguro de eliminar esta nota de ingreso?')) return;
+    try {
+      await axios.delete(`/api/entry-notes/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      loadEntryNotes();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Error al eliminar nota de ingreso');
+    }
+  };
+
+  const handleApproveEntryNote = async (id: number) => {
+    if (!window.confirm('¿Está seguro de aprobar esta nota de ingreso? Se actualizará el stock.')) return;
+    try {
+      await axios.post(`/api/entry-notes/${id}/approve`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      loadEntryNotes();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Error al aprobar nota de ingreso');
+    }
+  };
+
+  const handleAnnulEntryNote = async (id: number) => {
+    if (!window.confirm('¿Está seguro de anular esta nota de ingreso? Se revertirá el stock.')) return;
+    try {
+      await axios.post(`/api/entry-notes/${id}/annul`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      loadEntryNotes();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Error al anular nota de ingreso');
+    }
+  };
 
   const stats = {
     total: products.length,
@@ -86,24 +168,38 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
       className="space-y-8"
     >
       {/* Tab Switcher Interno */}
-      <div className="flex items-center gap-4 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm w-fit">
+      <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm w-fit flex-wrap">
         <button 
           onClick={() => setActiveSubTab('stock')}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-black transition-all ${activeSubTab === 'stock' ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black transition-all ${activeSubTab === 'stock' ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'text-slate-400 hover:text-slate-600'}`}
         >
           <Boxes className="w-4 h-4" />
-          STOCK ACTUAL (DETALLADO)
+          STOCK ACTUAL
         </button>
         <button 
           onClick={() => setActiveSubTab('history')}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-black transition-all ${activeSubTab === 'history' ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black transition-all ${activeSubTab === 'history' ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'text-slate-400 hover:text-slate-600'}`}
         >
           <History className="w-4 h-4" />
-          HISTORIAL DE MOVIMIENTOS
+          HISTORIAL
+        </button>
+        <button 
+          onClick={() => setActiveSubTab('entryNotes')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black transition-all ${activeSubTab === 'entryNotes' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          <FileInput className="w-4 h-4" />
+          NOTAS DE INGRESO
+        </button>
+        <button 
+          onClick={() => setActiveSubTab('exitNotes')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black transition-all ${activeSubTab === 'exitNotes' ? 'bg-red-600 text-white shadow-lg shadow-red-100' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          <FileOutput className="w-4 h-4" />
+          NOTAS DE SALIDA
         </button>
       </div>
 
-      {activeSubTab === 'stock' ? (
+      {activeSubTab === 'stock' && (
         <>
           {/* Stock Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -237,7 +333,9 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
             </div>
           </div>
         </>
-      ) : (
+      )}
+
+      {activeSubTab === 'history' && (
         <div className="bg-white rounded-4xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center">
             <div className="relative w-96">
@@ -353,6 +451,55 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {activeSubTab === 'entryNotes' && (
+        <div className="relative min-h-[600px]">
+          {entryNotesError ? (
+            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-4xl border border-red-200 shadow-sm">
+              <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <AlertTriangle className="w-10 h-10 text-red-500" />
+              </div>
+              <h3 className="text-xl font-black text-red-600 mb-2">Error al cargar notas de ingreso</h3>
+              <p className="text-sm text-red-400 font-medium mb-4 max-w-md text-center">{entryNotesError}</p>
+              <p className="text-xs text-slate-400 mb-6">Si el servidor no tiene los endpoints actualizados, reinicia el servidor backend.</p>
+              <button onClick={loadEntryNotes} className="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-colors">
+                <RefreshCcw className="w-4 h-4" /> Reintentar
+              </button>
+            </div>
+          ) : !isEntryNoteFormOpen ? (
+                <EntryNoteList
+                  notes={entryNotes}
+                  loading={loadingEntryNotes}
+                  canWrite={canWrite}
+                  onNew={handleNewEntryNote}
+                  onEdit={handleEditEntryNote}
+                  onDelete={handleDeleteEntryNote}
+                  onApprove={handleApproveEntryNote}
+                  onAnnul={handleAnnulEntryNote}
+                  onRefresh={loadEntryNotes}
+                />
+              ) : (
+                <EntryNoteForm
+                  isOpen={isEntryNoteFormOpen}
+                  onClose={handleCloseEntryNoteForm}
+                  editingNote={editingEntryNote}
+                  token={token}
+                  onSuccess={() => {
+                    loadEntryNotes();
+                    handleCloseEntryNoteForm();
+                  }}
+                />
+              )}
+        </div>
+      )}
+
+      {activeSubTab === 'exitNotes' && (
+        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-4xl border border-slate-200 shadow-sm">
+          <FileOutput className="w-16 h-16 text-slate-200 mb-4" />
+          <h3 className="text-xl font-black text-slate-400 mb-2">Notas de Salida</h3>
+          <p className="text-sm text-slate-400 font-medium">Módulo en desarrollo. Próximamente disponible.</p>
         </div>
       )}
     </motion.div>

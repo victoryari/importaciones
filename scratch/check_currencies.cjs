@@ -3,7 +3,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   const currencies = await prisma.sunatTable.findMany({
-    where: { tableName: 'currency' }
+    where: { tableName: 'TABLA_04' }
   });
   console.log(JSON.stringify(currencies, null, 2));
 }
