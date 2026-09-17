@@ -2535,7 +2535,7 @@ app.post('/api/purchases', authenticateToken, async (req, res) => {
               referencePrice: item.referencePrice ? parseFloat(item.referencePrice) : (item.referenceCost ? parseFloat(item.referenceCost) : null),
               lotNumber: item.lotNumber || null,
               seriesNumber: item.seriesNumber || null,
-              expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
+              expiryDate: (item.expiryDate || item.entranceDate) ? new Date(item.expiryDate || item.entranceDate) : null,
               unitSymbol: item.unitSymbol || null,
               observation: item.observation || null
             }))
@@ -2548,6 +2548,7 @@ app.post('/api/purchases', authenticateToken, async (req, res) => {
       const shouldIncrementStock = !referenceId;
 
       for (const item of items) {
+        const parsedExpiry = (item.expiryDate || item.entranceDate) ? new Date(item.expiryDate || item.entranceDate) : null;
         if (warehouseId && shouldIncrementStock) {
           const stockRecord = await (tx as any).stock.findFirst({
             where: { 
@@ -2562,7 +2563,7 @@ app.post('/api/purchases', authenticateToken, async (req, res) => {
               where: { id: stockRecord.id },
               data: { 
                 quantity: { increment: parseInt(item.quantity) },
-                ...(item.expiryDate && { expiryDate: new Date(item.expiryDate) })
+                ...(parsedExpiry && { expiryDate: parsedExpiry })
               }
             } as any);
           } else {
@@ -2572,7 +2573,7 @@ app.post('/api/purchases', authenticateToken, async (req, res) => {
                 warehouseId: parseInt(warehouseId),
                 quantity: parseInt(item.quantity),
                 lotNumber: item.lotNumber || null,
-                expiryDate: item.expiryDate ? new Date(item.expiryDate) : null
+                expiryDate: parsedExpiry
               }
             } as any);
           }
@@ -2722,7 +2723,7 @@ app.put('/api/purchases/:id', authenticateToken, async (req, res) => {
               referencePrice: item.referencePrice ? parseFloat(item.referencePrice) : (item.referenceCost ? parseFloat(item.referenceCost) : null),
               lotNumber: item.lotNumber || null,
               seriesNumber: item.seriesNumber || null,
-              expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
+              expiryDate: (item.expiryDate || item.entranceDate) ? new Date(item.expiryDate || item.entranceDate) : null,
               unitSymbol: item.unitSymbol || null,
               observation: item.observation || null
             }))
@@ -2733,6 +2734,7 @@ app.put('/api/purchases/:id', authenticateToken, async (req, res) => {
 
       // 5. Apply new stock and update product prices
       for (const newItem of items) {
+        const parsedExpiry = (newItem.expiryDate || newItem.entranceDate) ? new Date(newItem.expiryDate || newItem.entranceDate) : null;
         if (warehouseId) {
           const stockRecord = await (tx as any).stock.findFirst({
             where: { 
@@ -2747,7 +2749,7 @@ app.put('/api/purchases/:id', authenticateToken, async (req, res) => {
               where: { id: stockRecord.id },
               data: { 
                 quantity: { increment: parseInt(newItem.quantity) },
-                ...(newItem.expiryDate && { expiryDate: new Date(newItem.expiryDate) })
+                ...(parsedExpiry && { expiryDate: parsedExpiry })
               }
             });
           } else {
@@ -2757,7 +2759,7 @@ app.put('/api/purchases/:id', authenticateToken, async (req, res) => {
                 warehouseId: parseInt(warehouseId),
                 quantity: parseInt(newItem.quantity),
                 lotNumber: newItem.lotNumber || null,
-                expiryDate: newItem.expiryDate ? new Date(newItem.expiryDate) : null
+                expiryDate: parsedExpiry
               }
             });
           }
@@ -3034,7 +3036,7 @@ app.get('/api/movements/sources', authenticateToken, async (req, res) => {
       orderBy: { date: 'desc' }
     });
 
-    // --- FILTRO INTELIGENTE DE DOCUMENTOS EN TRÁNSITO ---
+    // --- FILTRO INTELIGENTE DE DOCUMENTOS EN TRÁNSITO Y ENRIQUECIMIENTO DE FECHA VENCIMIENTO ---
     let finalPurchases = purchases;
     if (type === 'GUIA' || type === 'COMPRA') {
       const validPurchases = [];
@@ -3055,6 +3057,9 @@ app.get('/api/movements/sources', authenticateToken, async (req, res) => {
           });
           if (stockRecord && stockRecord.quantity > 0) {
             hasStockInTransit = true;
+            if (!item.expiryDate && stockRecord.expiryDate) {
+              item.expiryDate = stockRecord.expiryDate;
+            }
             break; // Con un solo ítem que tenga stock, el documento debe aparecer
           }
         }
@@ -3063,6 +3068,24 @@ app.get('/api/movements/sources', authenticateToken, async (req, res) => {
         }
       }
       finalPurchases = validPurchases;
+    }
+
+    // Asegurar que todos los ítems tengan expiryDate si existe en Stock
+    for (const purchase of finalPurchases) {
+      for (const item of purchase.items) {
+        if (!item.expiryDate && item.lotNumber) {
+          const stockRec = await (prisma as any).stock.findFirst({
+            where: {
+              productId: item.productId,
+              lotNumber: item.lotNumber,
+              expiryDate: { not: null }
+            }
+          });
+          if (stockRec && stockRec.expiryDate) {
+            item.expiryDate = stockRec.expiryDate;
+          }
+        }
+      }
     }
 
     res.json(finalPurchases);

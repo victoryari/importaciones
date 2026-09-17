@@ -779,7 +779,7 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                         <th className="p-2 text-right w-24 bg-emerald-50/40">Valor Compra</th>
                         <th className="p-2 text-right w-24 bg-slate-100/50">Precio Compra</th>
                         <th className="p-2 text-center w-24">Lote</th>
-                        <th className="p-2 text-center w-28">F. Ingreso</th>
+                        <th className="p-2 text-center w-28">F. Vencimiento</th>
                         <th className="p-2 text-center w-10"></th>
                       </tr>
                     </thead>
@@ -896,9 +896,15 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                             <td className="p-1">
                               <input 
                                 type="date" 
-                                value={item.entranceDate || ''} 
-                                onChange={e => updateItem(idx, 'entranceDate', e.target.value)} 
+                                value={item.expiryDate ? (typeof item.expiryDate === 'string' ? (item.expiryDate.includes('T') ? item.expiryDate.split('T')[0] : item.expiryDate) : new Date(item.expiryDate).toISOString().split('T')[0]) : (item.entranceDate || '')} 
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  const newItems = [...formData.items];
+                                  newItems[idx] = { ...newItems[idx], expiryDate: val, entranceDate: val };
+                                  setFormData({ ...formData, items: newItems });
+                                }} 
                                 className="w-full h-7 text-center border border-slate-200 rounded focus:border-blue-500 bg-white outline-none text-[10px]" 
+                                title="Fecha de Vencimiento del Lote"
                               />
                             </td>
                             <td className="p-2 text-center">

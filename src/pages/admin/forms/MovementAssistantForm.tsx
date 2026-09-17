@@ -114,6 +114,8 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
         toWarehouseId: '', 
         toZoneId: '', 
         quantity: 1, 
+        lotNumber: '',
+        expiryDate: '',
         guideNumber: '',
         docType: '',
         docNumber: '' 
@@ -143,21 +145,36 @@ export const MovementAssistantForm: React.FC<MovementAssistantFormProps> = ({ is
   };
 
   const handleExtract = (sourceItems: any[], sourceInfo: any) => {
-    const extractedItems = sourceItems.map(item => ({
-      productId: item.productId,
-      productName: item.product?.name || 'Producto',
-      productCode: item.product?.code || '',
-      fromWarehouseId: 'TRANSIT', // Special ID for transitory
-      fromZoneId: 'TRANSIT_ZONE',
-      toWarehouseId: sourceInfo.warehouseId?.toString() || '',
-      toZoneId: '',
-      quantity: item.quantity,
-      lotNumber: item.lotNumber || '', // PRESERVAR EL LOTE
-      guideNumber: '',
-      docType: sourceInfo.docType || '50',
-      docNumber: `${sourceInfo.docSeries}-${sourceInfo.docNumber}`,
-      unit: item.unitSymbol || item.product?.package?.symbol || item.product?.subPackage?.symbol || item.product?.unit?.symbol || 'UN.'
-    }));
+    const extractedItems = sourceItems.map(item => {
+      let formattedExpiry = '';
+      const rawExpiry = item.expiryDate || item.entranceDate || item.dueDate;
+      if (rawExpiry) {
+        try {
+          formattedExpiry = typeof rawExpiry === 'string' 
+            ? (rawExpiry.includes('T') ? rawExpiry.split('T')[0] : rawExpiry)
+            : new Date(rawExpiry).toISOString().split('T')[0];
+        } catch (e) {
+          formattedExpiry = '';
+        }
+      }
+
+      return {
+        productId: item.productId,
+        productName: item.product?.name || 'Producto',
+        productCode: item.product?.code || '',
+        fromWarehouseId: 'TRANSIT', // Special ID for transitory
+        fromZoneId: 'TRANSIT_ZONE',
+        toWarehouseId: sourceInfo.warehouseId?.toString() || '',
+        toZoneId: '',
+        quantity: item.quantity,
+        lotNumber: item.lotNumber || '', // PRESERVAR EL LOTE
+        expiryDate: formattedExpiry, // PRESERVAR LA FECHA DE VENCIMIENTO DEL LOTE
+        guideNumber: '',
+        docType: sourceInfo.docType || '50',
+        docNumber: `${sourceInfo.docSeries}-${sourceInfo.docNumber}`,
+        unit: item.unitSymbol || item.product?.package?.symbol || item.product?.subPackage?.symbol || item.product?.unit?.symbol || 'UN.'
+      };
+    });
     setItems([...items, ...extractedItems]);
     setObservation(`Extracción de ${sourceInfo.docType} ${sourceInfo.docSeries}-${sourceInfo.docNumber}`);
   };
