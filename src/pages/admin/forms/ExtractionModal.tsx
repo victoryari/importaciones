@@ -41,106 +41,116 @@ export const ExtractionModal: React.FC<ExtractionModalProps> = ({ isOpen, onClos
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-300 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-300 flex items-center justify-center p-3 overflow-hidden">
           <motion.div 
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }} 
             exit={{ opacity: 0 }} 
             onClick={onClose} 
-            className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" 
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs" 
           />
           <motion.div 
-            initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+            initial={{ opacity: 0, scale: 0.97, y: 15 }} 
             animate={{ opacity: 1, scale: 1, y: 0 }} 
-            exit={{ opacity: 0, scale: 0.95, y: 20 }} 
-            className="relative w-full max-w-5xl h-[85vh] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-white/20"
+            exit={{ opacity: 0, scale: 0.97, y: 15 }} 
+            className="relative w-full max-w-4xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-200"
           >
             {/* Header */}
-            <div className="bg-[#1e293b] text-white px-6 py-4 flex items-center justify-between shadow-lg">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center shadow-inner">
-                  <Filter className="w-5 h-5 text-white" />
+            <div className="bg-[#004A99] text-white px-4 py-2.5 flex items-center justify-between shadow-sm shrink-0 border-b border-blue-900">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1 bg-white/10 rounded">
+                  <Filter className="w-4 h-4 text-blue-200" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold leading-none">Extraer Detalles de Otras Operaciones</h2>
-                  <p className="text-xs text-blue-300 mt-1 font-medium">Búsqueda masiva de documentos para movimientos de almacén</p>
+                  <h2 className="text-xs font-bold leading-none text-white uppercase tracking-tight">Extraer Detalles de Otras Operaciones</h2>
+                  <p className="text-[9px] text-blue-200 mt-0.5 uppercase font-medium">Búsqueda masiva de documentos para movimientos de almacén</p>
                 </div>
               </div>
-              <button onClick={onClose} className="hover:bg-white/10 p-2 rounded-full transition-colors">
-                <X className="w-6 h-6" />
+              <button 
+                onClick={onClose} 
+                className="p-1 hover:bg-red-600 rounded text-white/80 hover:text-white transition-colors cursor-pointer"
+                title="Cerrar"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Filter Bar */}
-            <div className="p-6 bg-slate-50 border-b border-slate-200">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                    <Calendar className="w-3 h-3" /> Fecha Desde
+            <div className="p-3.5 bg-slate-50 border-b border-slate-200 shrink-0">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-slate-400" /> Fecha Desde
                   </label>
                   <input 
                     type="date" 
                     value={dateFrom} 
                     onChange={(e) => setDateFrom(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white font-bold text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    className="w-full h-8 px-2.5 rounded-lg border border-slate-300 bg-white font-bold text-xs text-slate-700 focus:border-blue-500 outline-none transition-all"
                   />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                    <Calendar className="w-3 h-3" /> Fecha Hasta
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-slate-400" /> Fecha Hasta
                   </label>
                   <input 
                     type="date" 
                     value={dateTo} 
                     onChange={(e) => setDateTo(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white font-bold text-sm text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    className="w-full h-8 px-2.5 rounded-lg border border-slate-300 bg-white font-bold text-xs text-slate-700 focus:border-blue-500 outline-none transition-all"
                   />
                 </div>
-                <div className="space-y-3">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tipo de Documento</label>
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sourceType === 'COMPRA' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white group-hover:border-blue-400'}`}>
-                        {sourceType === 'COMPRA' && <div className="w-2 h-2 rounded-full bg-white" />}
-                      </div>
-                      <input type="radio" className="hidden" checked={sourceType === 'COMPRA'} onChange={() => setSourceType('COMPRA')} />
-                      <span className={`text-xs font-bold ${sourceType === 'COMPRA' ? 'text-blue-700' : 'text-slate-500'}`}>Compra</span>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Tipo de Documento</label>
+                  <div className="flex gap-3 h-8 items-center">
+                    <label className="flex items-center gap-1.5 cursor-pointer group">
+                      <input 
+                        type="radio" 
+                        name="sourceType"
+                        className="w-3.5 h-3.5 text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                        checked={sourceType === 'COMPRA'} 
+                        onChange={() => setSourceType('COMPRA')} 
+                      />
+                      <span className={`text-xs font-bold ${sourceType === 'COMPRA' ? 'text-blue-700' : 'text-slate-600'}`}>Compra</span>
                     </label>
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sourceType === 'GUIA' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white group-hover:border-blue-400'}`}>
-                        {sourceType === 'GUIA' && <div className="w-2 h-2 rounded-full bg-white" />}
-                      </div>
-                      <input type="radio" className="hidden" checked={sourceType === 'GUIA'} onChange={() => setSourceType('GUIA')} />
-                      <span className={`text-xs font-bold ${sourceType === 'GUIA' ? 'text-blue-700' : 'text-slate-500'}`}>Guía Remisión</span>
+                    <label className="flex items-center gap-1.5 cursor-pointer group">
+                      <input 
+                        type="radio" 
+                        name="sourceType"
+                        className="w-3.5 h-3.5 text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                        checked={sourceType === 'GUIA'} 
+                        onChange={() => setSourceType('GUIA')} 
+                      />
+                      <span className={`text-xs font-bold ${sourceType === 'GUIA' ? 'text-blue-700' : 'text-slate-600'}`}>Guía Remisión</span>
                     </label>
                   </div>
                 </div>
                 <button 
                   onClick={handleSearch}
                   disabled={loading}
-                  className="bg-blue-600 hover:bg-blue-700 text-white h-10.5 px-6 rounded-xl font-bold text-sm shadow-lg shadow-blue-200 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  className="bg-[#004A99] hover:bg-blue-800 text-white h-8 px-4 rounded-lg font-bold text-xs shadow-sm flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
                 >
-                  {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Search className="w-4 h-4" />}
+                  {loading ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Search className="w-3.5 h-3.5" />}
                   BUSCAR DOCUMENTOS
                 </button>
               </div>
             </div>
 
             {/* Results */}
-            <div className="flex-1 overflow-y-auto p-6 bg-white">
+            <div className="flex-1 overflow-y-auto p-4 bg-white">
               {results.length > 0 ? (
-                <div className="grid grid-cols-1 gap-4">
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
                   <table className="w-full border-collapse">
                     <thead>
-                      <tr className="bg-slate-100 border-b-2 border-slate-200">
-                        <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Tipo Doc</th>
-                        <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Nro. Documento</th>
-                        <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Fecha</th>
-                        <th className="px-4 py-3 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Proveedor / Cliente</th>
-                        <th className="px-4 py-3 text-right text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                      <tr className="bg-slate-100 border-b border-slate-200">
+                        <th className="px-3 py-2 text-center text-[9px] font-black text-slate-500 uppercase tracking-wider w-16">Tipo Doc</th>
+                        <th className="px-3 py-2 text-left text-[9px] font-black text-slate-500 uppercase tracking-wider w-36">Nro. Documento</th>
+                        <th className="px-3 py-2 text-center text-[9px] font-black text-slate-500 uppercase tracking-wider w-24">Fecha</th>
+                        <th className="px-3 py-2 text-left text-[9px] font-black text-slate-500 uppercase tracking-wider">Proveedor / Cliente</th>
+                        <th className="px-3 py-2 text-right text-[9px] font-black text-slate-500 uppercase tracking-wider w-32">
                           {sourceType === 'COMPRA' ? 'Total' : 'Cant. Total'}
                         </th>
-                        <th className="px-4 py-3 text-center text-[10px] font-black text-slate-500 uppercase tracking-widest w-40">Acción</th>
+                        <th className="px-3 py-2 text-center text-[9px] font-black text-slate-500 uppercase tracking-wider w-28">Acción</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -150,37 +160,44 @@ export const ExtractionModal: React.FC<ExtractionModalProps> = ({ isOpen, onClos
                         const displayUnit = (uniqueUnits.length === 1 ? uniqueUnits[0] : 'ÍTEMS') as string;
                         
                         return (
-                          <tr key={item.id} className="hover:bg-blue-50/50 transition-colors group">
-                            <td className="px-4 py-4">
-                              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-[10px] font-black uppercase">
-                                {item.docType}
+                          <tr key={item.id} className="hover:bg-blue-50/40 transition-colors group">
+                            <td className="px-3 py-2 text-center">
+                              <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-mono font-black">
+                                {item.docType || '50'}
                               </span>
                             </td>
-                            <td className="px-4 py-4 font-bold text-slate-700">{item.docSeries}-{item.docNumber}</td>
-                            <td className="px-4 py-4 text-xs font-medium text-slate-500 text-center">
+                            <td className="px-3 py-2 font-mono font-bold text-xs text-slate-800">
+                              {item.docSeries ? `${item.docSeries}-${item.docNumber}` : item.docNumber}
+                            </td>
+                            <td className="px-3 py-2 text-[10px] font-medium text-slate-500 text-center font-mono">
                               {new Date(item.date).toLocaleDateString()}
                             </td>
-                            <td className="px-4 py-4">
-                              <div className="text-xs font-bold text-slate-700 uppercase">{item.supplierName || item.customerName}</div>
-                              <div className="text-[10px] text-slate-400 font-medium">RUC: {item.supplier?.docNumber || item.customer?.docNumber}</div>
+                            <td className="px-3 py-2">
+                              <div className="text-[11px] font-bold text-slate-800 uppercase leading-snug line-clamp-2">
+                                {item.supplierName || item.customerName}
+                              </div>
+                              <div className="text-[9px] text-slate-400 font-mono font-medium mt-0.5">
+                                RUC: {item.supplier?.docNumber || item.customer?.docNumber || '-'}
+                              </div>
                             </td>
-                            <td className="px-4 py-4 text-right font-black text-slate-900">
+                            <td className="px-3 py-2 text-right font-mono font-bold text-xs text-slate-900 whitespace-nowrap">
                               {sourceType === 'COMPRA' ? (
                                 <>
                                   {item.currency === 'USD' ? '$' : 'S/'} {formatNumber(item.totalAmount)}
                                 </>
                               ) : (
-                                <span className="text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
-                                  {formatNumber(totalQty, 0)} <span className="text-[9px] text-blue-400 uppercase">{displayUnit}</span>
+                                <span className="text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                  {formatNumber(totalQty, 0)} <span className="text-[8px] text-blue-500 uppercase">{displayUnit}</span>
                                 </span>
                               )}
                             </td>
-                            <td className="px-4 py-4 text-center">
+                            <td className="px-3 py-2 text-center">
                               <button 
                                 onClick={() => handleSelect(item)}
-                                className="bg-white border-2 border-emerald-500 text-emerald-600 hover:bg-emerald-500 hover:text-white px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 w-full shadow-sm"
+                                className="bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 hover:border-emerald-600 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1 w-full shadow-2xs cursor-pointer"
+                                title="Extraer ítems de este documento"
                               >
-                                <CheckCircle2 className="w-4 h-4" /> EXTRAER
+                                <CheckCircle2 className="w-3.5 h-3.5" /> EXTRAER
                               </button>
                             </td>
                           </tr>
@@ -190,21 +207,21 @@ export const ExtractionModal: React.FC<ExtractionModalProps> = ({ isOpen, onClos
                   </table>
                 </div>
               ) : (
-                <div className="h-full flex flex-col items-center justify-center py-20 opacity-40">
-                  <FileText className="w-20 h-20 text-slate-200 mb-4" />
-                  <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">No se encontraron resultados</p>
-                  <p className="text-slate-300 text-xs font-medium mt-1">Ajuste los filtros de fecha para buscar documentos</p>
+                <div className="h-full flex flex-col items-center justify-center py-16 opacity-40">
+                  <FileText className="w-16 h-16 text-slate-300 mb-3" />
+                  <p className="text-slate-500 font-bold uppercase tracking-wider text-xs">No se encontraron resultados</p>
+                  <p className="text-slate-400 text-[10px] font-medium mt-0.5">Ajuste los filtros de fecha para buscar documentos</p>
                 </div>
               )}
             </div>
 
             {/* Footer */}
-            <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-end gap-4 shrink-0">
+            <div className="px-4 py-2.5 bg-slate-100/90 border-t border-slate-200 flex justify-end shrink-0">
               <button 
                 onClick={onClose}
-                className="px-8 py-3 rounded-2xl font-bold text-slate-600 hover:bg-slate-200 transition-all text-sm"
+                className="h-8 px-5 rounded-lg font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition-all text-xs shadow-2xs flex items-center gap-1.5 cursor-pointer"
               >
-                CERRAR VENTANA
+                <X className="w-3.5 h-3.5 text-slate-500" /> CERRAR VENTANA
               </button>
             </div>
           </motion.div>
