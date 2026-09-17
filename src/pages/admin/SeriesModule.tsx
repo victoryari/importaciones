@@ -119,17 +119,19 @@ export const SeriesModule: React.FC<SeriesModuleProps> = ({
                     </span>
                   )}
                 </td>
-                <td className="px-6 py-4">
-                  <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <td className="px-6 py-4 text-right">
+                  <div className="flex items-center justify-end gap-1.5">
                     <button 
                       onClick={() => onEdit(s)}
-                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                      className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl transition-all shadow-2xs"
+                      title="Editar Serie"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button 
                       onClick={() => onDelete(s.id)}
-                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                      className="p-2 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-xl transition-all shadow-2xs"
+                      title="Eliminar Serie"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

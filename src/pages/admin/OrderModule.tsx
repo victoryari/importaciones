@@ -212,7 +212,7 @@ export const OrderModule: React.FC<OrderModuleProps> = ({
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex justify-end gap-1.5">
                       <button 
                         onClick={() => onViewDetail(order)}
                         className="p-2.5 bg-sky-50 text-sky-600 rounded-xl hover:bg-sky-600 hover:text-white transition-all shadow-sm"

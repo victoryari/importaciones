@@ -105,8 +105,8 @@ export const SupplierSearchModal: React.FC<SupplierSearchModalProps> = ({ isOpen
                         </div>
                       </div>
                     </div>
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-lg shadow-blue-200">
+                    <div>
+                      <div className="w-8 h-8 bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white rounded-full flex items-center justify-center transition-all shadow-2xs">
                         <CheckCircle className="w-4 h-4" />
                       </div>
                     </div>

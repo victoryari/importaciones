@@ -183,7 +183,7 @@ export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({
                             S/ {Number(product.costPrice || product.salePrice || 0).toFixed(2)}
                           </td>
                           <td className="px-2 py-2 text-center">
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-50 text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-2xs">
                               <Check className="w-3.5 h-3.5" />
                             </span>
                           </td>

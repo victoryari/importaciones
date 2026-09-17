@@ -177,17 +177,17 @@ export const PurchaseModule: React.FC<PurchaseModuleProps> = ({ token, onNew, on
                   })()}
                 </td>
                 <td className="px-6 py-4 text-center">
-                  <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center justify-center gap-1.5">
                     <button 
                       onClick={() => onEdit(p, activeTab)}
-                      className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg transition-all"
+                      className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg transition-all cursor-pointer shadow-2xs"
                       title="Ver/Editar"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button 
                       onClick={() => onDelete(p.id)}
-                      className="p-2 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-lg transition-all"
+                      className="p-2 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded-lg transition-all cursor-pointer shadow-2xs"
                       title="Eliminar"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

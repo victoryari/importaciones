@@ -338,18 +338,20 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
                   )}
 
                   <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex justify-end gap-1.5">
                       <button 
                         onClick={() => onEdit(activeTab, item)}
-                        className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                        className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-2xs cursor-pointer"
+                        title="Editar"
                       >
-                        <Edit2 className="w-4 h-4" />
+                        <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button 
                         onClick={() => onDelete(activeTab, item.id)}
-                        className="p-2.5 text-slate-300 hover:text-red-500 transition-colors"
+                        className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all shadow-2xs cursor-pointer"
+                        title="Eliminar"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </td>

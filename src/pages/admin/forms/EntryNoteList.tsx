@@ -181,12 +181,12 @@ export const EntryNoteList: React.FC<EntryNoteListProps> = ({
                       {getStatusBadge(note.status)}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <div className="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex justify-center items-center gap-1.5">
                         {canEdit(note.status) && canWrite && (
                           <button
                             onClick={() => onEdit(note)}
-                            className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                            title="Editar"
+                            className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-2xs"
+                            title="Editar Nota"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
@@ -194,8 +194,8 @@ export const EntryNoteList: React.FC<EntryNoteListProps> = ({
                         {canApprove(note.status) && canWrite && (
                           <button
                             onClick={() => onApprove(note.id)}
-                            className="p-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
-                            title="Aprobar"
+                            className="p-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-2xs"
+                            title="Aprobar Ingreso"
                           >
                             <CheckCircle className="w-4 h-4" />
                           </button>
@@ -203,8 +203,8 @@ export const EntryNoteList: React.FC<EntryNoteListProps> = ({
                         {canAnnul(note.status) && canWrite && (
                           <button
                             onClick={() => onAnnul(note.id)}
-                            className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm"
-                            title="Anular"
+                            className="p-2 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-600 hover:text-white transition-all shadow-2xs"
+                            title="Anular Nota"
                           >
                             <X className="w-4 h-4" />
                           </button>
@@ -212,8 +212,8 @@ export const EntryNoteList: React.FC<EntryNoteListProps> = ({
                         {canDelete(note.status) && canWrite && (
                           <button
                             onClick={() => onDelete(note.id)}
-                            className="p-2 text-slate-300 hover:text-red-500 transition-colors"
-                            title="Eliminar"
+                            className="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-2xs"
+                            title="Eliminar Nota"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>

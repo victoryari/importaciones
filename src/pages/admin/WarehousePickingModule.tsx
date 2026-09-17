@@ -505,7 +505,7 @@ export default function WarehousePickingModule() {
                     {(order.warehouseStatus === 'IN_PICKING' || order.warehouseStatus === 'PICKED') && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handlePrint(order); }}
-                        className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all opacity-0 group-hover:opacity-100"
+                        className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-2xs"
                         title="Imprimir ticket"
                       >
                         <Printer className="w-4 h-4" />
