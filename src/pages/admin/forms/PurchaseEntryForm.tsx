@@ -682,90 +682,102 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                         <th className="p-2 text-left">Descripción</th>
                         <th className="p-2 text-center w-16">Cant.</th>
                         <th className="p-2 text-center w-14">U.M.</th>
-                        <th className="p-2 text-right w-24 bg-blue-50/40">Valor Compra</th>
+                        <th className="p-2 text-right w-24 bg-blue-50/40">Costo Unitario</th>
                         {formData.afectoIgv && <th className="p-2 text-right w-20">IGV</th>}
-                        <th className="p-2 text-right w-24 bg-emerald-50/40">Precio Compra</th>
+                        <th className="p-2 text-right w-24 bg-emerald-50/40">Precio Unitario</th>
+                        <th className="p-2 text-right w-24 bg-slate-100/50">Subtotal</th>
                         <th className="p-2 text-center w-24">Lote</th>
                         <th className="p-2 text-center w-28">F. Ingreso</th>
                         <th className="p-2 text-center w-10"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
-                      {formData.items.map((item: any, idx: number) => (
-                        <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
-                          <td className="p-2 font-mono text-[11px] font-bold text-slate-700">{item.code}</td>
-                          <td className="p-2 font-bold text-slate-900 uppercase text-xs">{item.name}</td>
-                          <td className="p-1">
-                            <input 
-                              type="number" 
-                              min="1"
-                              value={item.quantity} 
-                              onChange={e => updateItem(idx, 'quantity', e.target.value)} 
-                              className="w-full h-7 text-center border border-slate-200 rounded focus:border-blue-500 bg-white outline-none font-bold text-xs text-blue-900" 
-                            />
-                          </td>
-                          <td className="p-2 text-center">
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black bg-slate-100 text-slate-700 uppercase">
-                              {item.unitSymbol || 'UND'}
-                            </span>
-                          </td>
-                          <td className="p-1 bg-blue-50/20">
-                            <input 
-                              type="number" 
-                              step="0.0001" 
-                              value={item.valorCompra} 
-                              onChange={e => updateItem(idx, 'valorCompra', e.target.value)} 
-                              className={`w-full h-7 text-right px-1.5 border rounded text-xs font-bold ${formData.preciosIncluyenIgv ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-300 text-slate-800 focus:border-blue-500'} outline-none`} 
-                              readOnly={formData.preciosIncluyenIgv}
-                            />
-                          </td>
-                          {formData.afectoIgv && (
-                            <td className="p-2 text-right font-bold text-slate-500 text-xs">
-                              {formatNumber(Number(item.igv || 0) * Number(item.quantity || 0))}
+                      {formData.items.map((item: any, idx: number) => {
+                        const itemQty = Number(item.quantity || 0);
+                        const itemVal = Number(item.valorCompra || 0);
+                        const itemSubtotal = itemQty * itemVal;
+
+                        return (
+                          <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
+                            <td className="p-2 font-mono text-[11px] font-bold text-slate-700">{item.code}</td>
+                            <td className="p-2 font-bold text-slate-900 uppercase text-xs">{item.name}</td>
+                            <td className="p-1">
+                              <input 
+                                type="number" 
+                                min="1"
+                                value={item.quantity} 
+                                onChange={e => updateItem(idx, 'quantity', e.target.value)} 
+                                className="w-full h-7 text-center border border-slate-200 rounded focus:border-blue-500 bg-white outline-none font-bold text-xs text-blue-900" 
+                              />
                             </td>
-                          )}
-                          <td className="p-1 bg-emerald-50/20">
-                            <input 
-                              type="number" 
-                              step="0.0001" 
-                              value={item.price} 
-                              onChange={e => updateItem(idx, 'price', e.target.value)} 
-                              className={`w-full h-7 text-right px-1.5 border rounded text-xs font-bold ${!formData.preciosIncluyenIgv ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-300 text-emerald-800 focus:border-emerald-500'} outline-none`} 
-                              readOnly={!formData.preciosIncluyenIgv}
-                            />
-                          </td>
-                          <td className="p-1">
-                            <input 
-                              placeholder="LOTE" 
-                              value={item.lotNumber || ''} 
-                              onChange={e => updateItem(idx, 'lotNumber', e.target.value.toUpperCase())} 
-                              className="w-full h-7 text-center border border-slate-200 rounded focus:border-blue-500 bg-white outline-none font-bold font-mono text-[10px]" 
-                            />
-                          </td>
-                          <td className="p-1">
-                            <input 
-                              type="date" 
-                              value={item.entranceDate || ''} 
-                              onChange={e => updateItem(idx, 'entranceDate', e.target.value)} 
-                              className="w-full h-7 text-center border border-slate-200 rounded focus:border-blue-500 bg-white outline-none text-[10px]" 
-                            />
-                          </td>
-                          <td className="p-2 text-center">
-                            <button 
-                              type="button" 
-                              onClick={() => { 
-                                const itms = [...formData.items]; 
-                                itms.splice(idx, 1); 
-                                setFormData({...formData, items: itms}); 
-                              }} 
-                              className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
-                              title="Remover Item"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                            <td className="p-2 text-center">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black bg-slate-100 text-slate-700 uppercase">
+                                {item.unitSymbol || 'UND'}
+                              </span>
+                            </td>
+                            <td className="p-1 bg-blue-50/20">
+                              <input 
+                                type="number" 
+                                step="0.0001" 
+                                value={item.valorCompra} 
+                                onChange={e => updateItem(idx, 'valorCompra', e.target.value)} 
+                                className={`w-full h-7 text-right px-1.5 border rounded text-xs font-bold ${formData.preciosIncluyenIgv ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-300 text-slate-800 focus:border-blue-500'} outline-none`} 
+                                readOnly={formData.preciosIncluyenIgv}
+                                title="Costo Unitario (Base imponible sin IGV)"
+                              />
+                            </td>
+                            {formData.afectoIgv && (
+                              <td className="p-2 text-right font-bold text-slate-500 text-xs">
+                                {formatNumber(Number(item.igv || 0) * itemQty)}
+                              </td>
+                            )}
+                            <td className="p-1 bg-emerald-50/20">
+                              <input 
+                                type="number" 
+                                step="0.0001" 
+                                value={item.price} 
+                                onChange={e => updateItem(idx, 'price', e.target.value)} 
+                                className={`w-full h-7 text-right px-1.5 border rounded text-xs font-bold ${!formData.preciosIncluyenIgv ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-300 text-emerald-800 focus:border-emerald-500'} outline-none`} 
+                                readOnly={!formData.preciosIncluyenIgv}
+                                title="Precio Unitario (Incluye IGV si está afecto)"
+                              />
+                            </td>
+                            <td className="p-2 text-right font-bold text-slate-800 font-mono text-xs bg-slate-50/50">
+                              {formatNumber(itemSubtotal)}
+                            </td>
+                            <td className="p-1">
+                              <input 
+                                placeholder="LOTE" 
+                                value={item.lotNumber || ''} 
+                                onChange={e => updateItem(idx, 'lotNumber', e.target.value.toUpperCase())} 
+                                className="w-full h-7 text-center border border-slate-200 rounded focus:border-blue-500 bg-white outline-none font-bold font-mono text-[10px]" 
+                              />
+                            </td>
+                            <td className="p-1">
+                              <input 
+                                type="date" 
+                                value={item.entranceDate || ''} 
+                                onChange={e => updateItem(idx, 'entranceDate', e.target.value)} 
+                                className="w-full h-7 text-center border border-slate-200 rounded focus:border-blue-500 bg-white outline-none text-[10px]" 
+                              />
+                            </td>
+                            <td className="p-2 text-center">
+                              <button 
+                                type="button" 
+                                onClick={() => { 
+                                  const itms = [...formData.items]; 
+                                  itms.splice(idx, 1); 
+                                  setFormData({...formData, items: itms}); 
+                                }} 
+                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
+                                title="Remover Item"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                       {(!formData.items || formData.items.length === 0) && (
                         <tr>
                           <td colSpan={10} className="p-8 text-center text-slate-400 italic">
