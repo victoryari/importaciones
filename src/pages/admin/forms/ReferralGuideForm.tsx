@@ -378,6 +378,7 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({
             onClose={() => setIsSearchModalOpen(false)}
             onSelect={(p) => { addItem(p); setIsSearchModalOpen(false); }}
             token={token || ''}
+            allowZeroStock={true}
           />
 
           <SupplierSearchModal 

@@ -1648,6 +1648,7 @@ export default function Admin() {
                 formData={purchaseFormData}
                 setFormData={setPurchaseFormData}
                 mode={purchaseMode}
+                productsList={products}
               />
             )}
           </div>

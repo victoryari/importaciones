@@ -892,9 +892,48 @@ app.delete('/api/units/:id', authenticateToken, async (req, res) => {
 });
 
 // --- API PRODUCTS ---
+app.get('/api/products/search', authenticateToken, async (req, res) => {
+  try {
+    const q = (req.query.q || req.query.search || '') as string;
+    const term = q.trim();
+    const where: any = {};
+    if (term) {
+      where.OR = [
+        { name:        { contains: term } },
+        { code:        { contains: term } },
+        { description: { contains: term } },
+        { brand:       { name: { contains: term } } },
+        { category:    { name: { contains: term } } },
+      ];
+    }
+    const products = await (prisma as any).product.findMany({
+      where,
+      take: 50,
+      include: { 
+        category: true,
+        brand: true,
+        unit: true,
+        package: true,
+        subPackage: true,
+        stockRecords: {
+          include: { 
+            warehouse: true,
+            zone: { include: { floor: true } }
+          }
+        }
+      },
+      orderBy: { name: 'asc' }
+    });
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al buscar productos' });
+  }
+});
+
 app.get('/api/products', searchLimiter, async (req, res) => {
   try {
-    const { search, category, limit } = req.query;
+    const search = req.query.search || req.query.q;
+    const { category, limit } = req.query;
 
     // Construir filtro de búsqueda dinámico
     const where: any = {};

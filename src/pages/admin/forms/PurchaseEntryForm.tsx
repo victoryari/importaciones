@@ -19,6 +19,7 @@ interface PurchaseFormProps {
   formData: any;
   setFormData: (data: any) => void;
   mode?: 'invoices' | 'guides';
+  productsList?: any[];
 }
 
 const DEFAULT_PURCHASE_DOC_TYPES = [
@@ -50,10 +51,11 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
   onSuccess, 
   token, 
   formData, 
-  setFormData 
+  setFormData,
+  productsList
 }) => {
   const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>(productsList || []);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [docTypes, setDocTypes] = useState<any[]>(DEFAULT_PURCHASE_DOC_TYPES);
   const [currencies, setCurrencies] = useState<any[]>([]);
@@ -90,8 +92,26 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
   };
 
   useEffect(() => {
+    if (productsList && Array.isArray(productsList) && productsList.length > 0) {
+      setProducts(productsList);
+    }
+  }, [productsList]);
+
+  useEffect(() => {
     if (isOpen) fetchInitialData();
   }, [isOpen]);
+
+  const fetchProducts = async () => {
+    try {
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      const pRes = await axios.get('/api/products', config);
+      if (Array.isArray(pRes.data)) {
+        setProducts(pRes.data);
+      }
+    } catch (err) {
+      console.error('Error refreshing products:', err);
+    }
+  };
 
   // Efecto para Tipo de Cambio
   useEffect(() => {
@@ -133,7 +153,8 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
       ]);
       
       setSuppliers(Array.isArray(sRes.data) ? sRes.data : []);
-      setProducts(Array.isArray(pRes.data) ? pRes.data : []);
+      const prods = Array.isArray(pRes.data) && pRes.data.length > 0 ? pRes.data : (productsList || []);
+      setProducts(prods);
       const whs = Array.isArray(wRes.data) ? wRes.data.filter((w: any) => w.isActive !== false) : [];
       setWarehouses(whs);
       
@@ -706,6 +727,7 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                         placeholder="Buscar producto por nombre/código..." 
                         value={prodSearch} 
                         onChange={e => setProdSearch(e.target.value)} 
+                        onFocus={fetchProducts}
                         className="w-full h-7 pl-8 pr-3 text-xs border border-slate-300 rounded-lg outline-none focus:border-blue-500 bg-white" 
                       />
                       {prodSearch && (
@@ -732,7 +754,10 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
 
                     <button 
                       type="button" 
-                      onClick={() => setIsSearchModalOpen(true)}
+                      onClick={() => {
+                        fetchProducts();
+                        setIsSearchModalOpen(true);
+                      }}
                       className="h-7 px-3 bg-[#004A99] hover:bg-blue-800 text-white text-[10px] font-bold uppercase rounded-lg flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" /> Agregar Detalle
@@ -961,6 +986,7 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
               onClose={() => setIsSearchModalOpen(false)}
               onSelect={(p) => { addItem(p); setIsSearchModalOpen(false); }}
               token={token || ''}
+              allowZeroStock={true}
             />
 
             <SupplierSearchModal 
