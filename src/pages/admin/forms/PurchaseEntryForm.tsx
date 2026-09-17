@@ -684,8 +684,8 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                         <th className="p-2 text-center w-14">U.M.</th>
                         <th className="p-2 text-right w-24 bg-blue-50/40">Costo Unitario</th>
                         {formData.afectoIgv && <th className="p-2 text-right w-20">IGV</th>}
-                        <th className="p-2 text-right w-24 bg-emerald-50/40">Precio Unitario</th>
-                        <th className="p-2 text-right w-24 bg-slate-100/50">Subtotal</th>
+                        <th className="p-2 text-right w-24 bg-emerald-50/40">Valor Compra</th>
+                        <th className="p-2 text-right w-24 bg-slate-100/50">Precio Compra</th>
                         <th className="p-2 text-center w-24">Lote</th>
                         <th className="p-2 text-center w-28">F. Ingreso</th>
                         <th className="p-2 text-center w-10"></th>
@@ -694,8 +694,8 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                     <tbody className="divide-y divide-slate-100 bg-white">
                       {formData.items.map((item: any, idx: number) => {
                         const itemQty = Number(item.quantity || 0);
-                        const itemVal = Number(item.valorCompra || 0);
-                        const itemSubtotal = itemQty * itemVal;
+                        const itemPrice = Number(item.price || item.valorCompra || 0);
+                        const itemRowTotal = itemQty * itemPrice;
 
                         return (
                           <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
@@ -723,7 +723,7 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                                 onChange={e => updateItem(idx, 'valorCompra', e.target.value)} 
                                 className={`w-full h-7 text-right px-1.5 border rounded text-xs font-bold ${formData.preciosIncluyenIgv ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-300 text-slate-800 focus:border-blue-500'} outline-none`} 
                                 readOnly={formData.preciosIncluyenIgv}
-                                title="Costo Unitario (Base imponible sin IGV)"
+                                title="Costo Unitario base sin IGV"
                               />
                             </td>
                             {formData.afectoIgv && (
@@ -739,11 +739,11 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                                 onChange={e => updateItem(idx, 'price', e.target.value)} 
                                 className={`w-full h-7 text-right px-1.5 border rounded text-xs font-bold ${!formData.preciosIncluyenIgv ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-300 text-emerald-800 focus:border-emerald-500'} outline-none`} 
                                 readOnly={!formData.preciosIncluyenIgv}
-                                title="Precio Unitario (Incluye IGV si está afecto)"
+                                title="Valor Compra unitario (Incluye IGV si está afecto)"
                               />
                             </td>
                             <td className="p-2 text-right font-bold text-slate-800 font-mono text-xs bg-slate-50/50">
-                              {formatNumber(itemSubtotal)}
+                              {formatNumber(itemRowTotal)}
                             </td>
                             <td className="p-1">
                               <input 
