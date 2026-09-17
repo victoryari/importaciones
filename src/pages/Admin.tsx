@@ -559,18 +559,32 @@ export default function Admin() {
         setPurchaseFormData({
           ...item,
           date: item.date?.split('T')[0] || new Date().toISOString().split('T')[0],
-          items: item.items?.map((i: any) => ({
-            productId: i.productId,
-            name: i.product?.name || 'Producto',
-            code: i.product?.code || '',
-            unitSymbol: i.unitSymbol || i.product?.package?.symbol || i.product?.subPackage?.symbol || i.product?.unit?.symbol || 'UND',
-            quantity: i.quantity,
-            price: i.price,
-            lotNumber: i.lotNumber || '',
-            seriesNumber: i.seriesNumber || '',
-            expiryDate: i.expiryDate ? i.expiryDate.split('T')[0] : '',
-            observation: i.observation || ''
-          })) || []
+          items: item.items?.map((i: any) => {
+            const isFree = Boolean(i.isFree);
+            const price = Number(i.price || 0);
+            const refPrice = Number(i.referencePrice || price || 0);
+            const valor = price / 1.18;
+            const refCost = refPrice / 1.18;
+            return {
+              productId: i.productId,
+              name: i.product?.name || i.name || 'Producto',
+              code: i.product?.code || i.code || '',
+              unitSymbol: i.unitSymbol || i.product?.package?.symbol || i.product?.subPackage?.symbol || i.product?.unit?.symbol || 'UND',
+              quantity: Number(i.quantity || 1),
+              price: price,
+              valorCompra: isFree ? 0 : Number(i.valorCompra || valor),
+              referenceCost: refCost,
+              referencePrice: refPrice,
+              isFree: isFree,
+              freeType: i.freeType || '14',
+              igv: isFree ? 0 : (price - valor),
+              lotNumber: i.lotNumber || '',
+              seriesNumber: i.seriesNumber || '',
+              expiryDate: i.expiryDate ? i.expiryDate.split('T')[0] : '',
+              entranceDate: i.entranceDate ? i.entranceDate.split('T')[0] : (i.expiryDate ? i.expiryDate.split('T')[0] : new Date().toISOString().split('T')[0]),
+              observation: i.observation || ''
+            };
+          }) || []
         });
       } else {
         setPurchaseFormData({

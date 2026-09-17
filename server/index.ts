@@ -2457,7 +2457,10 @@ app.post('/api/purchases', authenticateToken, async (req, res) => {
     
     const purchase = await prisma.$transaction(async (tx) => {
       // 1. Create Purchase
-      const calculatedTotal = items.reduce((acc: number, item: any) => acc + (Number(item.quantity) * Number(item.price)), 0);
+      const calculatedTotal = items.reduce((acc: number, item: any) => {
+        if (item.isFree) return acc;
+        return acc + (Number(item.quantity) * Number(item.price));
+      }, 0);
       const finalTotal = bodyTotal !== undefined ? parseFloat(bodyTotal) : calculatedTotal;
 
       const newPurchase = await (tx as any).purchase.create({
@@ -2481,7 +2484,10 @@ app.post('/api/purchases', authenticateToken, async (req, res) => {
             create: items.map((item: any) => ({
               productId: item.productId,
               quantity: parseInt(item.quantity),
-              price: parseFloat(item.price),
+              price: item.isFree ? 0 : parseFloat(item.price || 0),
+              isFree: Boolean(item.isFree),
+              freeType: item.freeType || null,
+              referencePrice: item.referencePrice ? parseFloat(item.referencePrice) : (item.referenceCost ? parseFloat(item.referenceCost) : null),
               lotNumber: item.lotNumber || null,
               seriesNumber: item.seriesNumber || null,
               expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
@@ -2535,16 +2541,16 @@ app.post('/api/purchases', authenticateToken, async (req, res) => {
               type: 'INPUT',
               lotNumber: item.lotNumber || null,
               purchaseId: newPurchase.id,
-              observation: `Compra ${docSeries}-${docNumber} (${docType})`
+              observation: `Compra ${docSeries}-${docNumber} (${docType})${item.isFree ? ' [GRATUITO/MUESTRA]' : ''}`
             }
           } as any);
         } else if (referenceId) {
            console.log(`[PURCHASE] Skiping stock increment for ${item.productId} because it references ${referenceId}`);
         }
 
-        // Update product cost and recalculate sale price (Solo si es Factura o DUA)
+        // Update product cost and recalculate sale price (Solo si es Factura o DUA y no es muestra gratuita)
         const isAccountingDoc = ['01', '50', '03'].includes(docType);
-        if (isAccountingDoc) {
+        if (isAccountingDoc && !item.isFree && parseFloat(item.price) > 0) {
           const prod = await tx.product.findUnique({ where: { id: item.productId }, include: { unit: true } }) as any;
           if (prod) {
             item.productName = prod.name || '';
@@ -2651,12 +2657,18 @@ app.put('/api/purchases/:id', authenticateToken, async (req, res) => {
           paymentCondition: paymentCondition || 'CONTADO',
           creditDays: creditDays !== undefined ? parseInt(creditDays) : 0,
           observation,
-          totalAmount: bodyTotal !== undefined ? parseFloat(bodyTotal) : items.reduce((acc: number, item: any) => acc + (Number(item.quantity) * Number(item.price)), 0),
+          totalAmount: bodyTotal !== undefined ? parseFloat(bodyTotal) : items.reduce((acc: number, item: any) => {
+            if (item.isFree) return acc;
+            return acc + (Number(item.quantity) * Number(item.price));
+          }, 0),
           items: {
             create: items.map((item: any) => ({
               productId: item.productId,
               quantity: parseInt(item.quantity),
-              price: parseFloat(item.price),
+              price: item.isFree ? 0 : parseFloat(item.price || 0),
+              isFree: Boolean(item.isFree),
+              freeType: item.freeType || null,
+              referencePrice: item.referencePrice ? parseFloat(item.referencePrice) : (item.referenceCost ? parseFloat(item.referenceCost) : null),
               lotNumber: item.lotNumber || null,
               seriesNumber: item.seriesNumber || null,
               expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,

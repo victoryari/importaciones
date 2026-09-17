@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShoppingCart, X, Search, Save, Package, Truck, 
   Landmark, FileText, Calendar, DollarSign, UserPlus, 
-  AlertCircle, RefreshCw, Trash2, Plus
+  AlertCircle, RefreshCw, Trash2, Plus, Gift
 } from 'lucide-react';
 import axios from 'axios';
 import { formatNumber } from '../../../lib/utils';
@@ -196,6 +196,10 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
               quantity: it.quantity,
               price: formData.afectoIgv ? (formData.preciosIncluyenIgv ? price : valor + igv) : valor,
               valorCompra: valor,
+              referenceCost: valor,
+              referencePrice: formData.afectoIgv ? (formData.preciosIncluyenIgv ? price : valor + igv) : valor,
+              isFree: Boolean(it.isFree),
+              freeType: it.freeType || '14',
               igv: igv,
               lotNumber: it.lotNumber || '',
               expiryDate: it.expiryDate || '',
@@ -253,6 +257,10 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
         quantity: 1, 
         price: precio,
         valorCompra: valor,
+        referenceCost: valor,
+        referencePrice: precio,
+        isFree: false,
+        freeType: '14',
         igv: igv,
         lotNumber: '',
         expiryDate: '',
@@ -261,13 +269,46 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
     }));
   };
 
+  const toggleFreeItem = (index: number) => {
+    const newItems = [...formData.items];
+    const item = { ...newItems[index] };
+    if (!item.isFree) {
+      item.referenceCost = Number(item.valorCompra || item.referenceCost || 0);
+      item.referencePrice = Number(item.price || item.referencePrice || 0);
+      item.isFree = true;
+      item.freeType = '14'; // 14: Muestras comerciales/regalos, 12: Bonificación
+      item.valorCompra = 0;
+      item.price = 0;
+      item.igv = 0;
+    } else {
+      item.isFree = false;
+      item.freeType = undefined;
+      const restoredCost = Number(item.referenceCost || 0);
+      const restoredPrice = Number(item.referencePrice || 0);
+      item.valorCompra = restoredCost;
+      item.price = restoredPrice;
+      if (formData.afectoIgv) {
+        item.igv = formData.preciosIncluyenIgv ? (restoredPrice - restoredCost) : (restoredCost * 0.18);
+      } else {
+        item.igv = 0;
+      }
+    }
+    newItems[index] = item;
+    setFormData({ ...formData, items: newItems });
+  };
+
   const updateItem = (index: number, field: string, value: any) => {
     const newItems = [...formData.items];
     const item = { ...newItems[index], [field]: value };
     
     if (field === 'price') {
       const price = parseFloat(value) || 0;
-      if (formData.afectoIgv) {
+      if (item.isFree) {
+        item.referencePrice = price;
+        item.price = 0;
+        item.valorCompra = 0;
+        item.igv = 0;
+      } else if (formData.afectoIgv) {
         if (formData.preciosIncluyenIgv) {
           item.valorCompra = price / 1.18;
           item.igv = price - item.valorCompra;
@@ -281,7 +322,12 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
       }
     } else if (field === 'valorCompra') {
       const valor = parseFloat(value) || 0;
-      if (formData.afectoIgv) {
+      if (item.isFree) {
+        item.referenceCost = valor;
+        item.valorCompra = 0;
+        item.price = 0;
+        item.igv = 0;
+      } else if (formData.afectoIgv) {
         item.igv = valor * 0.18;
         item.price = valor + item.igv;
       } else {
@@ -316,15 +362,23 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
 
   // Cálculos de totales
   const subtotalGeneral = (formData.items || []).reduce((acc: number, item: any) => {
+    if (item.isFree) return acc;
     return acc + (Number(item.valorCompra || 0) * Number(item.quantity || 0));
   }, 0);
 
   const totalIgv = (formData.items || []).reduce((acc: number, item: any) => {
+    if (item.isFree) return acc;
     return acc + (Number(item.igv || 0) * Number(item.quantity || 0));
   }, 0);
 
   const totalGeneral = (formData.items || []).reduce((acc: number, item: any) => {
+    if (item.isFree) return acc;
     return acc + (Number(item.price || 0) * Number(item.quantity || 0));
+  }, 0);
+
+  const totalGratuito = (formData.items || []).reduce((acc: number, item: any) => {
+    if (!item.isFree) return acc;
+    return acc + (Number(item.referencePrice || item.referenceCost || 0) * Number(item.quantity || 0));
   }, 0);
 
   const selectedSupplier = suppliers.find(s => s.id.toString() === (formData.supplierId || '').toString());
@@ -680,6 +734,7 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                       <tr className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
                         <th className="p-2 text-left w-24">Código</th>
                         <th className="p-2 text-left">Descripción</th>
+                        <th className="p-2 text-center w-20">Gratuito</th>
                         <th className="p-2 text-center w-16">Cant.</th>
                         <th className="p-2 text-center w-14">U.M.</th>
                         <th className="p-2 text-right w-24 bg-blue-50/40">Costo Unitario</th>
@@ -694,13 +749,40 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                     <tbody className="divide-y divide-slate-100 bg-white">
                       {formData.items.map((item: any, idx: number) => {
                         const itemQty = Number(item.quantity || 0);
-                        const itemPrice = Number(item.price || item.valorCompra || 0);
-                        const itemRowTotal = itemQty * itemPrice;
+                        const isFree = Boolean(item.isFree);
+                        const itemPrice = isFree ? 0 : Number(item.price || item.valorCompra || 0);
+                        const itemRowTotal = isFree ? 0 : (itemQty * itemPrice);
 
                         return (
-                          <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
+                          <tr key={idx} className={`hover:bg-blue-50/30 transition-colors ${isFree ? 'bg-amber-50/30' : ''}`}>
                             <td className="p-2 font-mono text-[11px] font-bold text-slate-700">{item.code}</td>
-                            <td className="p-2 font-bold text-slate-900 uppercase text-xs">{item.name}</td>
+                            <td className="p-2 font-bold text-slate-900 uppercase text-xs">
+                              <div className="flex flex-col">
+                                <span>{item.name}</span>
+                                {isFree && (
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300">
+                                      <Gift className="w-2.5 h-2.5" /> GRATUITO / BONIFICACIÓN
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-1 text-center">
+                              <button
+                                type="button"
+                                onClick={() => toggleFreeItem(idx)}
+                                title={isFree ? "Cambiar a producto regular" : "Marcar como producto gratuito/muestra/regalo"}
+                                className={`h-7 px-2 rounded text-[10px] font-bold inline-flex items-center gap-1 border transition-all cursor-pointer ${
+                                  isFree
+                                    ? 'bg-amber-500 text-white border-amber-600 hover:bg-amber-600 shadow-2xs'
+                                    : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50 hover:text-slate-700'
+                                }`}
+                              >
+                                <Gift className={`w-3 h-3 ${isFree ? 'text-white' : 'text-slate-400'}`} />
+                                {isFree ? 'SÍ' : 'NO'}
+                              </button>
+                            </td>
                             <td className="p-1">
                               <input 
                                 type="number" 
@@ -716,34 +798,55 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                               </span>
                             </td>
                             <td className="p-1 bg-blue-50/20">
-                              <input 
-                                type="number" 
-                                step="0.0001" 
-                                value={item.valorCompra} 
-                                onChange={e => updateItem(idx, 'valorCompra', e.target.value)} 
-                                className={`w-full h-7 text-right px-1.5 border rounded text-xs font-bold ${formData.preciosIncluyenIgv ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-300 text-slate-800 focus:border-blue-500'} outline-none`} 
-                                readOnly={formData.preciosIncluyenIgv}
-                                title="Costo Unitario base sin IGV"
-                              />
+                              {isFree ? (
+                                <div className="text-right px-1.5 py-1">
+                                  <span className="text-xs font-bold text-slate-400">S/ 0.00</span>
+                                  <div className="text-[9px] text-slate-400 font-mono">Ref: {formatNumber(item.referenceCost || item.referencePrice || 0)}</div>
+                                </div>
+                              ) : (
+                                <input 
+                                  type="number" 
+                                  step="0.0001" 
+                                  value={item.valorCompra} 
+                                  onChange={e => updateItem(idx, 'valorCompra', e.target.value)} 
+                                  className={`w-full h-7 text-right px-1.5 border rounded text-xs font-bold ${formData.preciosIncluyenIgv ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-300 text-slate-800 focus:border-blue-500'} outline-none`} 
+                                  readOnly={formData.preciosIncluyenIgv}
+                                  title="Costo Unitario base sin IGV"
+                                />
+                              )}
                             </td>
                             {formData.afectoIgv && (
                               <td className="p-2 text-right font-bold text-slate-500 text-xs">
-                                {formatNumber(Number(item.igv || 0) * itemQty)}
+                                {isFree ? '0.00' : formatNumber(Number(item.igv || 0) * itemQty)}
                               </td>
                             )}
                             <td className="p-1 bg-emerald-50/20">
-                              <input 
-                                type="number" 
-                                step="0.0001" 
-                                value={item.price} 
-                                onChange={e => updateItem(idx, 'price', e.target.value)} 
-                                className={`w-full h-7 text-right px-1.5 border rounded text-xs font-bold ${!formData.preciosIncluyenIgv ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-300 text-emerald-800 focus:border-emerald-500'} outline-none`} 
-                                readOnly={!formData.preciosIncluyenIgv}
-                                title="Valor Compra unitario (Incluye IGV si está afecto)"
-                              />
+                              {isFree ? (
+                                <div className="text-right px-1.5 py-1">
+                                  <span className="text-xs font-bold text-slate-400">S/ 0.00</span>
+                                  <div className="text-[9px] text-slate-400 font-mono">Ref: {formatNumber(item.referencePrice || item.referenceCost || 0)}</div>
+                                </div>
+                              ) : (
+                                <input 
+                                  type="number" 
+                                  step="0.0001" 
+                                  value={item.price} 
+                                  onChange={e => updateItem(idx, 'price', e.target.value)} 
+                                  className={`w-full h-7 text-right px-1.5 border rounded text-xs font-bold ${!formData.preciosIncluyenIgv ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-300 text-emerald-800 focus:border-emerald-500'} outline-none`} 
+                                  readOnly={!formData.preciosIncluyenIgv}
+                                  title="Valor Compra unitario (Incluye IGV si está afecto)"
+                                />
+                              )}
                             </td>
                             <td className="p-2 text-right font-bold text-slate-800 font-mono text-xs bg-slate-50/50">
-                              {formatNumber(itemRowTotal)}
+                              {isFree ? (
+                                <div className="text-right">
+                                  <span className="text-xs font-bold text-amber-700">S/ 0.00</span>
+                                  <div className="text-[9px] text-amber-600/70 font-mono">Gratuito</div>
+                                </div>
+                              ) : (
+                                formatNumber(itemRowTotal)
+                              )}
                             </td>
                             <td className="p-1">
                               <input 
@@ -780,7 +883,7 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                       })}
                       {(!formData.items || formData.items.length === 0) && (
                         <tr>
-                          <td colSpan={10} className="p-8 text-center text-slate-400 italic">
+                          <td colSpan={formData.afectoIgv ? 12 : 11} className="p-8 text-center text-slate-400 italic">
                             No hay productos agregados. Utilice el buscador superior o el botón "+ Agregar Detalle".
                           </td>
                         </tr>
@@ -812,6 +915,15 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                 </div>
 
                 <div className="flex gap-4 items-center">
+                  {totalGratuito > 0 && (
+                    <div className="flex flex-col items-end px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-lg">
+                      <span className="text-[9px] font-bold text-amber-800 uppercase flex items-center gap-1">
+                        <Gift className="w-2.5 h-2.5" /> Op. Gratuitas (Ref)
+                      </span>
+                      <span className="text-xs font-bold text-amber-900 font-mono">S/ {formatNumber(totalGratuito)}</span>
+                    </div>
+                  )}
+
                   <div className="flex flex-col items-end">
                     <span className="text-[9px] font-bold text-slate-500 uppercase">Base Imponible</span>
                     <span className="text-xs font-bold text-slate-800 font-mono">S/ {formatNumber(subtotalGeneral)}</span>
