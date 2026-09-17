@@ -9,9 +9,19 @@ interface ProductSearchModalProps {
   onSelect: (product: any) => void;
   token: string;
   allowZeroStock?: boolean;
+  selectedWarehouseId?: number | string;
+  warehouses?: any[];
 }
 
-export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({ isOpen, onClose, onSelect, token, allowZeroStock = false }) => {
+export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onSelect, 
+  token, 
+  allowZeroStock = false,
+  selectedWarehouseId,
+  warehouses = []
+}) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -36,6 +46,13 @@ export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({ isOpen, 
     finally { setLoading(false); }
   };
 
+  const getWarehouseStock = (product: any, whId: number | string) => {
+    if (!product.stockRecords || !whId) return 0;
+    const targetId = parseInt(whId.toString());
+    const record = product.stockRecords.find((r: any) => r.warehouseId === targetId);
+    return record ? record.quantity : 0;
+  };
+
   const calculateTotalStock = (product: any) => {
     if (!product.stockRecords) return product.stock || 0;
     return product.stockRecords.reduce((acc: number, record: any) => {
@@ -47,6 +64,8 @@ export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({ isOpen, 
       return acc + record.quantity;
     }, 0);
   };
+
+  const selectedWhName = selectedWarehouseId && warehouses.find(w => w.id === parseInt(selectedWarehouseId.toString()))?.name;
 
   const filteredResults = results.filter((product) => {
     if (allowZeroStock) return true;
@@ -105,7 +124,9 @@ export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({ isOpen, 
                       <th className="px-2 py-1.5 font-bold text-slate-400 uppercase tracking-wider w-10">Foto</th>
                       <th className="px-2 py-1.5 font-bold text-slate-400 uppercase tracking-wider w-8">Cod.</th>
                       <th className="px-2 py-1.5 font-bold text-slate-400 uppercase tracking-wider">Producto</th>
-                      <th className="px-2 py-1.5 font-bold text-slate-400 uppercase tracking-wider text-center w-20">Stock</th>
+                      <th className="px-2 py-1.5 font-bold text-slate-400 uppercase tracking-wider text-center w-28">
+                        Stock {selectedWhName ? `(${selectedWhName})` : ''}
+                      </th>
                       <th className="px-2 py-1.5 font-bold text-slate-400 uppercase tracking-wider text-right w-24">Costo</th>
                       <th className="px-2 py-1.5 font-bold text-slate-400 uppercase tracking-wider text-center w-20"></th>
                     </tr>
@@ -113,6 +134,8 @@ export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({ isOpen, 
                   <tbody className="divide-y divide-slate-100">
                     {filteredResults.map((product) => {
                       const totalStock = calculateTotalStock(product);
+                      const whStock = selectedWarehouseId ? getWarehouseStock(product, selectedWarehouseId) : totalStock;
+                      const otherStock = totalStock - whStock;
                       const imageUrl = product.images && Array.isArray(product.images) && product.images.length > 0 ? product.images[0] : null;
                       return (
                         <tr key={product.id} className="hover:bg-blue-50/50 transition-colors group cursor-pointer" onClick={() => onSelect(product)}>
@@ -145,9 +168,16 @@ export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({ isOpen, 
                             <div className="text-[9px] text-slate-400">{product.category?.name} {product.brand?.name ? `• ${product.brand.name}` : ''}</div>
                           </td>
                           <td className="px-2 py-2 text-center">
-                            <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold ${totalStock > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
-                              {totalStock} {product.unit?.symbol || 'un.'}
-                            </span>
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold ${whStock > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>
+                                {whStock} {product.unit?.symbol || 'un.'}
+                              </span>
+                              {selectedWarehouseId && otherStock > 0 && (
+                                <span className="text-[8px] font-medium text-slate-400 bg-slate-100 px-1 py-0.2 rounded" title={`Stock en otras sedes: ${otherStock}`}>
+                                  +{otherStock} en otras sedes
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-2 py-2 text-right font-bold text-slate-700 text-xs">
                             S/ {Number(product.costPrice || product.salePrice || 0).toFixed(2)}

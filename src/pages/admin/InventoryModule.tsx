@@ -21,6 +21,10 @@ interface Product {
   images?: string[];
   category?: { name: string };
   unit?: { name?: string; symbol?: string };
+  package?: { name?: string; symbol?: string };
+  subPackage?: { name?: string; symbol?: string };
+  quantityPerPackage?: number;
+  quantityPerSubPackage?: number;
   isActive: boolean;
 }
 
@@ -313,7 +317,9 @@ export const InventoryModule: React.FC<InventoryModuleProps> = ({
                           <span className="text-xl font-black text-slate-900">
                             {formatNumber(s.quantity, 0)}
                           </span>
-                          <span className="text-[10px] text-slate-400 font-bold uppercase">{s.product?.unit?.symbol || 'un.'}</span>
+                          <span className="text-[10px] text-blue-700 font-black uppercase tracking-tight">
+                            {s.product?.package?.name || s.product?.package?.symbol || s.product?.subPackage?.name || s.product?.unit?.name || s.product?.unit?.symbol || 'CAJ'}
+                          </span>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">

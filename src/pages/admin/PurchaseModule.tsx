@@ -13,6 +13,9 @@ interface Purchase {
   totalAmount: number;
   currency: string;
   status: string;
+  purchaseType?: string;
+  paymentCondition?: string;
+  creditDays?: number;
   items: any[];
 }
 
@@ -135,11 +138,25 @@ export const PurchaseModule: React.FC<PurchaseModuleProps> = ({ token, onNew, on
                   <div className="font-bold text-slate-700 text-sm">{p.supplierName || (p as any).supplier?.name}</div>
                 </td>
                 <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 rounded text-[9px] font-black ${['GUIA', '09', 'GRM'].includes(p.docType) ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>
-                      {['09', 'GRM'].includes(p.docType) ? 'GUIA' : p.docType}
-                    </span>
-                    <span className="text-xs font-bold text-slate-600">{p.docSeries}-{p.docNumber}</span>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-black ${['GUIA', '09', 'GRM'].includes(p.docType) ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>
+                        {['09', 'GRM'].includes(p.docType) ? 'GUIA' : p.docType}
+                      </span>
+                      <span className="text-xs font-bold text-slate-600">{p.docSeries}-{p.docNumber}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {p.purchaseType && (
+                        <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-tight">
+                          {p.purchaseType}
+                        </span>
+                      )}
+                      {p.paymentCondition && (
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-tight ${p.paymentCondition === 'CREDITO' ? 'bg-amber-50 text-amber-700 border border-amber-200/60' : 'bg-slate-100 text-slate-600'}`}>
+                          {p.paymentCondition}{p.paymentCondition === 'CREDITO' && p.creditDays ? ` (${p.creditDays}d)` : ''}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </td>
                 {activeTab === 'invoices' && (

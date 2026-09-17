@@ -5,6 +5,7 @@ import axios from 'axios';
 import { ProductSearchModal } from './ProductSearchModal';
 import { SupplierSearchModal } from './SupplierSearchModal';
 import { SupplierForm } from './SupplierForm';
+import { SUNAT_PURCHASE_TYPES } from './PurchaseEntryForm';
 
 interface ReferralGuideFormProps {
   isOpen: boolean;
@@ -15,7 +16,19 @@ interface ReferralGuideFormProps {
   setFormData: (data: any) => void;
 }
 
-export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({ isOpen, onClose, onSuccess, token, formData, setFormData }) => {
+const DEFAULT_GUIDE_DOC_TYPES = [
+  { code: '09', name: 'Guía de Remisión - Remitente' },
+  { code: '31', name: 'Guía de Remisión - Transportista' }
+];
+
+export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({ 
+  isOpen, 
+  onClose, 
+  onSuccess, 
+  token, 
+  formData, 
+  setFormData 
+}) => {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -31,7 +44,7 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({ isOpen, on
     department: '', province: '', district: '' 
   });
 
-  const [docTypes, setDocTypes] = useState<any[]>([]);
+  const [docTypes, setDocTypes] = useState<any[]>(DEFAULT_GUIDE_DOC_TYPES);
   const [currencies, setCurrencies] = useState<any[]>([]);
   const [tcWarning, setTcWarning] = useState('');
 
@@ -53,11 +66,17 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({ isOpen, on
       if (res.data && res.data.sell_rate) {
         setFormData((prev: any) => ({ ...prev, exchangeRate: res.data.sell_rate.toString() }));
         const rateDate = res.data.date?.split('T')[0];
-        setTcWarning(rateDate === date ? '' : `Mostrando último T.C. registrado (${rateDate})`);
+        if (rateDate === date) {
+          setTcWarning('');
+        } else {
+          setTcWarning(`Mostrando último T.C. registrado (${rateDate}). No hay registro exacto para hoy.`);
+        }
       } else {
-        setTcWarning('No hay T.C. registrado para hoy');
+        setTcWarning('No hay tipo de cambio registrado para este día.');
       }
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error('Error fetching TC:', err);
+    }
   };
 
   const fetchInitialData = async () => {
@@ -67,7 +86,7 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({ isOpen, on
         axios.get('/api/suppliers', config).catch(() => ({ data: [] })),
         axios.get('/api/products', config).catch(() => ({ data: [] })),
         axios.get('/api/warehouses', config).catch(() => ({ data: [] })),
-        axios.get('/api/sunat/TABLA_02', config).catch(() => ({ data: [] })),
+        axios.get('/api/sunat/TABLA_10', config).catch(() => ({ data: [] })),
         axios.get('/api/sunat/TABLA_04', config).catch(() => ({ data: [] }))
       ]);
       
@@ -77,9 +96,10 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({ isOpen, on
       setWarehouses(whs);
       setCurrencies(Array.isArray(cRes.data) ? cRes.data : []);
       
-      // Asegurar que GRM esté presente o usar 09
-      const dts = Array.isArray(dRes.data) ? dRes.data : [];
-      setDocTypes(dts.filter((d: any) => d.code === '09' || d.code === 'GRM'));
+      // Asegurar que Guías (09 / 31) estén presentes
+      const dts = Array.isArray(dRes.data) && dRes.data.length > 0 ? dRes.data : DEFAULT_GUIDE_DOC_TYPES;
+      const filtered = dts.filter((d: any) => ['09', '31', 'GRM', 'GRT'].includes(d.code));
+      setDocTypes(filtered.length > 0 ? filtered : DEFAULT_GUIDE_DOC_TYPES);
       
       const defaultWh = whs.find((w: any) => w.name.toUpperCase().includes('COMPRAS IMP/NAC'))?.id?.toString();
       
@@ -236,9 +256,10 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({ isOpen, on
 
                 <div className="col-span-12 lg:col-span-4 flex flex-col gap-1">
                   <label className="font-black text-slate-500 uppercase text-[9px]">Tipo Compra:</label>
-                  <select value={formData.purchaseType} onChange={e => setFormData({...formData, purchaseType: e.target.value})} className="w-full h-7 bg-slate-50 border border-slate-200 px-2 outline-none font-bold">
-                    <option value="NACIONAL">NACIONAL</option>
-                    <option value="IMPORTACION">IMPORTACIÓN</option>
+                  <select value={formData.purchaseType || 'MERCADERIA'} onChange={e => setFormData({...formData, purchaseType: e.target.value})} className="w-full h-7 bg-slate-50 border border-slate-200 px-2 outline-none font-bold">
+                    {SUNAT_PURCHASE_TYPES.map(t => (
+                      <option key={t.code} value={t.code}>{t.name}</option>
+                    ))}
                   </select>
                 </div>
 

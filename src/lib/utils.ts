@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { resolveUbigeoInfo } from './ubigeoData';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -202,4 +203,59 @@ export function calculateItemTotal(quantity: number, unitCost: number): number {
 export function calculateTotalWeight(quantity: number, weight: number | null): number | null {
   if (!weight) return null;
   return quantity * weight;
+}
+
+export function formatFullCustomerAddress(
+  address?: string | null,
+  district?: string | null,
+  province?: string | null,
+  department?: string | null
+): string {
+  const cleanStr = (s?: string | null) => (s || '').trim().toUpperCase();
+  const removeAccents = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const isNumericOnly = (s: string) => /^\d+$/.test(s.trim());
+
+  let addr = cleanStr(address);
+  // Eliminar cualquier sufijo residual de códigos numéricos (ej. " - 15 - 01 - 01" o " - 15")
+  addr = addr.replace(/(?:\s*-\s*\d{1,4})+\s*$/g, '').trim();
+
+  let dept = cleanStr(department);
+  let prov = cleanStr(province);
+  let dist = cleanStr(district);
+
+  // Si los parámetros vienen como códigos numéricos (ej. "15", "01", "01"), resolverlos a sus nombres
+  if (isNumericOnly(dept) || isNumericOnly(prov) || isNumericOnly(dist)) {
+    const ubi = resolveUbigeoInfo({
+      department: dept,
+      province: prov,
+      district: dist
+    });
+    dept = ubi.department;
+    prov = ubi.province;
+    dist = ubi.district;
+  }
+
+  // Descartar si aún quedara algún código puramente numérico no resuelto
+  if (isNumericOnly(dept)) dept = '';
+  if (isNumericOnly(prov)) prov = '';
+  if (isNumericOnly(dist)) dist = '';
+
+  if (!addr) {
+    return [dept, prov, dist].filter(Boolean).join(' - ');
+  }
+
+  const normAddr = removeAccents(addr);
+  const parts: string[] = [addr];
+  
+  if (dept && !normAddr.includes(removeAccents(dept))) {
+    parts.push(dept);
+  }
+  if (prov && !normAddr.includes(removeAccents(prov))) {
+    parts.push(prov);
+  }
+  if (dist && !normAddr.includes(removeAccents(dist))) {
+    parts.push(dist);
+  }
+
+  return parts.join(' - ');
 }

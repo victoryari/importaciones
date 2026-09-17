@@ -104,15 +104,25 @@ export const generateQuotationPDF = async (quotation: any, items: any[], action:
     doc.text(getCurrencyName(quotation.currency), pageWidth - 45, 79);
 
     // --- TABLA DE PRODUCTOS ---
-    const tableData = (items || []).map((item, index) => [
-      index + 1,
-      item.product?.code || item.code || '-',
-      item.product?.name || item.name || '-',
-      item.quantity || 0,
-      item.product?.unit?.symbol || item.unit?.symbol || 'UND',
-      formatNumber(item.price || 0),
-      formatNumber(Number(item.quantity || 0) * Number(item.price || 0))
-    ]);
+    const hasFreeItems = (items || []).some(item => Boolean(item.isFree));
+    const tableData = (items || []).map((item, index) => {
+      const isFree = Boolean(item.isFree);
+      const effectivePrice = isFree ? 0 : Number(item.price || 0);
+      const desc = (item.product?.name || item.name || '-') + (isFree ? ' [TRANSFERENCIA GRATUITA]' : '');
+      const unitPriceStr = isFree 
+        ? `0.00 (Ref: ${formatNumber(item.referencePrice || item.originalPrice || item.price || 0)})`
+        : formatNumber(effectivePrice);
+
+      return [
+        index + 1,
+        item.product?.code || item.code || '-',
+        desc,
+        item.quantity || 0,
+        item.product?.unit?.symbol || item.unit?.symbol || 'UND',
+        unitPriceStr,
+        formatNumber(Number(item.quantity || 0) * effectivePrice)
+      ];
+    });
 
     autoTable(doc, {
       startY: 95,
@@ -134,8 +144,8 @@ export const generateQuotationPDF = async (quotation: any, items: any[], action:
         0: { halign: 'center', cellWidth: 10 },
         3: { halign: 'center', cellWidth: 15 },
         4: { halign: 'center', cellWidth: 15 },
-        5: { halign: 'right', cellWidth: 25 },
-        6: { halign: 'right', cellWidth: 25 },
+        5: { halign: 'right', cellWidth: 28 },
+        6: { halign: 'right', cellWidth: 22 },
       },
       margin: { left: margin, right: margin }
     });
@@ -165,10 +175,19 @@ export const generateQuotationPDF = async (quotation: any, items: any[], action:
     doc.text("TOTAL:", totalsX, finalY + 27);
     doc.text(`${quotation.currency === 'USD' ? '$' : 'S/'} ${formatNumber(total)}`, pageWidth - margin, finalY + 27, { align: 'right' });
 
-    // --- FOOTER ---
+    // --- FOOTER & LEYENDA GRATUITA ---
     doc.setFontSize(8);
     doc.setFont("helvetica", "italic");
     doc.setTextColor(120);
+
+    if (hasFreeItems) {
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(180, 80, 0);
+      doc.text("LEYENDA: TRANSFERENCIA GRATUITA DE UN BIEN Y/O SERVICIO PRESTADO GRATUITAMENTE", margin, finalY + 38);
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(120);
+    }
+
     doc.text(settings.footer_message || "Esta cotización tiene una validez de 7 días.", margin, finalY + 45);
 
     if (action === 'print') {
@@ -662,13 +681,17 @@ export const generateInvoicePDF = async (invoice: any, items: any[], action: 'sa
     
     doc.setDrawColor(200);
     doc.setLineWidth(0.3);
-    doc.line(margin, footerY + 22, pageWidth - margin, footerY + 22);
+    doc.line(margin, footerY + 24, pageWidth - margin, footerY + 24);
     
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
+    doc.setFontSize(6.8);
     doc.setTextColor(80);
-    doc.text("Representación Impresa de la FACTURA ELECTRÓNICA, consulte https://consulta.factesol.net.pe/", margin + 25, footerY + 7);
-    doc.text("Autorizado mediante RESOLUCIÓN DE INTENDENCIA : 0340050008568/SUNAT", margin + 25, footerY + 11);
+    doc.text(`Representación Impresa de la ${docTypeName}, autorizada por SUNAT`, margin + 25, footerY + 6);
+    doc.text("Autorizado mediante RESOLUCIÓN DE INTENDENCIA : 0340050008568/SUNAT", margin + 25, footerY + 10);
+    
+    const estCode = invoice.warehouse?.sunatCode || invoice.sunatEstablishmentCode || '0000';
+    doc.text(`Establecimiento Emisor SUNAT: [${estCode}] | Hash: ${invoice.sunatHashCode || 'VALIDADO-DIGITALMENTE'}`, margin + 25, footerY + 14);
+    doc.text("Consulte la validez de este comprobante en https://www.sunat.gob.pe/", margin + 25, footerY + 18);
     
     // QR Code
     drawQRCodeMockup(pageWidth - margin - 22, footerY + 2, 18);
@@ -677,7 +700,7 @@ export const generateInvoicePDF = async (invoice: any, items: any[], action: 'sa
     doc.setFont("helvetica", "italic");
     doc.setFontSize(5.5);
     doc.setTextColor(120);
-    doc.text("powered by TI", pageWidth - margin - 22, footerY + 21);
+    doc.text("SUNAT UBL 2.1", pageWidth - margin - 22, footerY + 22);
 
     if (action === 'print') {
       doc.autoPrint();
@@ -688,5 +711,338 @@ export const generateInvoicePDF = async (invoice: any, items: any[], action: 'sa
   } catch (error: any) {
     console.error("Error al generar PDF de Factura:", error);
     alert("Error al generar PDF de Factura: " + error.message);
+  }
+};
+
+export const generateReferralGuidePDF = async (guide: any, items: any[], action: 'save' | 'print' = 'print') => {
+  console.log(`Iniciando generación de PDF de Guía de Remisión (${action})...`);
+  try {
+    const settingsRes = await axios.get('/api/settings');
+    const settings = settingsRes.data;
+
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.width;
+    const margin = 14;
+    const boxW = pageWidth - margin * 2;
+
+    const drawFieldPill = (text: string, x: number, y: number) => {
+      const originalFont = doc.getFont();
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.2);
+      const textWidth = doc.getTextWidth(text);
+      const pillW = textWidth + 4;
+      const pillH = 3.8;
+      
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(140, 140, 140);
+      doc.setLineWidth(0.18);
+      doc.roundedRect(x - pillW / 2, y - pillH / 2, pillW, pillH, 1.2, 1.2, 'FD');
+      
+      doc.setTextColor(40, 40, 40);
+      doc.text(text, x, y + 1.1, { align: 'center' });
+      doc.setFont(originalFont.fontName, originalFont.fontStyle);
+    };
+
+    const drawQRCodeMockup = (x: number, y: number, size: number) => {
+      doc.setFillColor(255, 255, 255);
+      doc.rect(x, y, size, size, 'F');
+      doc.setDrawColor(180, 180, 180);
+      doc.setLineWidth(0.2);
+      doc.rect(x, y, size, size, 'D');
+
+      doc.setFillColor(0, 0, 0);
+      doc.rect(x + 1.5, y + 1.5, 3.5, 3.5, 'F');
+      doc.rect(x + size - 5, y + 1.5, 3.5, 3.5, 'F');
+      doc.rect(x + 1.5, y + size - 5, 3.5, 3.5, 'F');
+
+      doc.setFillColor(255, 255, 255);
+      doc.rect(x + 2.5, y + 2.5, 1.5, 1.5, 'F');
+      doc.rect(x + size - 4, y + 2.5, 1.5, 1.5, 'F');
+      doc.rect(x + 2.5, y + size - 4, 1.5, 1.5, 'F');
+
+      doc.setFillColor(0, 0, 0);
+      doc.rect(x + 7, y + 2, 2, 2, 'F');
+      doc.rect(x + 5, y + 6, 2.5, 1.5, 'F');
+      doc.rect(x + 8.5, y + 6, 2, 2.5, 'F');
+      doc.rect(x + 6, y + size - 5, 3, 2, 'F');
+      doc.rect(x + size - 5, y + 6, 2, 3, 'F');
+    };
+
+    // --- CABECERA ---
+    if (settings.company_logo) {
+      try {
+        doc.addImage(settings.company_logo, 'PNG', margin, 12, 35, 35, undefined, 'FAST');
+      } catch (e) {
+        console.warn("Error al cargar logo", e);
+      }
+    }
+
+    const companyX = settings.company_logo ? 52 : margin;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(27, 54, 93); // Azul Corporativo Carmelita
+    doc.text(settings.company_name || "IMPORTACIONES CARMELITA DEL NORTE SAC", companyX, 18);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.8);
+    doc.setTextColor(80, 80, 80);
+    doc.text(`RUC: ${settings.company_ruc || "20126500603"}`, companyX, 24);
+    doc.text(settings.company_address || "JR. CUZCO 809 A - LIMA", companyX, 29);
+    doc.text(`Telf: ${settings.company_phone || "972248827"} | Email: ${settings.company_email || "ventas@grupocarmelita.com"}`, companyX, 34);
+
+    // Cuadro de Comprobante (Derecha)
+    const rightBoxW = 60;
+    const rightBoxH = 34;
+    const rightBoxX = pageWidth - margin - rightBoxW;
+    const rightBoxY = 12;
+
+    doc.setDrawColor(27, 54, 93);
+    doc.setLineWidth(0.4);
+    doc.setFillColor(255, 255, 255);
+    doc.rect(rightBoxX, rightBoxY, rightBoxW, rightBoxH, 'FD');
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(27, 54, 93);
+    doc.text(`R.U.C. ${settings.company_ruc || "20126500603"}`, rightBoxX + rightBoxW / 2, rightBoxY + 6.5, { align: 'center' });
+    
+    doc.setFillColor(0, 74, 153); // Corporate Blue Banner
+    doc.rect(rightBoxX, rightBoxY + 10, rightBoxW, 12, 'F');
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text("GUÍA DE REMISIÓN ELECTRÓNICA", rightBoxX + rightBoxW / 2, rightBoxY + 14.5, { align: 'center' });
+    doc.setFontSize(7.5);
+    doc.text("REMITENTE", rightBoxX + rightBoxW / 2, rightBoxY + 19, { align: 'center' });
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10.5);
+    doc.setTextColor(0, 74, 153);
+    doc.text(`N° ${guide.numberFormatted || 'T001-00000001'}`, rightBoxX + rightBoxW / 2, rightBoxY + 29, { align: 'center' });
+
+    // --- SECCIÓN 1: DATOS GENERALES Y TRASLADO ---
+    let startY = 50;
+
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.2);
+    doc.setFillColor(255, 255, 255);
+    doc.rect(margin, startY, boxW, 24, 'FD');
+
+    drawFieldPill("FECHA EMISIÓN", margin + 25, startY);
+    drawFieldPill("FECHA TRASLADO", margin + 65, startY);
+    drawFieldPill("MOTIVO TRASLADO", margin + 115, startY);
+    drawFieldPill("MODALIDAD TRANSPORTE", margin + 162, startY);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(20, 20, 20);
+    const emDate = guide.issueDate ? new Date(guide.issueDate).toISOString().split('T')[0] : '-';
+    const trDate = guide.transferDate ? new Date(guide.transferDate).toISOString().split('T')[0] : emDate;
+    doc.text(emDate, margin + 25, startY + 5.5, { align: 'center' });
+    doc.text(trDate, margin + 65, startY + 5.5, { align: 'center' });
+    
+    const reasonText = guide.transferReasonDescription || (guide.transferReason === '01' ? 'VENTA' : 'TRASLADO ENTRE LOCALES');
+    doc.text(reasonText.toUpperCase(), margin + 115, startY + 5.5, { align: 'center' });
+    const modeText = guide.transportMode === '01' ? 'TRANSPORTE PÚBLICO' : 'TRANSPORTE PRIVADO';
+    doc.text(modeText, margin + 162, startY + 5.5, { align: 'center' });
+
+    // Fila 2 de Datos Generales: Destinatario
+    doc.setDrawColor(210, 210, 210);
+    doc.line(margin, startY + 10, margin + boxW, startY + 10);
+    drawFieldPill("DATOS DEL DESTINATARIO (CLIENTE)", margin + 40, startY + 10);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(90, 90, 90);
+    doc.text(`RUC / DNI: `, margin + 4, startY + 16);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(20, 20, 20);
+    doc.text(`${guide.customerDocNumber || '-'}`, margin + 20, startY + 16);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(90, 90, 90);
+    doc.text(`Razón Social: `, margin + 50, startY + 16);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(20, 20, 20);
+    doc.text(`${(guide.customerName || '').substring(0, 60)}`, margin + 70, startY + 16);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(90, 90, 90);
+    doc.text(`Dirección: `, margin + 4, startY + 21);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(30, 30, 30);
+    doc.text(`${(guide.customerAddress || guide.deliveryAddress || '-').substring(0, 95)}`, margin + 18, startY + 21);
+
+    // --- SECCIÓN 2: PUNTOS DE PARTIDA Y LLEGADA ---
+    startY += 28;
+    const halfW = (boxW - 4) / 2;
+
+    // Partida
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.2);
+    doc.setFillColor(255, 255, 255);
+    doc.rect(margin, startY, halfW, 20, 'FD');
+    drawFieldPill("PUNTO DE PARTIDA (ORIGEN)", margin + 35, startY);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(80, 80, 80);
+    doc.text("Almacén:", margin + 4, startY + 6);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(20, 20, 20);
+    const originWhName = guide.originWarehouse?.name || 'ALMACÉN PRINCIPAL';
+    doc.text(originWhName.toUpperCase(), margin + 18, startY + 6);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(80, 80, 80);
+    doc.text("Dirección:", margin + 4, startY + 11);
+    doc.setTextColor(30, 30, 30);
+    doc.text(`${(guide.originAddress || '-').substring(0, 48)}`, margin + 18, startY + 11);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(80, 80, 80);
+    doc.text(`Ubigeo: ${guide.originUbigeo || '150101'}   |   Cód. SUNAT: ${guide.originSunatCode || '0000'}`, margin + 4, startY + 16);
+
+    // Llegada
+    const llegadaX = margin + halfW + 4;
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.2);
+    doc.setFillColor(255, 255, 255);
+    doc.rect(llegadaX, startY, halfW, 20, 'FD');
+    drawFieldPill("PUNTO DE LLEGADA (DESTINO)", llegadaX + 35, startY);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(80, 80, 80);
+    doc.text("Dirección:", llegadaX + 4, startY + 6);
+    doc.setTextColor(30, 30, 30);
+    doc.text(`${(guide.deliveryAddress || '-').substring(0, 48)}`, llegadaX + 18, startY + 6);
+
+    const distText = [guide.deliveryDistrict, guide.deliveryProvince, guide.deliveryDepartment].filter(Boolean).join(' - ') || 'LIMA';
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(80, 80, 80);
+    doc.text("Distrito/Prov:", llegadaX + 4, startY + 11);
+    doc.setTextColor(30, 30, 30);
+    doc.text(distText.substring(0, 45), llegadaX + 22, startY + 11);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(80, 80, 80);
+    doc.text(`Ubigeo SUNAT: ${guide.deliveryUbigeo || '150101'}`, llegadaX + 4, startY + 16);
+
+    // --- SECCIÓN 3: TRANSPORTE Y CARGA ---
+    startY += 24;
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.2);
+    doc.setFillColor(255, 255, 255);
+    doc.rect(margin, startY, boxW, 20, 'FD');
+    drawFieldPill("DATOS DEL TRANSPORTE Y CARGA", margin + 40, startY);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(40, 40, 40);
+
+    if (guide.transportMode === '01') {
+      // Público
+      const carrName = guide.carrierName || guide.shippingAgency?.name || 'EMPRESA DE TRANSPORTE';
+      doc.text(`Transportista: ${carrName}   |   RUC: ${guide.carrierDocNumber || '-'}   |   Reg. MTC: ${guide.carrierMtcNumber || '-'}`, margin + 4, startY + 6.5);
+    } else {
+      // Privado
+      doc.text(`Conductor: ${guide.driverName || '-'}   |   DNI: ${guide.driverDocNumber || '-'}   |   Licencia: ${guide.driverLicenseNumber || '-'}`, margin + 4, startY + 6.5);
+      doc.text(`Vehículo Placa: ${guide.vehiclePlate || '-'} ${guide.vehicleSecondaryPlate ? `  |   Placa Acoplado: ${guide.vehicleSecondaryPlate}` : ''}`, margin + 4, startY + 11.5);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 74, 153);
+    const refDoc = guide.invoiceNumber ? `Comprobante: ${guide.invoiceNumber}` : (guide.orderNumber ? `Pedido: #${guide.orderNumber}` : '-');
+    doc.text(`Doc. Referencia: ${refDoc}`, margin + 4, startY + 16.5);
+    doc.text(`Peso Bruto Total: ${parseFloat(guide.totalWeight || 0).toFixed(2)} KGM   |   Total Bultos: ${guide.totalPackages || (items.length || 1)}`, margin + halfW + 4, startY + 16.5);
+
+    // --- TABLA DE BIENES ---
+    const tableStartY = startY + 24;
+    const tableHeader = [['#', 'CÓDIGO', 'DESCRIPCIÓN DE LOS BIENES', 'CANTIDAD', 'U.M.', 'PESO UNIT (KG)', 'PESO TOTAL (KG)']];
+    const tableData = (items || []).map((it: any, index: number) => {
+      const qty = parseFloat(it.quantity) || 1;
+      const uWeight = parseFloat(it.unitWeight) || 0;
+      const tWeight = parseFloat(it.totalWeight) || (qty * uWeight);
+      return [
+        (index + 1).toString(),
+        it.code || it.product?.code || '-',
+        it.description || it.product?.name || 'Producto',
+        qty.toString(),
+        it.unitMeasure || 'NIU',
+        uWeight > 0 ? uWeight.toFixed(3) : '-',
+        tWeight > 0 ? tWeight.toFixed(2) : '-'
+      ];
+    });
+
+    autoTable(doc, {
+      startY: tableStartY,
+      head: tableHeader,
+      body: tableData,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [0, 74, 153],
+        textColor: [255, 255, 255],
+        fontSize: 7.5,
+        fontStyle: 'bold',
+        halign: 'center',
+        cellPadding: 2
+      },
+      styles: {
+        fontSize: 7,
+        cellPadding: 1.8,
+        textColor: [33, 37, 41]
+      },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 26, halign: 'center' },
+        2: { cellWidth: 78 },
+        3: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+        4: { cellWidth: 15, halign: 'center' },
+        5: { cellWidth: 20, halign: 'right' },
+        6: { cellWidth: 21, halign: 'right', fontStyle: 'bold' }
+      },
+      margin: { left: margin, right: margin }
+    });
+
+    const finalY = (doc as any).lastAutoTable?.finalY || (tableStartY + 40);
+
+    // --- OBSERVACIONES Y FOOTER ---
+    const footerY = Math.max(finalY + 6, 240);
+
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.2);
+    doc.setFillColor(255, 255, 255);
+    doc.rect(margin, footerY, boxW, 14, 'FD');
+    drawFieldPill("OBSERVACIONES / GLOSA", margin + 25, footerY);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(60, 60, 60);
+    doc.text(guide.notes || "BIENES TRASLADADOS PARA SU ENTREGA EN EL DESTINO INDICADO.", margin + 4, footerY + 6.5);
+
+    // Legal y QR
+    doc.setDrawColor(200, 200, 200);
+    doc.setLineWidth(0.3);
+    doc.line(margin, footerY + 18, pageWidth - margin, footerY + 18);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.8);
+    doc.setTextColor(80, 80, 80);
+    doc.text("Representación Impresa de la GUÍA DE REMISIÓN ELECTRÓNICA - REMITENTE, autorizada por SUNAT", margin + 25, footerY + 23);
+    doc.text(`Establecimiento Emisor SUNAT: [${guide.originSunatCode || '0000'}] | Hash: ${guide.sunatHashCode || 'VALIDADO-DIGITALMENTE'}`, margin + 25, footerY + 27);
+    doc.text("Consulte la validez de este comprobante en https://www.sunat.gob.pe/", margin + 25, footerY + 31);
+
+    drawQRCodeMockup(pageWidth - margin - 20, footerY + 19, 15);
+
+    if (action === 'print') {
+      doc.autoPrint();
+      window.open(doc.output('bloburl'), '_blank');
+    } else {
+      doc.save(`Guia_Remision_${guide.numberFormatted || 'GRE'}.pdf`);
+    }
+  } catch (error: any) {
+    console.error("Error al generar PDF de Guía de Remisión:", error);
+    alert("Error al generar PDF de Guía de Remisión: " + error.message);
   }
 };

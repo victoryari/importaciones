@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import { 
   ShieldCheck as ShieldCheckIcon, 
   Plus as PlusIcon, 
   Pencil as PencilIcon, 
   X as XMarkIcon,
-  Check as CheckIcon
+  Check as CheckIcon,
+  Save,
+  RefreshCw
 } from 'lucide-react';
 
 interface Role {
@@ -53,6 +56,7 @@ export const RoleModule = () => {
   const [roles, setRoles] = useState<Role[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [loading, setLoading] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -105,6 +109,7 @@ export const RoleModule = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     try {
       const url = editingRole ? `/api/roles/${editingRole.id}` : '/api/roles';
       const method = editingRole ? 'PUT' : 'POST';
@@ -131,6 +136,8 @@ export const RoleModule = () => {
       }
     } catch (error) {
       alert('Error de red al guardar el rol');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -139,56 +146,64 @@ export const RoleModule = () => {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-            <ShieldCheckIcon className="w-8 h-8 text-blue-600" />
-            Roles y Permisos
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">
-            Gestiona los niveles de acceso al sistema
-          </p>
+    <div className="relative p-3 space-y-2.5">
+      {/* Barra Superior */}
+      <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 bg-blue-50 text-blue-800 rounded">
+            <ShieldCheckIcon className="w-5 h-5 text-blue-700" />
+          </div>
+          <div>
+            <h1 className="text-xs font-bold text-slate-800 uppercase tracking-tight">
+              Roles y Permisos de Usuarios
+            </h1>
+            <p className="text-[9px] text-slate-500 font-medium uppercase">Definición de privilegios y accesos por perfil</p>
+          </div>
         </div>
+
         <button 
           onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg shadow-blue-500/30"
+          className="h-8 flex items-center gap-1.5 bg-[#004A99] hover:bg-blue-800 text-white font-bold px-3.5 rounded text-xs transition-colors shadow-2xs cursor-pointer"
         >
-          <PlusIcon className="w-5 h-5" />
+          <PlusIcon className="w-3.5 h-3.5" />
           Nuevo Rol
         </button>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-widest">Rol</th>
-              <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-widest">Usuarios</th>
-              <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-widest">Estado</th>
-              <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-widest text-right">Acciones</th>
+      {/* Tabla de Roles */}
+      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-2xs">
+        <table className="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider font-bold text-slate-600">
+              <th className="px-4 py-2.5">Perfil / Nombre del Rol</th>
+              <th className="px-4 py-2.5">Usuarios Asignados</th>
+              <th className="px-4 py-2.5 text-center">Estado</th>
+              <th className="px-4 py-2.5 text-right">Acción</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-100 bg-white">
             {roles.map(role => (
-              <tr key={role.id} className="hover:bg-slate-50 transition-colors">
-                <td className="px-6 py-4">
-                  <span className="font-bold text-slate-800 bg-slate-100 px-3 py-1 rounded-lg text-sm">{role.name}</span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="text-sm font-medium text-slate-600">{role._count?.users || 0} usuarios</span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`px-3 py-1 text-xs font-black rounded-full ${role.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                    {role.isActive ? 'ACTIVO' : 'INACTIVO'}
+              <tr key={role.id} className="hover:bg-blue-50/30 transition-colors">
+                <td className="px-4 py-2.5">
+                  <span className="font-bold text-slate-800 uppercase bg-slate-100 px-2 py-0.5 rounded text-xs border border-slate-200">
+                    {role.name}
                   </span>
                 </td>
-                <td className="px-6 py-4 flex justify-end gap-2">
+                <td className="px-4 py-2.5">
+                  <span className="font-medium text-slate-600 text-xs">{role._count?.users || 0} usuario(s)</span>
+                </td>
+                <td className="px-4 py-2.5 text-center">
+                  <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full uppercase ${role.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                    {role.isActive ? 'Activo' : 'Inactivo'}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-right">
                   <button 
                     onClick={() => handleOpenModal(role)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="p-1 text-slate-400 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors cursor-pointer"
+                    title="Editar Rol"
                   >
-                    <PencilIcon className="w-5 h-5" />
+                    <PencilIcon className="w-3.5 h-3.5" />
                   </button>
                 </td>
               </tr>
@@ -197,96 +212,141 @@ export const RoleModule = () => {
         </table>
       </div>
 
-      {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h2 className="text-lg font-black text-slate-800">
-                {editingRole ? 'Editar Rol' : 'Nuevo Rol'}
-              </h2>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors">
-                <XMarkIcon className="w-6 h-6" />
-              </button>
-            </div>
+      {/* Modal de Crear / Editar Rol */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="absolute inset-0 z-[110] flex items-center justify-center p-3 overflow-hidden">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              onClick={() => setIsModalOpen(false)} 
+              className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs" 
+            />
 
-            <form onSubmit={handleSubmit} className="p-6 overflow-y-auto">
-              <div className="grid grid-cols-2 gap-6 mb-8">
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Nombre del Rol</label>
-                  <input 
-                    type="text" 
-                    required
-                    value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all uppercase"
-                    placeholder="Ej. VENDEDOR JUNIOR"
-                  />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.97, y: 10 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.97, y: 10 }} 
+              className="relative w-full max-w-2xl bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-300 max-h-[92vh]"
+            >
+              {/* Header Compacto ERP */}
+              <div className="bg-[#004A99] px-4 py-2.5 flex items-center justify-between text-white shadow-sm shrink-0 border-b border-blue-900">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 bg-white/10 rounded">
+                    <ShieldCheckIcon className="w-4 h-4 text-blue-200" />
+                  </div>
+                  <div>
+                    <h2 className="text-xs font-bold text-white uppercase tracking-tight">
+                      {editingRole ? 'Editar Rol y Permisos' : 'Registro de Nuevo Rol'}
+                    </h2>
+                    <p className="text-[9px] text-blue-200 uppercase font-medium">Matriz de Privilegios del Sistema</p>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Estado</label>
-                  <select 
-                    value={formData.isActive ? 'true' : 'false'}
-                    onChange={e => setFormData({...formData, isActive: e.target.value === 'true'})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-800 focus:bg-white outline-none"
-                  >
-                    <option value="true">Activo</option>
-                    <option value="false">Inactivo</option>
-                  </select>
-                </div>
+                <button 
+                  onClick={() => setIsModalOpen(false)} 
+                  className="p-1 hover:bg-red-600 rounded text-white/80 hover:text-white transition-colors cursor-pointer"
+                >
+                  <XMarkIcon className="w-4 h-4" />
+                </button>
               </div>
 
-              <div>
-                <label className="block text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Permisos del Sistema</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {AVAILABLE_PERMISSIONS.map(perm => (
-                    <label 
-                      key={perm.id} 
-                      className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                        formData.permissions.includes(perm.id) 
-                          ? 'bg-blue-50 border-blue-200 text-blue-800' 
-                          : 'bg-white border-slate-200 hover:border-slate-300 text-slate-600'
-                      }`}
-                    >
-                      <div className={`mt-0.5 shrink-0 w-5 h-5 rounded flex items-center justify-center border ${
-                        formData.permissions.includes(perm.id)
-                          ? 'bg-blue-600 border-blue-600 text-white'
-                          : 'bg-white border-slate-300'
-                      }`}>
-                        {formData.permissions.includes(perm.id) && <CheckIcon className="w-3.5 h-3.5 stroke-3" />}
-                      </div>
+              <form 
+                onSubmit={handleSubmit} 
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+                    e.preventDefault();
+                  }
+                }}
+                className="flex-1 overflow-y-auto p-3 space-y-2.5 bg-slate-50/70"
+              >
+                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase">Nombre del Rol</label>
                       <input 
-                        type="checkbox" 
-                        className="hidden"
-                        checked={formData.permissions.includes(perm.id)}
-                        onChange={() => handleTogglePermission(perm.id)}
+                        type="text" 
+                        required
+                        value={formData.name}
+                        onChange={e => setFormData({...formData, name: e.target.value})}
+                        className="h-8 w-full border border-slate-300 rounded px-2.5 text-xs font-bold uppercase text-blue-900 focus:border-blue-500 outline-none bg-white"
+                        placeholder="Ej. VENDEDOR / LOGÍSTICA"
                       />
-                      <div className="text-sm font-bold leading-tight">{perm.label}</div>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </form>
+                    </div>
 
-            <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex gap-3 justify-end">
-              <button 
-                type="button" 
-                onClick={() => setIsModalOpen(false)}
-                className="px-6 py-2.5 rounded-xl font-bold text-slate-600 hover:bg-slate-200 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button 
-                type="button"
-                onClick={handleSubmit}
-                className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-500 active:scale-95 transition-all"
-              >
-                Guardar Rol
-              </button>
-            </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase">Estado</label>
+                      <select 
+                        value={formData.isActive ? 'true' : 'false'}
+                        onChange={e => setFormData({...formData, isActive: e.target.value === 'true'})}
+                        className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold text-slate-800 bg-white focus:border-blue-500 outline-none"
+                      >
+                        <option value="true">ACTIVO</option>
+                        <option value="false">INACTIVO</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs space-y-2">
+                  <label className="text-[10px] font-bold text-blue-950 uppercase border-b border-slate-100 pb-1 flex justify-between items-center">
+                    <span>Permisos de Módulos y Operaciones</span>
+                    <span className="text-[9px] text-blue-700 font-bold">{formData.permissions.length} Seleccionados</span>
+                  </label>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-[300px] overflow-y-auto p-1">
+                    {AVAILABLE_PERMISSIONS.map(perm => (
+                      <label 
+                        key={perm.id} 
+                        className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer select-none transition-all ${
+                          formData.permissions.includes(perm.id) 
+                            ? 'bg-blue-50/80 border-blue-300 text-blue-950 font-bold shadow-2xs' 
+                            : 'bg-slate-50/50 border-slate-200 hover:border-slate-300 text-slate-700 font-medium'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 ${
+                          formData.permissions.includes(perm.id)
+                            ? 'bg-[#004A99] border-[#004A99] text-white'
+                            : 'bg-white border-slate-300'
+                        }`}>
+                          {formData.permissions.includes(perm.id) && <CheckIcon className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                        <input 
+                          type="checkbox" 
+                          className="hidden"
+                          checked={formData.permissions.includes(perm.id)}
+                          onChange={() => handleTogglePermission(perm.id)}
+                        />
+                        <span className="text-xs leading-tight">{perm.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Footer Compacto */}
+                <div className="px-3 py-2 bg-slate-100/90 border-t border-slate-200 flex items-center justify-between shrink-0 rounded-b-lg">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsModalOpen(false)}
+                    className="h-8 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded text-xs flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
+                  >
+                    <XMarkIcon className="w-3.5 h-3.5 text-red-500" /> Cancelar
+                  </button>
+
+                  <button 
+                    type="submit" 
+                    disabled={loading}
+                    className="h-8 px-4 bg-[#004A99] hover:bg-blue-800 text-white rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md disabled:opacity-50 cursor-pointer"
+                  >
+                    {loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    {loading ? 'Guardando...' : (editingRole ? 'Actualizar Rol' : 'Guardar Rol')}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 };

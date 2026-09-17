@@ -10775,22 +10775,97 @@ export const districts = {
   "090709": "Ñahuimpuquio"
 };
 
-export function getDeptId(name: string): string | undefined {
-  return DEPARTMENTS.find(d => d.name.toUpperCase() === name.toUpperCase())?.id;
+export function normalizeUbigeoString(s?: string | null): string {
+  if (!s) return "";
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\bCUZCO\b/gi, "CUSCO")
+    .replace(/\bPROV(\.?)\s*CONST(\.?)\s*(DEL)?\s*CALLAO\b/gi, "CALLAO")
+    .trim()
+    .toUpperCase();
 }
 
-export function getProvId(name: string): string | undefined {
-  for (const [deptId, provs] of Object.entries(PROVINCES)) {
-    const prov = provs.find(p => p.name.toUpperCase() === name.toUpperCase());
-    if (prov) return deptId + prov.id;
+export function getDeptId(nameOrId?: string): string | undefined {
+  if (!nameOrId) return undefined;
+  const clean = normalizeUbigeoString(nameOrId);
+  const found = DEPARTMENTS.find(d => d.id === clean || normalizeUbigeoString(d.name) === clean);
+  return found?.id;
+}
+
+export function getProvId(nameOrId?: string, deptId?: string): string | undefined {
+  if (!nameOrId) return undefined;
+  const clean = normalizeUbigeoString(nameOrId);
+  const validDeptId = deptId || getDeptId(deptId);
+  if (validDeptId && PROVINCES[validDeptId]) {
+    const prov = PROVINCES[validDeptId].find(p => p.id === clean || normalizeUbigeoString(p.name) === clean);
+    if (prov) return prov.id;
+  }
+  for (const provs of Object.values(PROVINCES)) {
+    const prov = provs.find(p => p.id === clean || normalizeUbigeoString(p.name) === clean);
+    if (prov) return prov.id;
   }
   return undefined;
 }
 
-export function getDistId(name: string): string | undefined {
-  for (const [provId, dists] of Object.entries(DISTRICTS)) {
-    const dist = dists.find(d => d.name.toUpperCase() === name.toUpperCase());
-    if (dist) return provId + dist.id;
+export function getDistId(nameOrId?: string, deptId?: string, provId?: string): string | undefined {
+  if (!nameOrId) return undefined;
+  const clean = normalizeUbigeoString(nameOrId);
+  const validDeptId = deptId || getDeptId(deptId);
+  const validProvId = provId || (validDeptId ? getProvId(provId, validDeptId) : undefined);
+  if (validDeptId && validProvId && DISTRICTS[validDeptId + validProvId]) {
+    const dist = DISTRICTS[validDeptId + validProvId].find(d => d.id === clean || normalizeUbigeoString(d.name) === clean);
+    if (dist) return dist.id;
+  }
+  for (const dists of Object.values(DISTRICTS)) {
+    const dist = dists.find(d => d.id === clean || normalizeUbigeoString(d.name) === clean);
+    if (dist) return dist.id;
   }
   return undefined;
 }
+
+export function resolveUbigeoInfo(data?: {
+  ubigeo?: string | null;
+  department?: string | null;
+  province?: string | null;
+  district?: string | null;
+  departamento?: string | null;
+  provincia?: string | null;
+  distrito?: string | null;
+} | null) {
+  if (!data) {
+    return { deptId: '', provId: '', distId: '', department: '', province: '', district: '', ubigeo: '' };
+  }
+  const rawUbigeo = typeof data.ubigeo === 'string' && data.ubigeo.length === 6 ? data.ubigeo : '';
+  const rawDept = data.departamento || data.department || (rawUbigeo ? rawUbigeo.substring(0, 2) : '');
+  const rawProv = data.provincia || data.province || (rawUbigeo ? rawUbigeo.substring(2, 4) : '');
+  const rawDist = data.distrito || data.district || (rawUbigeo ? rawUbigeo.substring(4, 6) : '');
+
+  const deptId = getDeptId(rawDept);
+  const deptObj = DEPARTMENTS.find(d => d.id === deptId);
+  const deptName = deptObj ? deptObj.name.toUpperCase() : (rawDept ? rawDept.toUpperCase() : '');
+
+  const provId = getProvId(rawProv, deptId);
+  const provList = deptId ? (PROVINCES[deptId] || []) : [];
+  const provObj = provList.find(p => p.id === provId || normalizeUbigeoString(p.name) === normalizeUbigeoString(rawProv));
+  const provName = provObj ? provObj.name.toUpperCase() : (rawProv ? rawProv.toUpperCase() : '');
+
+  const fullProvKey = deptId && provId ? deptId + provId : '';
+  const distId = getDistId(rawDist, deptId, provId);
+  const distList = fullProvKey ? (DISTRICTS[fullProvKey] || []) : [];
+  const distObj = distList.find(d => d.id === distId || normalizeUbigeoString(d.name) === normalizeUbigeoString(rawDist));
+  const distName = distObj ? distObj.name.toUpperCase() : (rawDist ? rawDist.toUpperCase() : '');
+
+  const ubigeoCode = (deptId && provId && distId) ? (deptId + provId + distId) : rawUbigeo;
+
+  return {
+    deptId: deptId || '',
+    provId: provId || '',
+    distId: distId || '',
+    department: deptName,
+    province: provName,
+    district: distName,
+    ubigeo: ubigeoCode
+  };
+}
+

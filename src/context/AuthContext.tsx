@@ -6,6 +6,8 @@ interface User {
   name: string;
   series?: string;
   role?: string;
+  warehouseId?: number | null;
+  warehouse?: { id: number; name: string; sunatCode?: string } | null;
   permissions?: string[];
 }
 
@@ -14,6 +16,7 @@ interface AuthContextType {
   token: string | null;
   login: (token: string, user: User) => void;
   logout: () => void;
+  updateUser: (updatedUser: Partial<User>) => void;
   isLoading: boolean;
   hasPermission: (permission: string) => boolean;
 }
@@ -63,6 +66,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  const updateUser = (updatedUser: Partial<User>) => {
+    setUser(prev => prev ? { ...prev, ...updatedUser } : null);
+  };
+
   const hasPermission = (permission: string) => {
     if (!user || !user.permissions) return false;
     if (user.permissions.includes('ALL')) return true;
@@ -70,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading, hasPermission }}>
+    <AuthContext.Provider value={{ user, token, login, logout, updateUser, isLoading, hasPermission }}>
       {children}
     </AuthContext.Provider>
   );

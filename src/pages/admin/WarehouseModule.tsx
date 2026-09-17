@@ -9,6 +9,7 @@ import {
 interface Warehouse {
   id: number;
   code?: string;
+  sunatCode?: string;
   name: string;
   type?: string;
   address?: string;
@@ -63,6 +64,7 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({ warehouses, on
               <tr>
                 <th className="w-12 px-6 py-4"></th>
                 <th className="px-6 py-4">Código / Nombre</th>
+                <th className="px-6 py-4">Establecimiento SUNAT</th>
                 <th className="px-6 py-4">Dirección y RUC</th>
                 <th className="px-6 py-4 text-center">Pisos</th>
                 <th className="px-6 py-4">Stock</th>
@@ -91,6 +93,11 @@ export const WarehouseModule: React.FC<WarehouseModuleProps> = ({ warehouses, on
                             <span className="text-[9px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-full uppercase tracking-widest">{warehouse.type}</span>
                           )}
                         </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-xs font-mono font-bold bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 rounded">
+                          Cód. {warehouse.sunatCode || '0000'}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-xs text-slate-600 font-medium flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-slate-400" /> {warehouse.address || 'Sin dirección'}</div>

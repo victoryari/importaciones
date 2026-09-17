@@ -45,6 +45,7 @@ interface PickingItem {
   id: number;
   productId: number;
   quantity: number;
+  unitMeasure?: string;
   price: number;
   discount: number;
   lotNumber?: string;
@@ -54,7 +55,8 @@ interface PickingItem {
     name: string;
     code?: string;
     unit?: { symbol: string };
-
+    package?: { symbol: string };
+    subPackage?: { symbol: string };
   };
 }
 
@@ -623,13 +625,18 @@ export default function WarehousePickingModule() {
                             <p className="font-bold text-slate-800 text-sm truncate">{item.product.name}</p>
                             <p className="text-[10px] text-slate-400">
                               {item.product.code && `Cód: ${item.product.code}`}
-                              {item.product.unit && ` · ${item.product.unit.symbol}`}
+                              {` · ${(item.unitMeasure || item.product.package?.symbol || item.product.subPackage?.symbol || item.product.unit?.symbol || 'UND').toUpperCase()}`}
                               {item.lotNumber && ` · Lote: ${item.lotNumber}`}
                             </p>
                           </div>
                         </div>
                         <div className="text-right shrink-0 ml-4">
-                          <p className="font-black text-slate-800">{item.quantity} <span className="text-xs font-medium text-slate-400">und</span></p>
+                          <p className="font-black text-slate-800">
+                            {item.quantity}{' '}
+                            <span className="text-xs font-bold text-blue-700 uppercase">
+                              {item.unitMeasure || item.product.package?.symbol || item.product.subPackage?.symbol || item.product.unit?.symbol || 'UND'}
+                            </span>
+                          </p>
                           {item.warehouseName && (
                             <p className="text-[10px] text-slate-400 mt-0.5">{item.warehouseName}</p>
                           )}

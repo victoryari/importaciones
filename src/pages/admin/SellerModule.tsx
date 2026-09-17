@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { User, Phone, Mail, Trash2, Edit2, Plus, CheckCircle2, XCircle, List, LayoutGrid } from 'lucide-react';
+import { User, Phone, Mail, Trash2, Edit2, Plus, CheckCircle2, XCircle, List, LayoutGrid, Building2 } from 'lucide-react';
 
 interface Seller {
   id: number;
@@ -9,6 +9,12 @@ interface Seller {
   phone: string;
   email: string;
   isActive: boolean;
+  warehouseId?: number | null;
+  warehouse?: {
+    id: number;
+    name: string;
+    sunatCode?: string;
+  };
 }
 
 interface SellerModuleProps {
@@ -24,10 +30,13 @@ export const SellerModule: React.FC<SellerModuleProps> = ({ sellers, onEdit, onN
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-          <User className="w-6 h-6 text-blue-600" />
-          Vendedores
-        </h2>
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <User className="w-6 h-6 text-blue-600" />
+            Vendedores
+          </h2>
+          <p className="text-sm text-slate-400 font-medium">Asignación de asesores de venta a sedes y almacenes</p>
+        </div>
         
         <div className="flex items-center gap-3 w-full md:w-auto">
           {/* View Toggle */}
@@ -52,9 +61,9 @@ export const SellerModule: React.FC<SellerModuleProps> = ({ sellers, onEdit, onN
 
           <button 
             onClick={onNew}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-blue-100 font-bold"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-blue-100 font-bold text-sm"
           >
-            <Plus className="w-5 h-5" /> Nuevo Vendedor
+            <Plus className="w-4 h-4" /> Nuevo Vendedor
           </button>
         </div>
       </div>
@@ -67,6 +76,7 @@ export const SellerModule: React.FC<SellerModuleProps> = ({ sellers, onEdit, onN
               <thead>
                 <tr className="bg-slate-50/50 border-b border-slate-100 text-[10px] uppercase tracking-wider font-black text-slate-400">
                   <th className="px-6 py-4">Vendedor / DNI</th>
+                  <th className="px-6 py-4">Sede / Almacén Asignado</th>
                   <th className="px-6 py-4">Teléfono</th>
                   <th className="px-6 py-4">Correo</th>
                   <th className="px-6 py-4 text-center">Estado</th>
@@ -86,6 +96,16 @@ export const SellerModule: React.FC<SellerModuleProps> = ({ sellers, onEdit, onN
                           <span className="text-[10px] text-slate-400 font-bold mt-0.5">DNI: {seller.dni}</span>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {seller.warehouse ? (
+                        <span className="inline-flex items-center gap-1.5 font-bold text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                          <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                          [{seller.warehouse.sunatCode || '0000'}] {seller.warehouse.name}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">Multisede / General</span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       {seller.phone ? (
@@ -158,34 +178,59 @@ export const SellerModule: React.FC<SellerModuleProps> = ({ sellers, onEdit, onN
                 <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                   <User className="w-6 h-6" />
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => onEdit(seller)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Edit2 className="w-4 h-4" /></button>
-                  <button onClick={() => onDelete(seller.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
+                <div className="flex items-center gap-1">
+                  {seller.isActive ? (
+                    <span className="flex items-center gap-1 text-emerald-600 text-[10px] font-bold bg-emerald-50 px-2 py-0.5 rounded-full uppercase">
+                      <CheckCircle2 className="w-3 h-3" /> Activo
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-slate-400 text-[10px] font-bold bg-slate-50 px-2 py-0.5 rounded-full uppercase">
+                      <XCircle className="w-3 h-3" /> Inactivo
+                    </span>
+                  )}
                 </div>
               </div>
 
-              <h3 className="text-lg font-bold text-slate-800 mb-1">{seller.name}</h3>
-              <p className="text-slate-400 text-sm mb-4">DNI: {seller.dni}</p>
+              <h3 className="text-base font-bold text-slate-800 mb-1">{seller.name}</h3>
+              <p className="text-xs text-slate-400 font-bold mb-3">DNI: {seller.dni}</p>
 
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center gap-2 text-slate-600 text-sm">
-                  <Phone className="w-4 h-4 text-slate-400" /> {seller.phone}
+              {seller.warehouse && (
+                <div className="mb-4">
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                    <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                    [{seller.warehouse.sunatCode || '0000'}] {seller.warehouse.name}
+                  </span>
                 </div>
-                <div className="flex items-center gap-2 text-slate-600 text-sm">
-                  <Mail className="w-4 h-4 text-slate-400" /> {seller.email}
-                </div>
-              </div>
+              )}
 
-              <div className="flex items-center gap-2 pt-4 border-t border-slate-50">
-                {seller.isActive ? (
-                  <span className="flex items-center gap-1 text-emerald-600 text-xs font-bold bg-emerald-50 px-3 py-1 rounded-full">
-                    <CheckCircle2 className="w-3 h-3" /> Activo
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-slate-400 text-xs font-bold bg-slate-50 px-3 py-1 rounded-full">
-                    <XCircle className="w-3 h-3" /> Inactivo
-                  </span>
+              <div className="space-y-2 pt-3 border-t border-slate-50 text-xs text-slate-600">
+                {seller.phone && (
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-3.5 h-3.5 text-slate-400" />
+                    <span>{seller.phone}</span>
+                  </div>
                 )}
+                {seller.email && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="truncate">{seller.email}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2 mt-5 pt-4 border-t border-slate-50">
+                <button
+                  onClick={() => onEdit(seller)}
+                  className="flex-1 py-2 bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-600 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <Edit2 className="w-3.5 h-3.5" /> Editar
+                </button>
+                <button
+                  onClick={() => onDelete(seller.id)}
+                  className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-xl transition-all"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             </motion.div>
           ))}

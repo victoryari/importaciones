@@ -33,6 +33,16 @@ interface CustomerModuleProps {
   departments: any[];
 }
 
+export const getDocumentTypeInfo = (docType?: string) => {
+  const dt = (docType || '').toString().trim().toUpperCase();
+  if (dt === '1' || dt === 'DNI') return { label: 'DNI', color: 'bg-blue-50 text-blue-700 border-blue-200' };
+  if (dt === '6' || dt === 'RUC') return { label: 'RUC', color: 'bg-purple-50 text-purple-700 border-purple-200' };
+  if (dt === '4' || dt === 'CE' || dt === 'CARNET EXT.') return { label: 'C.E.', color: 'bg-amber-50 text-amber-700 border-amber-200' };
+  if (dt === '7' || dt === 'PAS' || dt === 'PASAPORTE') return { label: 'PASAPORTE', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+  if (dt === '0' || dt === 'OTROS') return { label: 'OTROS', color: 'bg-slate-100 text-slate-600 border-slate-200' };
+  return { label: dt || 'DOC', color: 'bg-slate-100 text-slate-600 border-slate-200' };
+};
+
 export const CustomerModule: React.FC<CustomerModuleProps> = ({
   customers,
   onDelete,
@@ -145,7 +155,14 @@ export const CustomerModule: React.FC<CustomerModuleProps> = ({
                         <div className="flex flex-col">
                           <span className="font-bold text-slate-800 leading-tight">{customer.name}</span>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-black uppercase tracking-widest">{customer.docType}</span>
+                            {(() => {
+                              const docInfo = getDocumentTypeInfo(customer.docType);
+                              return (
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider border ${docInfo.color}`}>
+                                  {docInfo.label}
+                                </span>
+                              );
+                            })()}
                             <span className="text-[10px] text-slate-400 font-bold">{customer.docNumber}</span>
                           </div>
                         </div>
@@ -170,10 +187,10 @@ export const CustomerModule: React.FC<CustomerModuleProps> = ({
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-1.5 text-xs text-slate-600">
                         <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                        <span>
+                        <span className="text-xs uppercase font-medium" title={customer.address || ''}>
                           {(() => {
-                            const dept = departments.find(d => d.id === customer.department || d.name === customer.department);
-                            return dept?.name || customer.department || 'Sin ubicación';
+                            const ubi = [customer.department, customer.province, customer.district].filter(Boolean).join(' - ');
+                            return ubi || customer.address || 'Sin ubicación';
                           })()}
                         </span>
                       </div>
@@ -265,7 +282,14 @@ export const CustomerModule: React.FC<CustomerModuleProps> = ({
               <h3 className="text-lg font-bold text-slate-800 mb-1 line-clamp-1" title={customer.name}>{customer.name}</h3>
               
               <div className="flex items-center gap-2 mb-4">
-                <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-black uppercase tracking-widest">{customer.docType}</span>
+                {(() => {
+                  const docInfo = getDocumentTypeInfo(customer.docType);
+                  return (
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider border ${docInfo.color}`}>
+                      {docInfo.label}
+                    </span>
+                  );
+                })()}
                 <span className="text-xs text-slate-400 font-bold">{customer.docNumber}</span>
               </div>
 
@@ -278,10 +302,10 @@ export const CustomerModule: React.FC<CustomerModuleProps> = ({
                 </div>
                 <div className="flex items-center gap-2 text-slate-600 text-sm truncate">
                   <MapPin className="w-4 h-4 text-slate-400" /> 
-                  <span>
+                  <span className="truncate uppercase font-medium" title={customer.address || ''}>
                     {(() => {
-                      const dept = departments.find(d => d.id === customer.department || d.name === customer.department);
-                      return dept?.name || customer.department || 'Sin ubicación';
+                      const ubi = [customer.department, customer.province, customer.district].filter(Boolean).join(' - ');
+                      return ubi || customer.address || 'Sin ubicación';
                     })()}
                   </span>
                 </div>

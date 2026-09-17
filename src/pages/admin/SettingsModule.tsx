@@ -1,5 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
-import { Save, Image as ImageIcon, Globe, Phone, Mail, MapPin, Building, Facebook, Instagram, MessageCircle, Plus, Trash2, Megaphone, Monitor, Smartphone, Upload, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Save, Image as ImageIcon, Globe, Phone, Mail, MapPin, 
+  Building, Facebook, Instagram, MessageCircle, Plus, 
+  Trash2, Megaphone, Monitor, Smartphone, Upload, Loader2,
+  Sliders, Palette, Store, RefreshCw
+} from 'lucide-react';
 import axios from 'axios';
 
 interface SettingsModuleProps {
@@ -85,7 +90,7 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
           headers: { Authorization: `Bearer ${token}` }
         });
       }
-      alert("Todos los ajustes guardados correctamente");
+      alert("Todos los ajustes fueron guardados correctamente");
     } catch (error) {
       console.error("Error saving all settings:", error);
       alert("Error al guardar algunos ajustes");
@@ -121,7 +126,7 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
         await axios.post('/api/ads', ad, { headers: { Authorization: `Bearer ${token}` } });
       }
       fetchData();
-      alert("Banner guardado");
+      alert("Banner guardado correctamente");
     } catch (error) {
       console.error("Error saving ad:", error);
       alert("Error al guardar el banner");
@@ -131,7 +136,7 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
   };
 
   const handleDeleteAd = async (id: number) => {
-    if (!confirm('¿Eliminar este banner?')) return;
+    if (!confirm('¿Eliminar este banner publicitario?')) return;
     try {
       await axios.delete(`/api/ads/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       fetchData();
@@ -140,206 +145,238 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
     }
   };
 
-  if (loading) return <div className="flex justify-center p-10"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>;
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center p-12">
+        <Loader2 className="animate-spin h-6 w-6 text-blue-700" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">Configuración</h2>
-          <div className="flex gap-4 mt-2">
+    <div className="p-3 space-y-2.5">
+      {/* Barra Superior de Ajustes */}
+      <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs flex flex-wrap justify-between items-center gap-2">
+        <div className="flex items-center gap-3">
+          <div className="p-1.5 bg-blue-50 text-blue-800 rounded">
+            <Sliders className="w-5 h-5 text-blue-700" />
+          </div>
+          <div>
+            <h2 className="text-xs font-bold text-slate-800 uppercase tracking-tight">
+              Ajustes Generales del Sistema
+            </h2>
+            <p className="text-[9px] text-slate-500 font-medium uppercase">Configuración de empresa, catálogo y publicidad</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
             <button 
+              type="button"
               onClick={() => setActiveSubTab('general')}
-              className={`text-sm font-bold pb-2 border-b-2 transition-all ${activeSubTab === 'general' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+              className={`h-7 px-3 text-xs font-bold uppercase rounded-md transition-all cursor-pointer ${activeSubTab === 'general' ? 'bg-[#004A99] text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
             >
               General
             </button>
             <button 
+              type="button"
               onClick={() => setActiveSubTab('products')}
-              className={`text-sm font-bold pb-2 border-b-2 transition-all ${activeSubTab === 'products' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+              className={`h-7 px-3 text-xs font-bold uppercase rounded-md transition-all cursor-pointer ${activeSubTab === 'products' ? 'bg-[#004A99] text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
             >
-              Productos
+              Catálogo
             </button>
             <button 
+              type="button"
               onClick={() => setActiveSubTab('ads')}
-              className={`text-sm font-bold pb-2 border-b-2 transition-all ${activeSubTab === 'ads' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+              className={`h-7 px-3 text-xs font-bold uppercase rounded-md transition-all cursor-pointer ${activeSubTab === 'ads' ? 'bg-[#004A99] text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
             >
-              Publicidad (Banners)
+              Publicidad
             </button>
           </div>
+
+          {activeSubTab !== 'ads' && (
+            <button 
+              type="button"
+              onClick={handleSaveAll}
+              disabled={saveLoading}
+              className="h-8 px-4 flex items-center gap-1.5 bg-[#004A99] hover:bg-blue-800 text-white font-bold rounded text-xs transition-colors shadow-2xs disabled:opacity-50 cursor-pointer"
+            >
+              {saveLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              {saveLoading ? 'Guardando...' : 'Guardar Todo'}
+            </button>
+          )}
         </div>
-        {activeSubTab !== 'ads' && (
-          <button 
-            onClick={handleSaveAll}
-            disabled={saveLoading}
-            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-blue-700 transition-all disabled:opacity-50"
-          >
-            <Save className="w-5 h-5" />
-            {saveLoading ? 'Guardando...' : 'Guardar Todo'}
-          </button>
-        )}
       </div>
 
       {activeSubTab === 'general' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
           {/* Información de la Empresa */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 text-blue-600 font-bold mb-2">
-              <Building className="w-5 h-5" />
-              <h3>Información de la Empresa</h3>
+          <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs space-y-2">
+            <div className="flex items-center gap-1.5 border-b border-slate-100 pb-1.5 text-blue-900 font-bold">
+              <Building className="w-3.5 h-3.5 text-blue-700" />
+              <h3 className="text-xs uppercase tracking-tight">Información de la Empresa</h3>
             </div>
             
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Nombre Comercial</label>
+            <div className="space-y-2">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-600 uppercase">Razón Social / Nombre Comercial</label>
                 <input 
                   type="text" 
                   value={settings.company_name || ''} 
                   onChange={(e) => handleChange('company_name', e.target.value)}
-                  className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="h-8 w-full px-2.5 rounded border border-slate-300 font-bold text-xs text-blue-900 uppercase focus:border-blue-500 outline-none bg-white"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">RUC</label>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-600 uppercase">RUC de la Empresa</label>
                 <input 
                   type="text" 
                   value={settings.company_ruc || ''} 
                   onChange={(e) => handleChange('company_ruc', e.target.value)}
-                  className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="h-8 w-full px-2.5 rounded border border-slate-300 font-mono font-bold text-xs text-slate-800 focus:border-blue-500 outline-none bg-white"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Dirección Fiscal</label>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-600 uppercase">Dirección Fiscal</label>
                 <textarea 
                   value={settings.company_address || ''} 
                   onChange={(e) => handleChange('company_address', e.target.value)}
-                  className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none h-20 resize-none"
+                  className="w-full p-2 rounded border border-slate-300 text-xs font-medium text-slate-800 uppercase focus:border-blue-500 outline-none h-16 resize-none bg-white"
                 />
               </div>
             </div>
           </div>
 
           {/* Contacto y Redes */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 text-green-600 font-bold mb-2">
-              <Globe className="w-5 h-5" />
-              <h3>Contacto y Redes Sociales</h3>
+          <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs space-y-2">
+            <div className="flex items-center gap-1.5 border-b border-slate-100 pb-1.5 text-emerald-900 font-bold">
+              <Globe className="w-3.5 h-3.5 text-emerald-700" />
+              <h3 className="text-xs uppercase tracking-tight">Contacto y Redes Sociales</h3>
             </div>
             
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Teléfono Principal</label>
+            <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 uppercase">Teléfono Principal</label>
                   <div className="relative">
-                    <Phone className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                     <input 
                       type="text" 
                       value={settings.company_phone || ''} 
                       onChange={(e) => handleChange('company_phone', e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="h-8 w-full pl-7 pr-2 rounded border border-slate-300 text-xs font-medium focus:border-blue-500 outline-none bg-white"
                     />
+                    <Phone className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">WhatsApp (Web)</label>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 uppercase">WhatsApp (Ventas / Soporte)</label>
                   <div className="relative">
-                    <MessageCircle className="absolute left-3 top-2.5 w-4 h-4 text-green-500" />
                     <input 
                       type="text" 
                       value={settings.whatsapp_number || ''} 
                       onChange={(e) => handleChange('whatsapp_number', e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="h-8 w-full pl-7 pr-2 rounded border border-slate-300 text-xs font-bold text-emerald-700 focus:border-emerald-500 outline-none bg-white"
                     />
+                    <MessageCircle className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-600" />
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Facebook URL</label>
-                  <input 
-                    type="text" 
-                    value={settings.facebook_url || ''} 
-                    onChange={(e) => handleChange('facebook_url', e.target.value)}
-                    className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 uppercase">Facebook URL</label>
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      value={settings.facebook_url || ''} 
+                      onChange={(e) => handleChange('facebook_url', e.target.value)}
+                      className="h-8 w-full pl-7 pr-2 rounded border border-slate-300 text-xs font-medium focus:border-blue-500 outline-none bg-white"
+                    />
+                    <Facebook className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-blue-600" />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Instagram URL</label>
-                  <input 
-                    type="text" 
-                    value={settings.instagram_url || ''} 
-                    onChange={(e) => handleChange('instagram_url', e.target.value)}
-                    className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 uppercase">Instagram URL</label>
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      value={settings.instagram_url || ''} 
+                      onChange={(e) => handleChange('instagram_url', e.target.value)}
+                      className="h-8 w-full pl-7 pr-2 rounded border border-slate-300 text-xs font-medium focus:border-blue-500 outline-none bg-white"
+                    />
+                    <Instagram className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-pink-600" />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Apariencia */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4 md:col-span-2">
-            <div className="flex items-center gap-2 text-purple-600 font-bold mb-2">
-              <ImageIcon className="w-5 h-5" />
-              <h3>Apariencia y Recursos Visuales</h3>
+          {/* Identidad Gráfica */}
+          <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs space-y-2 md:col-span-2">
+            <div className="flex items-center gap-1.5 border-b border-slate-100 pb-1.5 text-blue-950 font-bold">
+              <ImageIcon className="w-3.5 h-3.5 text-blue-700" />
+              <h3 className="text-xs uppercase tracking-tight">Identidad Gráfica y Recursos Visuales</h3>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Logotipo Principal</label>
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <input 
-                      type="text" 
-                      value={settings.company_logo || ''} 
-                      onChange={(e) => handleChange('company_logo', e.target.value)}
-                      className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-xs"
-                      placeholder="URL de la imagen..."
-                    />
-                  </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-600 uppercase">Logotipo Principal de la Empresa</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={settings.company_logo || ''} 
+                    onChange={(e) => handleChange('company_logo', e.target.value)}
+                    className="h-8 flex-1 px-2 rounded border border-slate-300 text-xs focus:border-blue-500 outline-none bg-white"
+                    placeholder="URL de la imagen del logotipo..."
+                  />
                   <input type="file" ref={logoInputRef} className="hidden" accept="image/*" onChange={(e) => handleUpload(e, 'company_logo')} />
                   <button 
+                    type="button"
                     onClick={() => logoInputRef.current?.click()}
                     disabled={uploading === 'company_logo'}
-                    className="px-4 bg-slate-100 border border-slate-200 rounded-xl hover:bg-slate-200 transition-all flex items-center gap-2 text-xs font-bold"
+                    className="h-8 px-3 bg-slate-100 border border-slate-300 hover:bg-slate-200 rounded text-xs font-bold uppercase flex items-center gap-1 transition-colors cursor-pointer"
                   >
-                    {uploading === 'company_logo' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    {uploading === 'company_logo' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 text-slate-700" />}
                     Subir
                   </button>
                 </div>
                 {settings.company_logo && (
-                  <div className="mt-4 p-4 border border-dashed rounded-2xl bg-slate-50 flex justify-center relative group">
-                    <img src={settings.company_logo} alt="Logo Preview" className="h-16 object-contain" />
-                    <button onClick={() => handleChange('company_logo', '')} className="absolute top-2 right-2 p-1 bg-red-100 text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-3 h-3" /></button>
+                  <div className="mt-2 p-2 border border-slate-200 rounded bg-slate-50 flex justify-center relative group">
+                    <img src={settings.company_logo} alt="Logo Preview" className="h-12 object-contain" />
+                    <button onClick={() => handleChange('company_logo', '')} className="absolute top-1 right-1 p-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"><Trash2 className="w-3 h-3" /></button>
                   </div>
                 )}
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Favicon (Icono Pestaña)</label>
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <input 
-                      type="text" 
-                      value={settings.favicon || ''} 
-                      onChange={(e) => handleChange('favicon', e.target.value)}
-                      className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-xs"
-                      placeholder="URL del icono..."
-                    />
-                  </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-600 uppercase">Favicon (Icono de la Pestaña)</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={settings.favicon || ''} 
+                    onChange={(e) => handleChange('favicon', e.target.value)}
+                    className="h-8 flex-1 px-2 rounded border border-slate-300 text-xs focus:border-blue-500 outline-none bg-white"
+                    placeholder="URL del icono favicon..."
+                  />
                   <input type="file" ref={faviconInputRef} className="hidden" accept="image/x-icon,image/png,image/jpeg" onChange={(e) => handleUpload(e, 'favicon')} />
                   <button 
+                    type="button"
                     onClick={() => faviconInputRef.current?.click()}
                     disabled={uploading === 'favicon'}
-                    className="px-4 bg-slate-100 border border-slate-200 rounded-xl hover:bg-slate-200 transition-all flex items-center gap-2 text-xs font-bold"
+                    className="h-8 px-3 bg-slate-100 border border-slate-300 hover:bg-slate-200 rounded text-xs font-bold uppercase flex items-center gap-1 transition-colors cursor-pointer"
                   >
-                    {uploading === 'favicon' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    {uploading === 'favicon' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 text-slate-700" />}
                     Subir
                   </button>
                 </div>
                 {settings.favicon && (
-                  <div className="mt-4 p-4 border border-dashed rounded-2xl bg-slate-50 flex justify-center relative group">
-                    <img src={settings.favicon} alt="Favicon Preview" className="h-10 w-10 object-contain" />
-                    <button onClick={() => handleChange('favicon', '')} className="absolute top-2 right-2 p-1 bg-red-100 text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-3 h-3" /></button>
+                  <div className="mt-2 p-2 border border-slate-200 rounded bg-slate-50 flex justify-center relative group">
+                    <img src={settings.favicon} alt="Favicon Preview" className="h-8 w-8 object-contain" />
+                    <button onClick={() => handleChange('favicon', '')} className="absolute top-1 right-1 p-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"><Trash2 className="w-3 h-3" /></button>
                   </div>
                 )}
               </div>
@@ -347,18 +384,18 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
           </div>
         </div>
       ) : activeSubTab === 'products' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 text-orange-600 font-bold mb-2">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
-              <h3>Visualización de Productos</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+          <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs space-y-2">
+            <div className="flex items-center gap-1.5 border-b border-slate-100 pb-1.5 text-orange-950 font-bold">
+              <Store className="w-3.5 h-3.5 text-orange-600" />
+              <h3 className="text-xs uppercase tracking-tight">Visualización de Productos</h3>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1">Tarjetas por fila</label>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-600 uppercase">Tarjetas de Producto por Fila (Tienda Web)</label>
               <select
                 value={settings.products_per_page || '3'}
                 onChange={(e) => handleChange('products_per_page', e.target.value)}
-                className="w-full px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                className="h-8 w-full px-2 rounded border border-slate-300 font-bold text-xs focus:border-blue-500 outline-none bg-white"
               >
                 <option value="2">2 tarjetas</option>
                 <option value="3">3 tarjetas</option>
@@ -366,96 +403,99 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
                 <option value="5">5 tarjetas</option>
                 <option value="6">6 tarjetas</option>
               </select>
-              <p className="text-xs text-slate-400 mt-2">Define cuántas tarjetas de producto se muestran por fila en la tienda (vista escritorio).</p>
+              <p className="text-[9px] text-slate-400 font-medium">Determina la densidad de elementos en el catálogo público.</p>
             </div>
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-2.5">
           <div className="flex justify-end">
             <button 
+              type="button"
               onClick={handleAddAd}
-              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-green-700 transition-all text-sm"
+              className="h-8 flex items-center gap-1 bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 rounded font-bold text-xs uppercase transition-colors shadow-2xs cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               Agregar Banner
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-6">
+          <div className="grid grid-cols-1 gap-2.5">
             {ads.map((ad, index) => (
-              <div key={index} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <div className="lg:col-span-3 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1">Título del Banner</label>
+              <div key={index} className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs grid grid-cols-1 lg:grid-cols-4 gap-3">
+                <div className="lg:col-span-3 space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase">Título del Banner</label>
                       <input 
                         type="text" 
                         value={ad.title} 
                         onChange={(e) => handleUpdateAd(index, 'title', e.target.value)}
-                        className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none"
+                        className="h-8 w-full px-2 rounded border border-slate-300 text-xs font-bold focus:border-blue-500 outline-none bg-white"
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1">Link de Acción (URL)</label>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase">URL de Redirección</label>
                       <input 
                         type="text" 
                         value={ad.link || ''} 
                         onChange={(e) => handleUpdateAd(index, 'link', e.target.value)}
-                        className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none"
+                        className="h-8 w-full px-2 rounded border border-slate-300 text-xs font-mono focus:border-blue-500 outline-none bg-white"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 mb-1 flex items-center gap-1">
-                        <Monitor className="w-3 h-3" /> Imagen Web (Desktop)
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase flex items-center gap-1">
+                        <Monitor className="w-3 h-3 text-blue-700" /> Imagen Desktop
                       </label>
-                      <div className="flex gap-2">
+                      <div className="flex gap-1.5">
                         <input 
                           type="text" 
                           value={ad.imageUrl} 
                           onChange={(e) => handleUpdateAd(index, 'imageUrl', e.target.value)}
-                          className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 outline-none text-[10px]"
+                          className="h-8 flex-1 px-2 rounded border border-slate-300 outline-none text-xs bg-white"
                         />
                         <input type="file" id={`ad-web-${index}`} className="hidden" accept="image/*" onChange={(e) => handleUpload(e, 'imageUrl', true, index)} />
-                        <button onClick={() => document.getElementById(`ad-web-${index}`)?.click()} className="p-1.5 bg-slate-100 rounded-lg hover:bg-slate-200"><Upload className="w-4 h-4 text-slate-600" /></button>
+                        <button type="button" onClick={() => document.getElementById(`ad-web-${index}`)?.click()} className="h-8 px-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded cursor-pointer"><Upload className="w-3.5 h-3.5 text-slate-600" /></button>
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-500 mb-1 flex items-center gap-1">
-                        <Smartphone className="w-3 h-3" /> Imagen Móvil (Opcional)
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase flex items-center gap-1">
+                        <Smartphone className="w-3 h-3 text-emerald-700" /> Imagen Móvil
                       </label>
-                      <div className="flex gap-2">
+                      <div className="flex gap-1.5">
                         <input 
                           type="text" 
                           value={ad.mobileImageUrl || ''} 
                           onChange={(e) => handleUpdateAd(index, 'mobileImageUrl', e.target.value)}
-                          className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 outline-none text-[10px]"
+                          className="h-8 flex-1 px-2 rounded border border-slate-300 outline-none text-xs bg-white"
                         />
                         <input type="file" id={`ad-mob-${index}`} className="hidden" accept="image/*" onChange={(e) => handleUpload(e, 'mobileImageUrl', true, index)} />
-                        <button onClick={() => document.getElementById(`ad-mob-${index}`)?.click()} className="p-1.5 bg-slate-100 rounded-lg hover:bg-slate-200"><Upload className="w-4 h-4 text-slate-600" /></button>
+                        <button type="button" onClick={() => document.getElementById(`ad-mob-${index}`)?.click()} className="h-8 px-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded cursor-pointer"><Upload className="w-3.5 h-3.5 text-slate-600" /></button>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-6">
-                    <label className="flex items-center gap-2 cursor-pointer">
+                  <div className="flex items-center gap-4 pt-1">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
                       <input 
                         type="checkbox" 
                         checked={ad.active} 
                         onChange={(e) => handleUpdateAd(index, 'active', e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded"
+                        className="w-3.5 h-3.5 text-blue-600 rounded cursor-pointer"
                       />
-                      <span className="text-xs font-bold text-slate-600">Visible en Web</span>
+                      <span className="text-xs font-bold text-slate-700 uppercase">Activo en la Web</span>
                     </label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-500">Posición:</span>
+
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-slate-600 uppercase">Posición:</span>
                       <select 
                         value={ad.position} 
                         onChange={(e) => handleUpdateAd(index, 'position', e.target.value)}
-                        className="text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none"
+                        className="h-7 text-xs font-bold border border-slate-300 rounded px-2 outline-none bg-white"
                       >
                         <option value="home-promotional">Principal (Home)</option>
                         <option value="category-side">Lateral Categorías</option>
@@ -464,32 +504,34 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
                   </div>
                 </div>
 
-                <div className="flex flex-col justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100">
-                  <div className="w-full space-y-2">
-                    <span className="text-[10px] font-bold text-slate-400 block text-center uppercase">Previsualización</span>
-                    <div className="w-full h-24 bg-slate-200 rounded-lg overflow-hidden relative">
+                <div className="flex flex-col justify-between items-center bg-slate-50 p-2.5 rounded border border-slate-200">
+                  <div className="w-full space-y-1">
+                    <span className="text-[9px] font-bold text-slate-400 block text-center uppercase">Previsualización</span>
+                    <div className="w-full h-20 bg-slate-200 rounded overflow-hidden relative flex items-center justify-center">
                       {uploading?.startsWith(`ad-${index}`) ? (
-                        <div className="w-full h-full flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-blue-600" /></div>
+                        <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
                       ) : ad.imageUrl ? (
                         <img src={ad.imageUrl} className="w-full h-full object-cover" alt="Preview" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center"><ImageIcon className="text-slate-400" /></div>
+                        <ImageIcon className="w-6 h-6 text-slate-400" />
                       )}
                     </div>
                   </div>
-                  <div className="flex gap-2 w-full mt-4">
+                  <div className="flex gap-1.5 w-full mt-2">
                     <button 
+                      type="button"
                       onClick={() => handleSaveAd(ad)}
-                      className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold text-xs hover:bg-blue-700 transition-all"
+                      className="flex-1 h-7 bg-[#004A99] hover:bg-blue-800 text-white rounded font-bold text-[10px] uppercase transition-colors cursor-pointer"
                     >
                       {saveLoading ? '...' : 'Guardar'}
                     </button>
                     {ad.id && (
                       <button 
+                        type="button"
                         onClick={() => handleDeleteAd(ad.id)}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                        className="h-7 px-2 text-red-600 hover:bg-red-50 border border-red-200 rounded transition-colors cursor-pointer"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
@@ -497,10 +539,10 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
               </div>
             ))}
             {ads.length === 0 && (
-              <div className="text-center py-20 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-                <Megaphone className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                <p className="text-slate-500 font-bold">No hay banners configurados</p>
-                <button onClick={handleAddAd} className="text-blue-600 text-sm font-bold mt-2">Agregar el primero</button>
+              <div className="text-center py-12 bg-white rounded-lg border border-slate-200 border-dashed">
+                <Megaphone className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-slate-500 font-bold text-xs uppercase">No hay banners publicitarios registrados</p>
+                <button type="button" onClick={handleAddAd} className="text-blue-700 text-xs font-bold mt-1 uppercase hover:underline cursor-pointer">+ Agregar Banner</button>
               </div>
             )}
           </div>

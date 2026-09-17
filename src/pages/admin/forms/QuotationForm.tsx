@@ -4,12 +4,14 @@ import {
   PlusCircle, Save, X, Search, Trash2, FileText, 
   DollarSign, Calendar, Tag, Info,
   Calculator, ChevronDown, Building2, UserPlus, 
-  Printer, FileDown, RefreshCw, Truck, ClipboardList, HelpCircle, Hash, MapPin
+  Printer, FileDown, RefreshCw, Truck, ClipboardList, HelpCircle, Hash, MapPin,
+  Gift
 } from 'lucide-react';
 import { ProductSearchModal } from './ProductSearchModal';
 import axios from 'axios';
+import { useAuth } from '../../../context/AuthContext';
 import { generateQuotationPDF } from '../../../lib/pdfGenerator';
-import { formatNumber } from '../../../lib/utils';
+import { formatNumber, formatFullCustomerAddress } from '../../../lib/utils';
 
 interface QuotationFormProps {
   isOpen: boolean;
@@ -30,7 +32,7 @@ interface QuotationFormProps {
   handleSearchProduct: (query: string) => void;
   quotationItems: any[];
   addQuotationItem: (product: any) => void;
-  updateQuotationItem: (productId: number, field: string, value: any) => void;
+  updateQuotationItem: (productId: number, field: string | Record<string, any>, value?: any) => void;
   removeQuotationItem: (productId: number) => void;
   quotationTotal: number;
   handleConsultCustomer: (docType: string, docNumber: string) => Promise<any>;
@@ -51,6 +53,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
   removeQuotationItem, quotationTotal, handleConsultCustomer, handleQuickRegister,
   onOpenCustomerForm, token, sunatIgvAffectations, sunatDocTypes, series
 }) => {
+  const { user } = useAuth();
   const [isConsulting, setIsConsulting] = useState(false);
   const [consultedData, setConsultedData] = useState<any>(null);
   const [customerSearchResults, setCustomerSearchResults] = useState<any[]>([]);
@@ -78,6 +81,48 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
     }
   }, [isOpen, formData.date, formData.currency]);
 
+  // Asegurar operationType por defecto a 10
+  useEffect(() => {
+    if (isOpen && !editingItem) {
+      setFormData((prev: any) => ({
+        ...prev,
+        operationType: prev.operationType || '10'
+      }));
+    }
+  }, [isOpen, editingItem]);
+
+  // Auto-seleccionar vendedor asignado o coincidente con el usuario logueado
+  useEffect(() => {
+    if (isOpen && (!formData.sellerId || formData.sellerId === '') && sellers.length > 0) {
+      let matchedSeller = null;
+      if (user) {
+        if (user.email) {
+          matchedSeller = sellers.find(s => s.email && s.email.toLowerCase() === user.email.toLowerCase() && s.isActive !== false);
+        }
+        if (!matchedSeller && user.name) {
+          const uName = user.name.toLowerCase().trim();
+          matchedSeller = sellers.find(s => s.name && (s.name.toLowerCase().trim() === uName || uName.includes(s.name.toLowerCase().trim()) || s.name.toLowerCase().trim().includes(uName)) && s.isActive !== false);
+        }
+        if (!matchedSeller && (user as any).dni) {
+          matchedSeller = sellers.find(s => s.dni === (user as any).dni && s.isActive !== false);
+        }
+        if (!matchedSeller && user.warehouseId) {
+          matchedSeller = sellers.find(s => s.warehouseId === user.warehouseId && s.isActive !== false);
+        }
+      }
+      if (!matchedSeller && sellers.filter(s => s.isActive !== false).length === 1) {
+        matchedSeller = sellers.find(s => s.isActive !== false);
+      }
+      if (matchedSeller) {
+        setFormData((prev: any) => ({
+          ...prev,
+          sellerId: matchedSeller.id.toString(),
+          sellerName: matchedSeller.name
+        }));
+      }
+    }
+  }, [isOpen, sellers, user, formData.sellerId]);
+
 
 
   const handleSeriesChange = (seriesId: string) => {
@@ -91,6 +136,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
         setFormData((prev: any) => ({
           ...prev,
           pickupPlace: warehouse?.name || '',
+          warehouseId: selected.warehouseId.toString(),
           docSeries: selected.series,
           docNumber: res.data.nextNumber,
           seriesId: selected.id
@@ -101,10 +147,40 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
     }
   };
 
-  // Totales detallados
-  const dsctoTotal = formData.flete * 0; // Placeholder
-  const valorVenta = quotationTotal / 1.18;
-  const igvTotal = quotationTotal - valorVenta;
+  const handleWarehouseChange = (warehouseId: string) => {
+    const wId = parseInt(warehouseId);
+    const warehouse = warehouses.find(w => w.id === wId);
+    const matchingSeries = series.filter(s => s.warehouseId === wId && s.documentType === (formData.docType || 'COT') && s.isActive !== false);
+
+    if (matchingSeries.length > 0) {
+      handleSeriesChange(matchingSeries[0].id.toString());
+    } else {
+      setFormData((prev: any) => ({
+        ...prev,
+        warehouseId: warehouseId,
+        pickupPlace: warehouse?.name || '',
+        docSeries: '',
+        docNumber: '',
+        seriesId: ''
+      }));
+    }
+  };
+
+  // Auto-seleccionar serie y almacén asignado al abrir
+  useEffect(() => {
+    if (isOpen && (!formData.docSeries || !formData.warehouseId) && series.length > 0) {
+      let targetSeries: any = null;
+      if (formData.warehouseId) {
+        targetSeries = series.find(s => s.warehouseId === parseInt(formData.warehouseId) && s.documentType === (formData.docType || 'COT') && s.isActive !== false);
+      }
+      if (!targetSeries) {
+        targetSeries = series.find(s => s.documentType === (formData.docType || 'COT') && s.isActive !== false);
+      }
+      if (targetSeries) {
+        handleSeriesChange(targetSeries.id.toString());
+      }
+    }
+  }, [isOpen, series, formData.warehouseId]);
 
   const handleDocumentSearch = async () => {
     if (!formData.ruc) return;
@@ -122,13 +198,21 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
       const data = await handleConsultCustomer(docType, formData.ruc);
       if (data) {
         let name = "";
-        let address = "";
+        let rawAddress = "";
         if (docType === 'RUC') {
-          name = data.nombre_o_razon_social || data.razonSocial || "";
-          address = data.direccion_completa || data.direccion || "";
+          name = data.nombre_o_razon_social || data.razonSocial || data.nombre || data.name || "";
+          rawAddress = data.direccion_completa || data.direccion || data.address || "";
         } else {
-          name = `${data.nombres} ${data.apellido_paterno} ${data.apellido_materno}`;
+          name = `${data.nombres || data.firstName || ''} ${data.apellido_paterno || data.apellidoPaterno || data.lastName || ''} ${data.apellido_materno || data.apellidoMaterno || ''}`.trim();
+          rawAddress = data.direccion_completa || data.direccion || data.address || "";
         }
+
+        const address = formatFullCustomerAddress(
+          rawAddress,
+          data.distrito || data.district,
+          data.provincia || data.province,
+          data.departamento || data.department
+        );
         
         setFormData({
           ...formData,
@@ -143,7 +227,10 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
           docType: docType,
           personType: docType === 'RUC' ? 'JURIDICA' : 'NATURAL',
           firstName: data.nombres || '',
-          lastName: `${data.apellido_paterno || ''} ${data.apellido_materno || ''}`.trim()
+          lastName: `${data.apellido_paterno || ''} ${data.apellido_materno || ''}`.trim(),
+          department: data.departamento || data.department || '',
+          province: data.provincia || data.province || '',
+          district: data.distrito || data.district || ''
         });
       }
     } catch (err) { console.error("Search error:", err); }
@@ -166,7 +253,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
   };
 
   const handleCustomerNameSearch = (q: string) => {
-    setFormData({...formData, razonSocial: q});
+    setFormData({...formData, razonSocial: q.toUpperCase()});
     if (q.length > 2) {
       const filtered = customers.filter(c => 
         (c.name && c.name.toLowerCase().includes(q.toLowerCase())) ||
@@ -181,17 +268,46 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
   };
 
   const selectCustomer = (c: any) => {
+    const clientName = (c.name || `${c.firstName || ''} ${c.lastName || ''}`).trim().toUpperCase();
+    const clientAddress = formatFullCustomerAddress(c.address, c.district, c.province, c.department);
     setFormData({
       ...formData,
       customerId: c.id.toString(),
       ruc: c.docNumber,
-      razonSocial: c.name || `${c.firstName} ${c.lastName}`,
-      address: c.address || ''
+      razonSocial: clientName,
+      address: clientAddress
     });
     setCustomerSearchResults([]);
     setRucSearchResults([]);
     setConsultedData(null);
   };
+
+  const totalGratuito = quotationItems.reduce((acc, item) => {
+    if (!item.isFree) return acc;
+    const refP = Number(item.referencePrice || item.originalPrice || item.price || 0);
+    return acc + (refP * Number(item.quantity || 0));
+  }, 0);
+
+  const dsctoTotal = quotationItems.reduce((acc, item) => {
+    if (item.isFree) return acc;
+    const subtotal = Number(item.price || 0) * Number(item.quantity || 0);
+    return acc + ((subtotal * (Number(item.discount) || 0)) / 100);
+  }, 0);
+
+  const valorVenta = quotationItems.reduce((acc, item) => {
+    if (item.isFree) return acc;
+    const subtotal = Number(item.price || 0) * Number(item.quantity || 0);
+    const totalLine = subtotal - ((subtotal * (Number(item.discount) || 0)) / 100);
+    return acc + (totalLine / 1.18);
+  }, 0);
+
+  const igvTotal = quotationItems.reduce((acc, item) => {
+    if (item.isFree) return acc;
+    const subtotal = Number(item.price || 0) * Number(item.quantity || 0);
+    const totalLine = subtotal - ((subtotal * (Number(item.discount) || 0)) / 100);
+    const valorLine = totalLine / 1.18;
+    return acc + (totalLine - valorLine);
+  }, 0);
 
   return (
     <AnimatePresence>
@@ -241,10 +357,12 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
               <div className="flex-1 overflow-y-auto p-3 space-y-3">
                 
                 {/* --- SECCIÓN 1: CABECERA --- */}
-                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                  <div className="md:col-span-5 flex items-center gap-1">
-                    <span className="text-[11px] font-bold text-slate-600 shrink-0">Documento</span>
-                    <div className={`h-8 border border-slate-300 rounded px-2 text-[10px] font-black w-24 flex items-center uppercase ${formData.docType === 'PED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-blue-700'}`}>
+                {/* --- SECCIÓN 1: CABECERA --- */}
+                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
+                  {/* Documento, Serie y Correlativo */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-bold text-slate-600 shrink-0">Doc.</span>
+                    <div className={`h-8 border border-slate-300 rounded px-2.5 text-[10px] font-black flex items-center uppercase ${formData.docType === 'PED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-blue-700'}`}>
                       {formData.docType === 'PED' ? 'Pedido' : 'Cotización'}
                     </div>
 
@@ -252,35 +370,39 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                     <select 
                       value={series.find(s => s.series === formData.docSeries && s.documentType === (formData.docType || 'COT'))?.id || ''} 
                       onChange={e => handleSeriesChange(e.target.value)}
-                      className="h-8 border border-slate-300 rounded px-1 text-xs font-bold bg-blue-50 w-28"
+                      className="h-8 border border-slate-300 rounded px-2 text-xs font-bold bg-blue-50/80 text-blue-900 focus:bg-white focus:ring-1 focus:ring-blue-500 w-20 text-center"
                     >
-                      <option value="">--SERIE--</option>
-                      {series.filter(s => s.documentType === (formData.docType || 'COT')).map(s => (
-                        <option key={s.id} value={s.id}>{s.series}</option>
-                      ))}
+                      <option value="">--</option>
+                      {series
+                        .filter(s => s.documentType === (formData.docType || 'COT') && s.isActive !== false)
+                        .map(s => (
+                          <option key={s.id} value={s.id}>
+                            {s.series}
+                          </option>
+                        ))}
                     </select>
-                    <span className="text-slate-400">-</span>
-                    <div className="relative flex-1">
+                    <span className="text-slate-400 font-bold">-</span>
+                    <div className="relative w-28">
                       <input 
                         type="text" 
                         readOnly
                         value={formData.docNumber} 
-                        className="h-8 border border-slate-300 rounded pl-7 pr-2 text-xs font-bold w-full bg-slate-100 text-blue-700" 
+                        className="h-8 border border-slate-300 rounded pl-6 pr-2 text-xs font-bold w-full bg-slate-100 text-blue-700 font-mono" 
                         placeholder="00000001" 
                       />
-                      <Hash className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-blue-500" />
+                      <Hash className="w-3.5 h-3.5 absolute left-1.5 top-1/2 -translate-y-1/2 text-blue-500" />
                     </div>
                   </div>
 
-                  <div className="md:col-span-3 flex items-center gap-2 justify-center">
+                  <div className="flex items-center gap-1.5">
                     <span className="text-[11px] font-bold text-slate-600">Fecha</span>
-                    <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="h-8 border border-slate-300 rounded px-2 text-xs font-bold" />
+                    <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="h-8 border border-slate-300 rounded px-2 text-xs font-bold w-36" />
                   </div>
 
-                  <div className="md:col-span-3 flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-slate-600 whitespace-nowrap">Tipo Cambio</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-bold text-slate-600 whitespace-nowrap">T.C.</span>
                     <div className="flex items-center gap-1">
-                      <input type="number" step="0.001" value={formData.exchangeRate} onChange={e => setFormData({...formData, exchangeRate: e.target.value})} className="h-8 border border-slate-300 rounded px-2 text-xs font-bold w-24 text-right bg-yellow-50" />
+                      <input type="number" step="0.001" value={formData.exchangeRate} onChange={e => setFormData({...formData, exchangeRate: e.target.value})} className="h-8 border border-slate-300 rounded px-2 text-xs font-bold w-20 text-right bg-yellow-50 font-mono" />
                       <button 
                         type="button" 
                         onClick={handleRefreshTC}
@@ -296,16 +418,16 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                 {/* --- SECCIÓN 2: DATOS CLIENTE --- */}
                 <fieldset className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
                   <legend className="text-[10px] font-bold text-blue-700 px-2 uppercase tracking-tighter">Datos Cliente</legend>
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-x-4 gap-y-2">
-                    <div className="md:col-span-4 flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-600 w-12 text-right">RUC:</span>
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                    <div className="md:col-span-3 flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-slate-600 shrink-0">RUC/DNI:</span>
                       <div className="relative flex-1 group">
                         <Building2 className="w-4 h-4 absolute left-2 top-1/2 -translate-y-1/2 text-blue-800" />
                         <input 
                           type="text" 
                           value={formData.ruc} 
                           onChange={e => handleRucPredictiveSearch(e.target.value)}
-                          className="h-8 w-full border border-slate-300 rounded pl-8 pr-16 text-xs font-bold" 
+                          className="h-8 w-full border border-slate-300 rounded pl-7 pr-14 text-xs font-bold font-mono" 
                           placeholder="00000000000"
                         />
                         {rucSearchResults.length > 0 && (
@@ -314,7 +436,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                               <div 
                                 key={c.id} 
                                 onClick={() => selectCustomer(c)} 
-                                className="p-3 hover:bg-blue-50 cursor-pointer text-xs flex flex-col border-b border-slate-100"
+                                className="p-2 hover:bg-blue-50 cursor-pointer text-xs flex flex-col border-b border-slate-100"
                               >
                                 <span className="font-bold text-slate-800">{c.docNumber}</span>
                                 <span className="text-[10px] text-slate-500">{c.name || `${c.firstName} ${c.lastName}`}</span>
@@ -322,27 +444,26 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                             ))}
                           </div>
                         )}
-                        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
                           <button type="button" onClick={() => onOpenCustomerForm(formData.ruc)} className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Registrar Nuevo Cliente">
                             <UserPlus className="w-3.5 h-3.5" />
                           </button>
                           <button type="button" onClick={handleDocumentSearch} disabled={isConsulting} className="p-1 text-slate-400 hover:text-blue-600 transition-colors disabled:opacity-50">
                             {isConsulting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
                           </button>
-                          <span className="text-[9px] font-bold text-slate-300 mr-1 italic">Revisar</span>
                         </div>
                       </div>
                     </div>
                     
-                    <div className="md:col-span-8 flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-600 w-24 text-right">Razón Social:</span>
-                      <div className="flex-1 flex gap-2 relative">
+                    <div className="md:col-span-4 flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-slate-600 shrink-0">Razón Social:</span>
+                      <div className="flex-1 flex gap-1.5 relative">
                         <div className="flex-1 relative">
                           <input 
                             type="text" 
                             value={formData.razonSocial} 
                             onChange={e => handleCustomerNameSearch(e.target.value)} 
-                            className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold bg-[#D9E9FF] text-[#004A99]" 
+                            className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold bg-[#D9E9FF] text-[#004A99] uppercase" 
                             placeholder="PÚBLICO GENERAL" 
                           />
                           {customerSearchResults.length > 0 && (
@@ -351,7 +472,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                                 <div 
                                   key={c.id} 
                                   onClick={() => selectCustomer(c)} 
-                                  className="p-3 hover:bg-blue-50 cursor-pointer text-xs flex flex-col border-b border-slate-100"
+                                  className="p-2 hover:bg-blue-50 cursor-pointer text-xs flex flex-col border-b border-slate-100"
                                 >
                                   <span className="font-bold text-slate-800">{c.name || `${c.firstName} ${c.lastName}`}</span>
                                   <span className="text-[10px] text-slate-500">{c.docNumber} - {c.address}</span>
@@ -372,11 +493,17 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                       </div>
                     </div>
 
-                    <div className="md:col-span-12 flex items-center gap-2">
-                      <div className="w-12 h-1" />
+                    <div className="md:col-span-5 flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-slate-600 shrink-0">Dirección:</span>
                       <div className="flex-1 relative group">
-                        <input type="text" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold bg-[#F8FBFF]" placeholder="DIRECCIÓN..." />
-                        <RefreshCw className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-emerald-500 bg-white p-0.5 rounded shadow-sm cursor-pointer" />
+                        <input 
+                          type="text" 
+                          value={formData.address || ''} 
+                          onChange={e => setFormData({...formData, address: e.target.value.toUpperCase()})} 
+                          className="h-8 w-full border border-slate-300 rounded pl-2 pr-7 text-xs font-bold bg-[#F8FBFF] uppercase text-slate-800 focus:bg-white" 
+                          placeholder="DIRECCIÓN..." 
+                        />
+                        <MapPin className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" />
                       </div>
                     </div>
                   </div>
@@ -385,9 +512,9 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                 {/* --- SECCIÓN 3: CONDICIONES --- */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
                   {/* Col Izquierda */}
-                  <div className="lg:col-span-5 bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-2">
+                  <div className="lg:col-span-4 bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-600 w-20 text-right">Condición de Pago:</span>
+                      <span className="text-[11px] font-bold text-slate-600 w-18 text-right shrink-0">Cond. Pago:</span>
                       <select value={formData.paymentCondition} onChange={e => setFormData({...formData, paymentCondition: e.target.value})} className="h-8 flex-1 border border-slate-300 rounded px-2 text-xs font-bold bg-white">
                         {sunatPaymentConditions.map(c => (
                           <option key={c.code} value={c.code}>{c.name}</option>
@@ -395,7 +522,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                       </select>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-600 w-20 text-right">Moneda:</span>
+                      <span className="text-[11px] font-bold text-slate-600 w-18 text-right shrink-0">Moneda:</span>
                       <select value={formData.currency} onChange={e => setFormData({...formData, currency: e.target.value})} className="h-8 flex-1 border border-slate-300 rounded px-2 text-xs font-bold bg-white">
                         {sunatCurrencies.map(c => (
                           <option key={c.code} value={c.code}>{c.name} {c.symbol ? `(${c.symbol})` : ''}</option>
@@ -403,7 +530,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                       </select>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-600 w-20 text-right">Vendedor:</span>
+                      <span className="text-[11px] font-bold text-slate-600 w-18 text-right shrink-0">Vendedor:</span>
                       <select value={formData.sellerId} onChange={e => setFormData({...formData, sellerId: e.target.value})} className="h-8 flex-1 border border-slate-300 rounded px-2 text-xs font-bold bg-white">
                         <option value="">--Seleccionar Vendedor--</option>
                         {sellers.map(s => (
@@ -414,93 +541,106 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                   </div>
 
                   {/* Col Derecha */}
-                  <div className="lg:col-span-7 bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-2">
-                    <div className="flex gap-4">
-                      <div className="flex-1 flex items-center gap-2">
-                        <span className="text-[11px] font-bold text-slate-600 w-20 text-right">Observación:</span>
-                        <div className="relative flex-1">
-                          <input type="text" value={formData.observation} onChange={e => setFormData({...formData, observation: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold bg-white" />
-                          <FileText className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 text-amber-500" />
-                        </div>
+                  <div className="lg:col-span-8 bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-2.5 overflow-hidden">
+                    {/* Fila 1: Operación e IGV (6 cols) | Estado y Dscto (6 cols) */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                      <div className="md:col-span-6 flex items-center gap-2 min-w-0">
+                        <span className="text-[11px] font-bold text-slate-600 w-18 text-right shrink-0">Tipo Op.:</span>
+                        <select 
+                          value={formData.operationType || '10'} 
+                          onChange={e => setFormData({...formData, operationType: e.target.value})} 
+                          className="h-8 flex-1 min-w-0 w-full border border-slate-300 rounded px-2 text-xs font-bold bg-white text-slate-800 truncate"
+                        >
+                          <option value="10">10 | GRAVADO - OPERACIÓN ONEROSA</option>
+                          <option value="11">11 | [GRAVADO] RETIRO POR PREMIO</option>
+                          <option value="12">12 | [GRAVADO] RETIRO POR DONACIÓN</option>
+                          <option value="13">13 | [GRAVADO] RETIRO</option>
+                          <option value="14">14 | [GRAVADO] RETIRO POR PUBLICIDAD</option>
+                          <option value="15">15 | [GRAVADO] BONIFICACIONES</option>
+                          <option value="16">16 | [GRAVADO] RETIRO A TRABAJADORES</option>
+                          <option value="20">20 | EXONERADO - OPERACIÓN ONEROSA</option>
+                          <option value="30">30 | INAFECTO - OPERACIÓN ONEROSA</option>
+                          <option value="40">40 | EXPORTACIÓN</option>
+                        </select>
+                        <label className="flex items-center gap-1 cursor-pointer shrink-0">
+                          <input type="checkbox" checked={formData.priceIncludesIgv} onChange={e => setFormData({...formData, priceIncludesIgv: e.target.checked})} className="w-3.5 h-3.5 border-slate-300 rounded text-blue-600" />
+                          <span className="text-[11px] font-bold text-slate-600">Inc. IGV</span>
+                        </label>
                       </div>
-                      <div className="w-48 flex items-center gap-2">
-                        <span className="text-[11px] font-bold text-slate-600">Descuento:</span>
-                        <div className="relative flex-1">
-                          <input type="number" value={formData.globalDiscount} onChange={e => setFormData({...formData, globalDiscount: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold bg-blue-50 text-blue-800 text-right pr-6" />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-blue-400">%</span>
+
+                      <div className="md:col-span-6 flex items-center gap-2 min-w-0">
+                        <div className="flex-1 flex items-center gap-1 min-w-0">
+                          <span className="text-[11px] font-bold text-slate-600 w-14 text-right shrink-0">Estado:</span>
+                          <select value={formData.billingStatus} onChange={e => setFormData({...formData, billingStatus: e.target.value})} className="h-8 flex-1 min-w-0 w-full border border-slate-300 rounded px-2 text-xs font-bold bg-white text-slate-400 italic truncate">
+                            <option value="SIN FACTURAR">SIN FACTURAR</option>
+                          </select>
+                        </div>
+                        <div className="w-22 flex items-center gap-1 shrink-0">
+                          <span className="text-[11px] font-bold text-slate-600 shrink-0">Dscto:</span>
+                          <div className="relative flex-1">
+                            <input type="number" value={formData.globalDiscount} onChange={e => setFormData({...formData, globalDiscount: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-1.5 text-xs font-bold bg-blue-50 text-blue-800 text-right pr-4" />
+                            <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] font-bold text-blue-400">%</span>
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex gap-4">
-                      <div className="flex-1 flex items-center gap-2">
-                        <span className="text-[11px] font-bold text-slate-600 w-20 text-right">Agencia:</span>
-                        <div className="flex flex-1 gap-1">
-                          <div className="w-10 h-8 bg-slate-100 rounded border border-slate-300 flex items-center justify-center"><Truck className="w-4 h-4 text-slate-500" /></div>
-                          <select 
-                            value={formData.agencyId} 
-                            onChange={e => {
-                              const selectedAgency = shippingAgencies.find(a => a.id === parseInt(e.target.value));
-                              const mainBranch = selectedAgency?.branches?.find((b: any) => b.isMain) || selectedAgency?.branches?.[0];
-                              setFormData({
-                                ...formData, 
-                                agencyId: e.target.value,
-                                branchId: mainBranch?.id?.toString() || ''
-                              });
-                            }} 
-                            className="h-8 flex-1 border border-slate-300 rounded px-2 text-xs font-bold bg-white"
-                          >
-                            <option value="">--Seleccionar Agencia--</option>
-                            {shippingAgencies.map(a => (
-                              <option key={a.id} value={a.id}>{a.name}</option>
-                            ))}
-                          </select>
-                        </div>
+                    {/* Fila 2: Agencia (6 cols) | Sucursal (6 cols) */}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                      <div className="md:col-span-6 flex items-center gap-2 min-w-0">
+                        <span className="text-[11px] font-bold text-slate-600 w-18 text-right shrink-0">Agencia:</span>
+                        <select 
+                          value={formData.agencyId} 
+                          onChange={e => {
+                            const selectedAgency = shippingAgencies.find(a => a.id === parseInt(e.target.value));
+                            const mainBranch = selectedAgency?.branches?.find((b: any) => b.isMain) || selectedAgency?.branches?.[0];
+                            setFormData({
+                              ...formData, 
+                              agencyId: e.target.value,
+                              branchId: mainBranch?.id?.toString() || ''
+                            });
+                          }} 
+                          className="h-8 flex-1 min-w-0 w-full border border-slate-300 rounded px-2 text-xs font-bold bg-white truncate"
+                        >
+                          <option value="">--Seleccionar Agencia--</option>
+                          {shippingAgencies.map(a => (
+                            <option key={a.id} value={a.id}>{a.name}</option>
+                          ))}
+                        </select>
                       </div>
-                      {formData.agencyId && (() => {
-                        const selectedAgency = shippingAgencies.find(a => a.id === parseInt(formData.agencyId));
-                        const branches = selectedAgency?.branches || [];
-                        if (branches.length > 1) {
-                          return (
-                            <div className="flex-1 flex items-center gap-2">
-                              <span className="text-[11px] font-bold text-slate-600 w-20 text-right">Sucursal:</span>
-                              <select 
-                                value={formData.branchId || ''} 
-                                onChange={e => setFormData({...formData, branchId: e.target.value})} 
-                                className="h-8 flex-1 border border-slate-300 rounded px-2 text-xs font-bold bg-white"
-                              >
-                                <option value="">--Seleccionar Sucursal--</option>
-                                {branches.map((b: any) => (
-                                  <option key={b.id} value={b.id}>{b.address?.substring(0, 40)}{b.isMain ? ' (Principal)' : ''}</option>
-                                ))}
-                              </select>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
-                      <div className="w-48 flex items-center gap-2">
-                        <span className="text-[11px] font-bold text-slate-600 whitespace-nowrap">Estado Fact.:</span>
-                        <select value={formData.billingStatus} onChange={e => setFormData({...formData, billingStatus: e.target.value})} className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold bg-white text-slate-400 italic">
-                          <option value="SIN FACTURAR">SIN FACTURAR</option>
+
+                      <div className="md:col-span-6 flex items-center gap-2 min-w-0">
+                        <span className="text-[11px] font-bold text-slate-600 w-14 text-right shrink-0">Sucursal:</span>
+                        <select 
+                          value={formData.branchId || ''} 
+                          onChange={e => setFormData({...formData, branchId: e.target.value})} 
+                          disabled={!formData.agencyId}
+                          className={`h-8 flex-1 min-w-0 w-full border rounded px-2 text-xs font-bold truncate ${formData.agencyId ? 'border-slate-300 bg-white text-slate-800' : 'border-slate-200 bg-slate-50 text-slate-400'}`}
+                        >
+                          <option value="">{formData.agencyId ? '--Seleccionar Sucursal--' : '--Seleccione Agencia--'}</option>
+                          {formData.agencyId && (() => {
+                            const selectedAgency = shippingAgencies.find(a => a.id === parseInt(formData.agencyId));
+                            const branches = selectedAgency?.branches || [];
+                            return branches.map((b: any) => (
+                              <option key={b.id} value={b.id}>
+                                {b.address ? b.address.substring(0, 45) : 'Principal'}{b.isMain ? ' (Principal)' : ''}
+                              </option>
+                            ));
+                          })()}
                         </select>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-12 gap-4">
-                      <div className="col-span-12 flex items-center gap-2 justify-end">
-                        <input type="checkbox" checked={formData.priceIncludesIgv} onChange={e => setFormData({...formData, priceIncludesIgv: e.target.checked})} className="w-4 h-4 border-slate-300 rounded" />
-                        <span className="text-[11px] font-bold text-slate-600">Precio Incluye IGV</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-600 w-20 text-right whitespace-nowrap">Tipo Operación:</span>
-                      <select value={formData.operationType} onChange={e => setFormData({...formData, operationType: e.target.value})} className="h-8 flex-1 border border-slate-300 rounded px-2 text-xs font-bold bg-white max-w-50">
-                        {sunatIgvAffectations.map(t => (
-                          <option key={t.code} value={t.code}>{t.code} | {t.name}</option>
-                        ))}
-                      </select>
+                    {/* Fila 3: Observación */}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[11px] font-bold text-slate-600 w-18 text-right shrink-0">Obs.:</span>
+                      <input 
+                        type="text" 
+                        value={formData.observation} 
+                        onChange={e => setFormData({...formData, observation: e.target.value})} 
+                        className="h-8 flex-1 min-w-0 w-full border border-slate-300 rounded px-2 text-xs font-bold bg-white placeholder:font-normal placeholder:text-slate-400" 
+                        placeholder="Observación o detalle de cotización (opcional)..." 
+                      />
                     </div>
                   </div>
                 </div>
@@ -568,6 +708,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                           <th className="px-2 py-1 font-bold border-r border-slate-300 min-w-50">Descripción Producto</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-16">Cantidad</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-center w-20">U.M.</th>
+                          <th className="px-2 py-1 font-bold border-r border-slate-300 text-center w-18">Gratuito</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-center w-24">Cat. Precio</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-24">Precio Unitario</th>
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-16">Dscto%</th>
@@ -577,16 +718,20 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                           <th className="px-2 py-1 font-bold border-r border-slate-300 text-right w-20">Igv</th>
                           <th className="px-2 py-1 font-bold w-10 text-center">Acción</th>
                         </tr>
-</thead>
+                      </thead>
                       <tbody>
                         {quotationItems.map((item, index) => {
-                          const subtotal = item.price * item.quantity;
-                          const dsctoLine = (subtotal * (item.discount || 0)) / 100;
-                          const totalLine = subtotal - dsctoLine;
-                          const valorLine = totalLine / 1.18;
-                          const igvLine = totalLine - valorLine;
+                          const isFree = Boolean(item.isFree);
+                          const effectivePrice = isFree ? 0 : Number(item.price || 0);
+                          const subtotal = effectivePrice * Number(item.quantity || 0);
+                          const dsctoLine = isFree ? 0 : ((subtotal * (Number(item.discount) || 0)) / 100);
+                          const totalLine = isFree ? 0 : (subtotal - dsctoLine);
+                          const valorLine = isFree ? 0 : (totalLine / 1.18);
+                          const igvLine = isFree ? 0 : (totalLine - valorLine);
+                          const refPrice = Number(item.referencePrice || item.originalPrice || item.price || 0);
+
                           return (
-                            <tr key={item.productId} className="border-b border-slate-200 hover:bg-slate-50 transition-colors">
+                            <tr key={item.productId} className={`border-b border-slate-200 hover:bg-slate-50 transition-colors ${isFree ? 'bg-amber-50/40' : ''}`}>
                               <td className="px-2 py-1 text-center font-bold text-slate-500 border-r border-slate-200">{index + 1}</td>
                               <td className="px-2 py-1 border-r border-slate-200 text-blue-600 font-bold uppercase">{item.warehouseName || 'S/A'}</td>
                               <td className="px-2 py-1 border-r border-slate-200 font-bold">{item.code || 'S/C'}</td>
@@ -601,7 +746,16 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                                   )}
                                 </div>
                               </td>
-                              <td className="px-2 py-1 border-r border-slate-200 font-bold truncate max-w-62.5">{item.name}</td>
+                              <td className="px-2 py-1 border-r border-slate-200 font-bold truncate max-w-62.5">
+                                <div className="flex items-center gap-1.5">
+                                  {isFree && (
+                                    <span className="bg-amber-500 text-white text-[8px] px-1 py-0.2 rounded font-black tracking-wider shrink-0 flex items-center gap-0.5">
+                                      <Gift className="w-2.5 h-2.5" /> REGALO
+                                    </span>
+                                  )}
+                                  <span className="truncate">{item.name}</span>
+                                </div>
+                              </td>
                               <td className="px-2 py-1 border-r border-slate-200"><input type="number" value={item.quantity} onChange={e => updateQuotationItem(item.productId, 'quantity', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white" /></td>
                               <td className="px-2 py-1 border-r border-slate-200 text-center">
                                 <select
@@ -618,9 +772,56 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                                   )}
                                 </select>
                               </td>
+                              <td className="px-2 py-1 border-r border-slate-200 text-center">
+                                 <button
+                                   type="button"
+                                   onClick={() => {
+                                     const nextFree = !item.isFree;
+                                     if (nextFree) {
+                                       const currentP = Number(item.price || 0) > 0 ? Number(item.price) : refPrice;
+                                       updateQuotationItem(item.productId, {
+                                         isFree: true,
+                                         referencePrice: currentP,
+                                         price: 0,
+                                         discount: 0
+                                       });
+                                     } else {
+                                       const restoreP = item.referencePrice || item.originalPrice || refPrice || 0;
+                                       updateQuotationItem(item.productId, {
+                                         isFree: false,
+                                         price: restoreP
+                                       });
+                                     }
+                                   }}
+                                   className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase transition-all flex items-center justify-center gap-1 mx-auto cursor-pointer ${
+                                     isFree 
+                                       ? 'bg-amber-500 text-white shadow-sm ring-1 ring-amber-400' 
+                                       : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                                   }`}
+                                   title={isFree ? "Ítem marcado como regalo/bonificación (Gratuito S/ 0.00)" : "Marcar producto como regalo/bonificación"}
+                                 >
+                                   <Gift className="w-2.5 h-2.5" />
+                                   {isFree ? 'SÍ' : 'NO'}
+                                 </button>
+                              </td>
                               <td className="px-2 py-1 border-r border-slate-200 text-center text-slate-400">--Seleccionar--</td>
-                              <td className="px-2 py-1 border-r border-slate-200"><input type="number" step="0.000001" value={item.price} onChange={e => updateQuotationItem(item.productId, 'price', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white font-bold" /></td>
-                              <td className="px-2 py-1 border-r border-slate-200"><input type="number" value={item.discount} onChange={e => updateQuotationItem(item.productId, 'discount', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white" /></td>
+                              <td className="px-2 py-1 border-r border-slate-200">
+                                {isFree ? (
+                                  <div className="flex flex-col items-end leading-tight">
+                                    <span className="font-black text-amber-700">S/ 0.00</span>
+                                    <span className="text-[8px] text-slate-400 font-medium">Ref: S/ {formatNumber(refPrice)}</span>
+                                  </div>
+                                ) : (
+                                  <input type="number" step="0.000001" value={item.price} onChange={e => updateQuotationItem(item.productId, 'price', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white font-bold" />
+                                )}
+                              </td>
+                              <td className="px-2 py-1 border-r border-slate-200">
+                                {isFree ? (
+                                  <span className="text-slate-300 text-center block">0</span>
+                                ) : (
+                                  <input type="number" value={item.discount} onChange={e => updateQuotationItem(item.productId, 'discount', parseFloat(e.target.value) || 0)} className="w-full text-right bg-transparent outline-none focus:bg-white" />
+                                )}
+                              </td>
                               <td className="px-2 py-1 border-r border-slate-200 text-right">{formatNumber(dsctoLine)}</td>
                               <td className="px-2 py-1 border-r border-slate-200 text-right font-bold">{formatNumber(totalLine)}</td>
                               <td className="px-2 py-1 border-r border-slate-200 text-right">{formatNumber(valorLine)}</td>
@@ -634,7 +835,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                           );
                         })}
                         {quotationItems.length === 0 && (
-                          <tr><td colSpan={15} className="h-64 text-center text-slate-300 italic">No hay productos en el detalle</td></tr>
+                          <tr><td colSpan={16} className="h-64 text-center text-slate-300 italic">No hay productos en el detalle</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -687,13 +888,21 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                     <button type="button" onClick={async () => await generateQuotationPDF(formData, quotationItems, 'save')} className="h-10 px-4 bg-white border border-slate-300 rounded text-xs font-bold hover:bg-slate-100 flex items-center gap-2"><FileDown className="w-4 h-4 text-red-600" /> PDF</button>
                   </div>
 
-                  <div className="grid grid-cols-6 gap-x-2 gap-y-1">
-                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">Flete:</p><input type="number" value={formData.flete} onChange={e => setFormData({...formData, flete: e.target.value})} className="w-20 h-8 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
-                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">Dscto. :</p><input type="text" readOnly value={formatNumber(dsctoTotal)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
-                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">Valor:</p><input type="text" readOnly value={formatNumber(valorVenta)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
-                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">Valor Venta:</p><input type="text" readOnly value={formatNumber(valorVenta)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
-                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">I.G.V. :</p><input type="text" readOnly value={formatNumber(igvTotal)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
-                    <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">P. Venta:</p><input type="text" readOnly value={formatNumber(quotationTotal)} className="w-24 h-8 bg-[#D9E9FF] border border-[#004A99] text-right px-2 text-sm font-black text-[#004A99] rounded" /></div>
+                  <div className="flex items-center gap-2">
+                    {totalGratuito > 0 && (
+                      <div className="text-center bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                        <p className="text-[9px] font-black text-amber-700 uppercase mb-1">Op. Gratuita:</p>
+                        <input type="text" readOnly value={formatNumber(totalGratuito)} className="w-20 h-8 bg-white border border-amber-300 text-right px-2 text-xs font-black text-amber-800 rounded" />
+                      </div>
+                    )}
+                    <div className="grid grid-cols-6 gap-x-2 gap-y-1">
+                      <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">Flete:</p><input type="number" value={formData.flete} onChange={e => setFormData({...formData, flete: e.target.value})} className="w-20 h-8 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
+                      <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">Dscto. :</p><input type="text" readOnly value={formatNumber(dsctoTotal)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
+                      <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">Valor:</p><input type="text" readOnly value={formatNumber(valorVenta)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
+                      <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">Valor Venta:</p><input type="text" readOnly value={formatNumber(valorVenta)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
+                      <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">I.G.V. :</p><input type="text" readOnly value={formatNumber(igvTotal)} className="w-20 h-8 bg-slate-50 border border-slate-300 text-right px-2 text-xs font-bold rounded" /></div>
+                      <div className="text-center"><p className="text-[10px] font-bold text-slate-500 mb-1">P. Venta:</p><input type="text" readOnly value={formatNumber(quotationTotal)} className="w-24 h-8 bg-[#D9E9FF] border border-[#004A99] text-right px-2 text-sm font-black text-[#004A99] rounded" /></div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -708,6 +917,8 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
             setIsProductSearchModalOpen(false);
           }} 
           token={token} 
+          selectedWarehouseId={formData.warehouseId}
+          warehouses={warehouses}
         />
       </>
     )}

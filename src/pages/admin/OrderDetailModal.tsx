@@ -123,6 +123,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ isOpen, onCl
                         <th className="text-left pb-2 pr-2">Código</th>
                         <th className="text-left pb-2 pr-2">Producto</th>
                         <th className="text-center pb-2 pr-2">Cant.</th>
+                        <th className="text-center pb-2 pr-2">U.M.</th>
                         <th className="text-right pb-2 pr-2">P. Unit.</th>
                         <th className="text-right pb-2">Total</th>
                       </tr>
@@ -134,6 +135,9 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ isOpen, onCl
                           <td className="py-2 pr-2 font-bold">{item.product?.code || item.code || '—'}</td>
                           <td className="py-2 pr-2 font-bold">{item.product?.name || item.name}</td>
                           <td className="py-2 pr-2 text-center font-bold">{item.quantity}</td>
+                          <td className="py-2 pr-2 text-center font-bold text-blue-700 uppercase">
+                            {item.unitMeasure || item.product?.package?.symbol || item.product?.subPackage?.symbol || item.product?.unit?.symbol || 'UND'}
+                          </td>
                           <td className="py-2 pr-2 text-right font-bold">{formatCurrency(item.price)}</td>
                           <td className="py-2 text-right font-black">{formatCurrency(item.quantity * item.price)}</td>
                         </tr>
@@ -141,7 +145,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ isOpen, onCl
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td colSpan={5} className="text-right pt-3 font-black text-sm">Total:</td>
+                        <td colSpan={6} className="text-right pt-3 font-black text-sm">Total:</td>
                         <td className="text-right pt-3 font-black text-lg text-blue-800">{formatCurrency(order.totalAmount)}</td>
                       </tr>
                     </tfoot>

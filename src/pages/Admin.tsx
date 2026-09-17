@@ -22,6 +22,8 @@ import { SupplierModule } from './admin/SupplierModule';
 import { RoleModule } from './admin/RoleModule';
 import { UserModule } from './admin/UserModule';
 import { AdvancedLogisticsModule } from './admin/AdvancedLogisticsModule';
+import { ReferralGuideModule } from './admin/ReferralGuideModule';
+import { ProfileView } from './admin/ProfileView';
 
 // Formularios
 import { QuotationForm } from './admin/forms/QuotationForm';
@@ -35,15 +37,17 @@ import { AgencyForm } from './admin/forms/AgencyForm';
 import { SeriesForm } from './admin/forms/SeriesForm';
 import { PurchaseEntryForm } from './admin/forms/PurchaseEntryForm';
 import { ReferralGuideForm } from './admin/forms/ReferralGuideForm';
+import { SalesReferralGuideForm } from './admin/forms/SalesReferralGuideForm';
 import { SupplierForm } from './admin/forms/SupplierForm';
 import { TransferForm } from './admin/forms/TransferForm';
 import { MovementAssistantForm } from './admin/forms/MovementAssistantForm';
 import PaymentForm from './admin/forms/PaymentForm';
 import { InvoiceForm } from './admin/forms/InvoiceForm';
 import { OrderDetailModal } from './admin/OrderDetailModal';
+import { formatFullCustomerAddress } from '../lib/utils';
 
 import axios from 'axios';
-import { getDeptId, getProvId, getDistId } from '../lib/ubigeoData';
+import { getDeptId, getProvId, getDistId, resolveUbigeoInfo } from '../lib/ubigeoData';
 
 // --- Interfaces Globales Estrictas ---
 interface Category { id: number; name: string; slug: string; image?: string; isFeatured: boolean; _count?: { products: number }; }
@@ -55,7 +59,7 @@ interface Customer { id: number; code?: string; name: string; personType: string
 interface Quotation { id: number; customerName: string; totalAmount: number; status: string; createdAt: string; items: any[]; exchangeRate: number; docSeries?: string; docNumber?: string; customerDocNumber?: string; customerPhone?: string; customerAddress?: string; currency?: string; pickupPlace?: string; sellerId?: number; customerId?: number; }
 
 export default function Admin() {
-  const { token, logout, user, hasPermission } = useAuth();
+  const { token, logout, user, updateUser, hasPermission } = useAuth();
   
   // Estados de Datos
   const [categories, setCategories] = useState<Category[]>([]);
@@ -132,11 +136,14 @@ export default function Admin() {
   const [isMovementAssistantOpen, setIsMovementAssistantOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<any>(null);
+  const [isReferralGuideModalOpen, setIsReferralGuideModalOpen] = useState(false);
+  const [selectedOrderIdForGuide, setSelectedOrderIdForGuide] = useState<number | null>(null);
+  const [referralGuideRefreshTrigger, setReferralGuideRefreshTrigger] = useState(0);
   const [simpleModalType, setSimpleModalType] = useState<'categories' | 'brands' | 'units' | 'warehouses'>('categories');
   const [logisticsTab, setLogisticsTab] = useState<'agencies' | 'zones'>('agencies');
 
   // Formularios iniciales
-  const initialSellerData = { name: '', dni: '', phone: '', email: '', isActive: true };
+  const initialSellerData = { name: '', dni: '', phone: '', email: '', warehouseId: '', isActive: true };
   const initialProductData = { code: '', name: '', slug: '', weight: '', description: '', features: '', sanitaryRegister: '', certificate: '', igv: 18, costPrice: 0, salePrice: 0, profitMargin: 30, minSalePrice: 0, maxSalePrice: 0, stock: 0, categoryId: '', brandId: '', unitId: '', packageId: '', quantityPerPackage: 1, subPackageId: '', quantityPerSubPackage: 1, images: [], isActive: true, isFeatured: false, showInWeb: true, manageLots: false, useExpiryDate: false, isOnSale: false, discountPercent: '' };
   const initialQuotationData = { 
     igvPercent: 18,
@@ -152,6 +159,7 @@ export default function Admin() {
     address: '',
     customerId: '', 
     sellerId: '',
+    warehouseId: user?.warehouseId ? user.warehouseId.toString() : '',
     paymentCondition: 'CONTADO',
     currency: '1', 
     sellerName: user?.name || '',
@@ -176,15 +184,17 @@ export default function Admin() {
     documentType: '01', series: '', docSeries: '', docNumber: '', seriesId: '',
     customerName: '', customerDocType: 'DNI', customerDocNumber: '', customerAddress: '',
     customerEmail: '', customerPhone: '', customerId: '',
+    warehouseId: user?.warehouseId ? user.warehouseId.toString() : '',
     issueDate: new Date().toISOString().split('T')[0],
     dueDate: '',
     currency: 'PEN', exchangeRate: '1.000',
     paymentCondition: 'CONTADO', operationType: '10',
     includeIgv: true, priceIncludesIgv: true, igvPercent: 18,
-    sellerId: '', orderId: '', notes: '',
+    sellerId: '', orderId: '', orderNumber: '', guideRemission: '', notes: '',
+    refDocType: '01', refDocSeries: '', refDocNumber: '', refDocDate: '', refNoteReason: '01',
     installments: [] as any[],
   };
-  const initialWarehouseData = { code: '', name: '', commercialName: '', address: '', ruc: '', ubigeo: '', observation: '', phones: '', type: '', validateStock: true, isActive: true, floors: [] };
+  const initialWarehouseData = { code: '', sunatCode: '0000', name: '', commercialName: '', address: '', ruc: '', ubigeo: '', observation: '', phones: '', type: '', validateStock: true, isActive: true, floors: [] };
 
   const [agencyFormData, setAgencyFormData] = useState(initialAgencyData);
   const [warehouseFormData, setWarehouseFormData] = useState(initialWarehouseData);
@@ -199,9 +209,10 @@ export default function Admin() {
   const [orderDetail, setOrderDetail] = useState<any>(null);
   const [isOrderDetailOpen, setIsOrderDetailOpen] = useState(false);
   const [purchaseFormData, setPurchaseFormData] = useState({
-    supplierId: '', supplierName: '', docType: 'FACTURA', docSeries: '', docNumber: '',
+    supplierId: '', supplierName: '', docType: '01', docSeries: '', docNumber: '',
     date: new Date().toISOString().split('T')[0], currency: 'PEN', exchangeRate: '1.00',
-    warehouseId: '', observation: '', items: [] as any[]
+    warehouseId: '', purchaseType: 'MERCADERIA', paymentCondition: 'CONTADO', creditDays: 0,
+    observation: '', items: [] as any[]
   });
   const [supplierFormData, setSupplierFormData] = useState({
     name: '', docType: 'RUC', docNumber: '', address: '', phone: '', email: '', contact: ''
@@ -218,7 +229,10 @@ export default function Admin() {
 
   useEffect(() => { fetchData(); }, []);
   useEffect(() => {
-    const total = quotationItems.reduce((acc, item) => acc + (item.price * item.quantity * (1 - (item.discount || 0) / 100)), 0);
+    const total = quotationItems.reduce((acc, item) => {
+      if (item.isFree) return acc;
+      return acc + (Number(item.price || 0) * Number(item.quantity || 0) * (1 - (Number(item.discount) || 0) / 100));
+    }, 0);
     setQuotationTotal(total);
   }, [quotationItems]);
 
@@ -281,6 +295,10 @@ export default function Admin() {
         name: p.name,
         code: p.code,
         price: p.salePrice,
+        originalPrice: p.salePrice,
+        referencePrice: p.salePrice,
+        isFree: false,
+        freeType: '15',
         quantity: 1,
         discount: 0,
         unit: p.unit,
@@ -299,8 +317,16 @@ export default function Admin() {
     setSearchResults([]);
   };
 
-  const updateQuotationItem = (id: number, f: string, v: any) => {
-    setQuotationItems(quotationItems.map(i => i.productId === id ? { ...i, [f]: v } : i));
+  const updateQuotationItem = (id: number, f: string | Record<string, any>, v?: any) => {
+    setQuotationItems(prev => prev.map(i => {
+      if (i.productId === id) {
+        if (typeof f === 'object' && f !== null) {
+          return { ...i, ...f };
+        }
+        return { ...i, [f as string]: v };
+      }
+      return i;
+    }));
   };
 
   const removeQuotationItem = (id: number) => {
@@ -414,10 +440,18 @@ export default function Admin() {
           setEditingItem(null);
           const customer = customers.find(c => c.id === item.customerId);
           setQuotationFormData((prev: any) => ({ ...prev, ...item }));
+          const isRuc = item.customerDocType === 'RUC' || (item.customerDocNumber && item.customerDocNumber.length === 11);
+          const targetDocType = isRuc ? '01' : '03';
+          const matchingSeries = series.find((s: any) => s.documentType === targetDocType && s.isActive) || series.find((s: any) => s.documentType === '01' && s.isActive);
+
+          const orderNumberStr = item.docSeries && item.docNumber 
+            ? `${item.docSeries}-${item.docNumber}` 
+            : (item.orderNumber || `PED-${String(item.id).padStart(6, '0')}`);
+
           setInvoiceFormData({
             ...initialInvoiceData,
             customerName: item.customerName || '',
-            customerDocType: item.customerDocType || 'DNI',
+            customerDocType: item.customerDocType || (isRuc ? 'RUC' : 'DNI'),
             customerDocNumber: item.customerDocNumber || '',
             customerAddress: item.customerAddress || '',
             customerEmail: item.customerEmail || '',
@@ -425,13 +459,17 @@ export default function Admin() {
             customerId: item.customerId?.toString() || '',
             sellerId: item.sellerId?.toString() || '',
             orderId: item.id,
+            orderNumber: orderNumberStr,
+            guideRemission: item.guideRemission || item.guiaRemision || '',
             paymentCondition: item.paymentCondition || 'CONTADO',
             currency: item.currency || 'PEN',
             operationType: item.operationType || '10',
             exchangeRate: item.exchangeRate || '1.000',
             issueDate: new Date().toISOString().split('T')[0],
             notes: item.notes || '',
-            documentType: '01',
+            documentType: targetDocType,
+            series: matchingSeries ? matchingSeries.id.toString() : '',
+            docSeries: matchingSeries ? matchingSeries.series : '',
           });
           setQuotationItems(item.items?.map((i: any) => {
             const prod = i.product || {};
@@ -456,6 +494,8 @@ export default function Admin() {
               unitMeasure: i.unitMeasure || prod.package?.symbol || prod.subPackage?.symbol || prod.unit?.symbol || 'UND',
               priceType: i.priceType || 'PRICE1',
               lotNumber: i.lotNumber || '',
+              isFree: i.isFree || i.isBonus || Number(i.price) === 0,
+              referencePrice: Number(i.referencePrice || i.originalPrice || prod.salePrice || i.price || 0),
               unit: prod.unit || { symbol: 'UND' },
             };
           }) || []);
@@ -495,6 +535,8 @@ export default function Admin() {
               unitMeasure: i.unitMeasure || prod.package?.symbol || prod.subPackage?.symbol || prod.unit?.symbol || 'UND',
               priceType: i.priceType || 'PRICE1',
               lotNumber: i.lotNumber || '',
+              isFree: i.isFree || i.isBonus || Number(i.price) === 0,
+              referencePrice: Number(i.referencePrice || i.originalPrice || prod.salePrice || i.price || 0),
               unit: prod.unit || { symbol: 'UND' },
             };
           }) || []);
@@ -534,7 +576,8 @@ export default function Admin() {
         setPurchaseFormData({
           supplierId: '', supplierName: '', docType: modeToSet === 'guides' ? '09' : '01', docSeries: '', docNumber: '',
           date: new Date().toISOString().split('T')[0], currency: 'PEN', exchangeRate: '1.00',
-          warehouseId: '', observation: '', items: []
+          warehouseId: '', purchaseType: 'MERCADERIA', paymentCondition: 'CONTADO', creditDays: 0,
+          observation: '', items: []
         });
       }
       setIsPurchaseModalOpen(true);
@@ -605,7 +648,19 @@ export default function Admin() {
           };
         }) || []);
       } else {
-        setQuotationFormData({ ...initialQuotationData, docType: 'COT' });
+        const matchedSeller = sellers.find(s => 
+          (user?.email && s.email?.toLowerCase() === user.email.toLowerCase()) ||
+          (user?.name && (s.name?.toLowerCase().trim() === user.name.toLowerCase().trim() || user.name.toLowerCase().includes(s.name.toLowerCase().trim()))) ||
+          (user?.warehouseId && s.warehouseId === user.warehouseId)
+        ) || (sellers.filter(s => s.isActive !== false).length === 1 ? sellers.find(s => s.isActive !== false) : null);
+
+        setQuotationFormData({ 
+          ...initialQuotationData, 
+          docType: 'COT',
+          sellerId: matchedSeller ? matchedSeller.id.toString() : '',
+          sellerName: matchedSeller ? matchedSeller.name : (user?.name || ''),
+          operationType: '10'
+        });
         setQuotationItems([]);
       }
       setIsQuotationModalOpen(true); 
@@ -628,6 +683,7 @@ export default function Admin() {
           customerId: item.customerId?.toString() || '',
           agencyId: item.agencyId?.toString() || '',
           docType: 'PED',
+          operationType: item.operationType || '10',
           date: item.createdAt?.split('T')[0] || item.date || new Date().toISOString().split('T')[0],
           expiryDate: item.dueDate?.split('T')[0] || item.expiryDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         });
@@ -665,7 +721,19 @@ export default function Admin() {
           };
         }) || []);
       } else {
-        setQuotationFormData({ ...initialQuotationData, docType: 'PED' });
+        const matchedSeller = sellers.find(s => 
+          (user?.email && s.email?.toLowerCase() === user.email.toLowerCase()) ||
+          (user?.name && (s.name?.toLowerCase().trim() === user.name.toLowerCase().trim() || user.name.toLowerCase().includes(s.name.toLowerCase().trim()))) ||
+          (user?.warehouseId && s.warehouseId === user.warehouseId)
+        ) || (sellers.filter(s => s.isActive !== false).length === 1 ? sellers.find(s => s.isActive !== false) : null);
+
+        setQuotationFormData({ 
+          ...initialQuotationData, 
+          docType: 'PED',
+          sellerId: matchedSeller ? matchedSeller.id.toString() : '',
+          sellerName: matchedSeller ? matchedSeller.name : (user?.name || ''),
+          operationType: '10'
+        });
         setQuotationItems([]);
       }
       setIsOrderModalOpen(true); 
@@ -746,6 +814,7 @@ export default function Admin() {
         address: warehouseFormData.address,
         ruc: warehouseFormData.ruc,
         phones: warehouseFormData.phones,
+        sunatCode: warehouseFormData.sunatCode || '0000',
         observation: warehouseFormData.observation,
         isActive: warehouseFormData.isActive,
         validateStock: warehouseFormData.validateStock
@@ -1015,33 +1084,60 @@ export default function Admin() {
     e.preventDefault(); setLoading(true);
     try {
       const url = editingItem ? `/api/customers/${editingItem.id}` : '/api/customers';
-      const res = await axios({ method: editingItem ? 'PUT' : 'POST', url, data: customerFormData, headers: { Authorization: `Bearer ${token}` } });
-      showSuccess('Guardado'); 
+      const fullAddress = formatFullCustomerAddress(
+        customerFormData.address,
+        customerFormData.district,
+        customerFormData.province,
+        customerFormData.department
+      );
+      const payload = { ...customerFormData, address: fullAddress };
+
+      const res = await axios({ method: editingItem ? 'PUT' : 'POST', url, data: payload, headers: { Authorization: `Bearer ${token}` } });
+      showSuccess('Cliente guardado'); 
       setIsCustomerModalOpen(false); 
       await fetchData();
       
-      // Si estamos en el modal de cotización, seleccionar automáticamente al nuevo cliente
-      if (isQuotationModalOpen && !editingItem) {
+      // Si estamos en el modal de cotización o pedido, seleccionar automáticamente al nuevo cliente con todos sus datos
+      if ((isQuotationModalOpen || isOrderModalOpen) && !editingItem) {
+        const client = res.data;
+        const clientName = client.name || [client.firstName, client.secondName, client.lastName, client.surname].filter(Boolean).join(' ') || '';
         setQuotationFormData((prev: any) => ({
           ...prev,
-          customerId: res.data.id.toString(),
-          ruc: res.data.docNumber,
-          razonSocial: res.data.name || `${res.data.firstName} ${res.data.lastName}`,
-          address: res.data.address || ''
+          customerId: client.id ? client.id.toString() : '',
+          ruc: client.docNumber || prev.ruc,
+          razonSocial: clientName,
+          address: client.address || fullAddress || ''
         }));
       }
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+    } catch (err: any) { 
+      console.error(err);
+      alert(err.response?.data?.error || 'Error al guardar cliente');
+    } finally { setLoading(false); }
   };
 
   const handleConsultDocument = async () => {
-    if (!customerFormData.docNumber) return;
+    const rawDoc = (customerFormData.docNumber || '').trim();
+    if (!rawDoc) {
+      showError('Ingrese un número de documento para consultar');
+      return;
+    }
+
+    // Normalizar tipo de documento: SUNAT usa '1'/'6', API espera 'dni'/'ruc'
+    const typeMap: Record<string, string> = { '1': 'dni', '6': 'ruc', 'DNI': 'dni', 'RUC': 'ruc', 'dni': 'dni', 'ruc': 'ruc' };
+    const apiType = typeMap[customerFormData.docType] || (rawDoc.length === 11 ? 'ruc' : 'dni');
+
+    if (apiType === 'ruc' && rawDoc.length !== 11) {
+      showError(`El RUC debe tener exactamente 11 dígitos numéricos (ingresó ${rawDoc.length} dígitos).`);
+      return;
+    }
+    if (apiType === 'dni' && rawDoc.length !== 8) {
+      showError(`El DNI debe tener exactamente 8 dígitos numéricos (ingresó ${rawDoc.length} dígitos).`);
+      return;
+    }
+
     setLoading(true);
     try {
-      // Normalizar tipo de documento: SUNAT usa '1'/'6', API espera 'dni'/'ruc'
-      const typeMap: Record<string, string> = { '1': 'dni', '6': 'ruc', 'DNI': 'dni', 'RUC': 'ruc', 'dni': 'dni', 'ruc': 'ruc' };
-      const apiType = typeMap[customerFormData.docType] || customerFormData.docType.toLowerCase();
-      
-      const res = await axios.get(`/api/consult/${apiType}/${customerFormData.docNumber.trim()}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.get(`/api/consult/${apiType}/${rawDoc}`, { headers: { Authorization: `Bearer ${token}` } });
       const d = res.data;
       
       if (d.success === false || d.message) {
@@ -1052,23 +1148,23 @@ export default function Admin() {
       if (d.ruc || d.dni || d.razonSocial || d.nombres || d.nombre_o_razon_social) {
         const data = d.data || d;
         const isRuc = customerFormData.docType === '6' || customerFormData.docType === 'RUC';
-        
+        const ubi = resolveUbigeoInfo(data);
+
         if (isRuc) {
-          const dName = data.departamento || data.department || '';
-          const pName = data.provincia || data.province || '';
-          const diName = data.distrito || data.district || '';
-          
-          const deptId = getDeptId(dName);
-          const provId = getProvId(pName);
-          const distId = getDistId(diName);
+          const fullAddress = formatFullCustomerAddress(
+            data.direccion || data.direccion_completa || '',
+            ubi.district,
+            ubi.province,
+            ubi.department
+          );
 
           setCustomerFormData({ 
             ...customerFormData, 
             name: data.razonSocial || data.nombre_o_razon_social || '', 
-            address: data.direccion || data.direccion_completa || '', 
-            department: deptId,
-            province: provId,
-            district: distId
+            address: fullAddress, 
+            department: ubi.department,
+            province: ubi.province,
+            district: ubi.district
           });
         } else {
           const rawNames = data.nombres || '';
@@ -1078,14 +1174,13 @@ export default function Admin() {
           
           const apePat = data.apellidoPaterno || data.apellido_paterno || '';
           const apeMat = data.apellidoMaterno || data.apellido_materno || '';
-          
-          const dName = data.departamento || data.department || '';
-          const pName = data.provincia || data.province || '';
-          const diName = data.distrito || data.district || '';
-          
-          const deptId = getDeptId(dName);
-          const provId = getProvId(pName);
-          const distId = getDistId(diName);
+
+          const fullAddress = formatFullCustomerAddress(
+            data.direccion || data.direccion_completa || '',
+            ubi.district,
+            ubi.province,
+            ubi.department
+          );
 
           setCustomerFormData({ 
             ...customerFormData, 
@@ -1094,10 +1189,10 @@ export default function Admin() {
             lastName: apePat,
             surname: apeMat,
             name: data.razonSocial || `${rawNames} ${apePat} ${apeMat}`.trim(),
-            address: data.direccion || data.direccion_completa || '',
-            department: deptId,
-            province: provId,
-            district: distId
+            address: fullAddress, 
+            department: ubi.department,
+            province: ubi.province,
+            district: ubi.district
           });
         }
         showSuccess('Datos recuperados correctamente');
@@ -1145,12 +1240,26 @@ export default function Admin() {
 
       <div className="flex flex-col lg:flex-row gap-6 h-full min-h-0">
         <aside className="w-full lg:w-64 shrink-0 space-y-2 h-full overflow-y-auto custom-scrollbar pr-2">
-          <div className="px-5 py-4 mb-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
-            <div className="flex items-center gap-3 mb-1">
-              <div className="w-8 h-8 bg-linear-to-tr from-cyan-400 to-sky-500 rounded-xl flex items-center justify-center font-black text-white shadow-md shadow-sky-100">C</div>
-              <span className="font-bold text-slate-800 text-base tracking-tight">Panel Admin</span>
+          <div 
+            onClick={() => handleOpenTab('profile', 'Mi Perfil')}
+            className={`px-4 py-3 mb-4 bg-white border rounded-2xl shadow-xs cursor-pointer transition-all hover:shadow-md hover:border-blue-400 group ${
+              activeTabId === 'profile' ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/20' : 'border-slate-100'
+            }`}
+            title="Haga clic para ver y editar su perfil de usuario"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-linear-to-tr from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center font-black text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform shrink-0">
+                {user?.name ? user.name.charAt(0).toUpperCase() : 'C'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="font-bold text-slate-800 text-sm tracking-tight block truncate group-hover:text-blue-600 transition-colors">
+                  Panel Admin
+                </span>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider truncate">
+                  {user?.name || 'Administrador'}
+                </p>
+              </div>
             </div>
-            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest pl-11">{user?.name || 'Administrador'}</p>
           </div>
           {/* --- MENU AGRUPADO --- */}
           {/* Resumen (standalone) */}
@@ -1215,6 +1324,7 @@ export default function Admin() {
             {!collapsedSections.logistica && (
               <div className="space-y-0.5 pl-2">
                 {[
+                  { id: 'referral-guides', icon: FileText, label: 'Guías de Remisión', permission: 'VIEW_LOGISTICS' },
                   { id: 'picking', icon: PackageSearch, label: 'Picking / Almacén', permission: 'VIEW_PICKING' },
                   { id: 'inventory', icon: BarChart3, label: 'Inventario / Stock', permission: 'VIEW_INVENTORY' },
                   { id: 'warehouses', icon: MapPin, label: 'Almacenes / Sedes', permission: 'VIEW_WAREHOUSES' },
@@ -1331,17 +1441,31 @@ export default function Admin() {
                         sunatCurrencies={sunatCurrencies}
                       />
                     )}
-                    {currentTab === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => {}} onEdit={(o) => openForm('orders', o)} onOpenPayment={handleOpenPayment} onNewDirectOrder={() => { handleResetQuotationForm(); setQuotationFormData(prev => ({...prev, docType: 'PED'})); setIsOrderModalOpen(true); }} onCancelDispatch={(id) => { if (confirm('¿Anular despacho? Se revertirá el stock y el pedido volverá a "Preparado" en picking.')) { axios.put(`/api/orders/${id}/status`, {status: 'PREPARING'}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData).catch(err => alert(err.response?.data?.error || 'Error al anular despacho')); } }} onCancelPayment={(id) => { if (confirm('¿Anular cobro? Se eliminarán los pagos y se devolverá el stock a los almacenes originales.')) { axios.post(`/api/orders/${id}/cancel-payment`, {}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData).catch(err => alert(err.response?.data?.error || 'Error al anular cobro')); } }} onGenerateInvoice={(o) => openForm('invoices', {...o, docType: 'PED'})} onViewDetail={(o) => { setOrderDetail(o); setIsOrderDetailOpen(true); }} />}
+                    {currentTab === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => handleOpenTab('referral-guides', 'Guías de Remisión')} onEdit={(o) => openForm('orders', o)} onOpenPayment={handleOpenPayment} onNewDirectOrder={() => { handleResetQuotationForm(); setQuotationFormData(prev => ({...prev, docType: 'PED'})); setIsOrderModalOpen(true); }} onCancelDispatch={(id) => { if (confirm('¿Anular despacho? Se revertirá el stock y el pedido volverá a "Preparado" en picking.')) { axios.put(`/api/orders/${id}/status`, {status: 'PREPARING'}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData).catch(err => alert(err.response?.data?.error || 'Error al anular despacho')); } }} onCancelPayment={(id) => { if (confirm('¿Anular cobro? Se eliminarán los pagos y se devolverá el stock a los almacenes originales.')) { axios.post(`/api/orders/${id}/cancel-payment`, {}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData).catch(err => alert(err.response?.data?.error || 'Error al anular cobro')); } }} onGenerateInvoice={(o) => openForm('invoices', {...o, docType: 'PED'})} onViewDetail={(o) => { setOrderDetail(o); setIsOrderDetailOpen(true); }} />}
                     {currentTab === 'inventory' && <InventoryModule products={products} stockDetails={stockDetails} movements={movements} onUpdateStock={(pid, s) => axios.put(`/api/products/${pid}/stock`, {stock:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onEdit={(p) => openForm('products', p)} onOpenAssistant={() => setIsMovementAssistantOpen(true)} token={token} onRefresh={fetchData} />}
                     {currentTab === 'customers' && <CustomerModule customers={customers} onEdit={(c) => openForm('customers', c)} onNew={() => openForm('customers')} onDelete={(id) => handleDelete('customers', id)} departments={[]} />}
                     {currentTab === 'exchange-rates' && <ExchangeRateModule token={token} exchangeRates={exchangeRates} onDelete={(id) => handleDelete('exchange-rates', id)} onSave={(d) => axios.post('/api/exchange-rates', d, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} loading={loading} isActive={activeTabId === tab.id} />}
                     {currentTab === 'shipping' && <LogisticsModule logisticsTab={logisticsTab} setLogisticsTab={setLogisticsTab} shippingAgencies={shippingAgencies} shippingZones={shippingZones} openEditModal={(item) => openForm(logisticsTab === 'agencies' ? 'shipping-agencies' : 'shipping-zones', item)} handleDelete={(t,id) => handleDelete(t,id)} />}
+                    {currentTab === 'referral-guides' && (
+                      <ReferralGuideModule 
+                        token={token} 
+                        orders={orders} 
+                        warehouses={warehouses} 
+                        shippingAgencies={shippingAgencies} 
+                        seriesList={series} 
+                        onNew={() => {
+                          setSelectedOrderIdForGuide(null);
+                          setIsReferralGuideModalOpen(true);
+                        }}
+                        refreshTrigger={referralGuideRefreshTrigger}
+                      />
+                    )}
                     {currentTab === 'logistics' && <AdvancedLogisticsModule token={token} />}
                     {currentTab === 'sellers' && <SellerModule sellers={sellers} onEdit={(s) => openForm('sellers', s)} onNew={() => openForm('sellers')} onDelete={(id) => handleDelete('sellers', id)} />}
                     {currentTab === 'warehouses' && <WarehouseModule warehouses={warehouses} onEdit={(w) => openForm('warehouses', w)} onNew={() => openForm('warehouses')} onDelete={(id) => handleDelete('warehouses', id)} />}
                     {currentTab === 'picking' && <WarehousePickingModule />}
                     {currentTab === 'series' && <SeriesModule series={series} warehouses={warehouses} documentTypes={seriesDocTypes} onEdit={(s) => openForm('series', s)} onNew={() => openForm('series')} onDelete={(id) => handleDelete('series', id)} />}
-                    {currentTab === 'invoices' && <InvoiceModule invoices={invoices} documentTypes={seriesDocTypes} onEdit={(inv) => openForm('invoices', inv)} onNew={() => openForm('invoices')} onDelete={(id) => handleDelete('invoices', id)} />}
+                    {currentTab === 'invoices' && <InvoiceModule invoices={invoices} documentTypes={seriesDocTypes} onEdit={(inv) => openForm('invoices', inv)} onNew={() => openForm('invoices')} onDelete={(id) => handleDelete('invoices', id)} token={token} onRefresh={fetchData} />}
                     {currentTab === 'purchases' && (
                       <PurchaseModule 
                         token={token || undefined} 
@@ -1355,6 +1479,17 @@ export default function Admin() {
                     {currentTab === 'settings' && <SettingsModule token={token} />}
                     {currentTab === 'users' && <UserModule />}
                     {currentTab === 'roles' && <RoleModule />}
+                    {currentTab === 'profile' && (
+                      <ProfileView 
+                        user={user} 
+                        token={token} 
+                        onUserUpdate={(updatedUser) => {
+                          updateUser(updatedUser);
+                        }}
+                        showSuccess={showSuccess}
+                        showError={showError}
+                      />
+                    )}
                   </div>
                 </div>
               );
@@ -1419,7 +1554,7 @@ export default function Admin() {
           </div>
 
           <div style={{ display: activeTabId === 'sellers' ? 'block' : 'none' }}>
-            <SellerForm isOpen={isSellerModalOpen} onClose={() => setIsSellerModalOpen(false)} onSubmit={handleSubmitSeller} formData={sellerFormData} setFormData={setSellerFormData} loading={loading} isEditing={!!editingItem} />
+            <SellerForm isOpen={isSellerModalOpen} onClose={() => setIsSellerModalOpen(false)} onSubmit={handleSubmitSeller} formData={sellerFormData} setFormData={setSellerFormData} loading={loading} isEditing={!!editingItem} warehouses={warehouses} />
           </div>
 
           <div style={{ display: ['products', 'categories', 'brands', 'units', 'warehouses'].includes(activeTabId) ? 'block' : 'none' }}>
@@ -1458,12 +1593,14 @@ export default function Admin() {
               searchResults={searchResults}
               handleSearchProduct={handleSearchProduct}
               quotationItems={quotationItems}
+              setQuotationItems={setQuotationItems}
               addQuotationItem={addQuotationItem}
               updateQuotationItem={updateQuotationItem}
               removeQuotationItem={removeQuotationItem}
               quotationTotal={quotationTotal}
               token={token}
               series={series}
+              invoices={invoices}
               handleConsultCustomer={handleConsultForQuotation}
               handleQuickRegister={handleQuickRegisterCustomer}
               onOpenCustomerForm={(doc) => { setCustomerFormData({ ...initialCustomerData, docNumber: doc }); setIsCustomerModalOpen(true); }}
@@ -1567,7 +1704,15 @@ export default function Admin() {
               quotationTotal={quotationTotal}
               handleConsultCustomer={handleConsultForQuotation}
               handleQuickRegister={handleQuickRegisterCustomer}
-              onOpenCustomerForm={(doc) => { setCustomerFormData({ ...initialCustomerData, docNumber: doc }); setIsCustomerModalOpen(true); }}
+              onOpenCustomerForm={(doc) => {
+                setCustomerFormData({ 
+                  ...initialCustomerData, 
+                  docNumber: doc,
+                  docType: doc && doc.length === 11 ? 'RUC' : 'DNI',
+                  personType: doc && doc.length === 11 ? 'JURIDICA' : 'NATURAL'
+                });
+                setIsCustomerModalOpen(true);
+              }}
               token={token || ''}
               sunatIgvAffectations={sunatIgvAffectations}
               sunatDocTypes={sunatDocTypes}
@@ -1583,6 +1728,27 @@ export default function Admin() {
               onSubmit={handleSubmitPayment}
               onDeletePayment={handleDeletePayment}
               loading={loading}
+            />
+          </div>
+
+          <div style={{ display: activeTabId === 'referral-guides' || isReferralGuideModalOpen ? 'block' : 'none' }}>
+            <SalesReferralGuideForm
+              isOpen={isReferralGuideModalOpen}
+              onClose={() => setIsReferralGuideModalOpen(false)}
+              onSuccess={() => {
+                setIsReferralGuideModalOpen(false);
+                setReferralGuideRefreshTrigger(prev => prev + 1);
+                fetchData();
+              }}
+              token={token}
+              initialOrderId={selectedOrderIdForGuide}
+              orders={orders}
+              quotations={quotations}
+              invoices={invoices}
+              warehouses={warehouses}
+              shippingAgencies={shippingAgencies}
+              seriesList={series}
+              sellers={sellers}
             />
           </div>
 

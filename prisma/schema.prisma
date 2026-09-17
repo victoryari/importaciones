@@ -99,6 +99,7 @@ model Product {
   stockRecords          Stock[]
   movements             StockMovement[]
   entryNoteItems        EntryNoteItem[]
+  salesReferralGuideItems SalesReferralGuideItem[]
 
   @@index([brandId])
   @@index([categoryId])
@@ -121,6 +122,7 @@ model Warehouse {
   ruc            String?
   type           String?
   ubigeo         String?
+  sunatCode      String?          @default("0000")
   updatedAt      DateTime         @default(now()) @updatedAt
   validateStock  Boolean          @default(true)
   series         DocumentSeries[]
@@ -131,6 +133,10 @@ model Warehouse {
   toTransfers    Transfer[]       @relation("ToTransfer")
   floors         WarehouseFloor[]
   entryNotes     EntryNote[]      @relation("EntryNoteWarehouse")
+  invoices       Invoice[]
+  users          User[]           @relation("UserWarehouse")
+  sellers        Seller[]         @relation("SellerWarehouse")
+  salesReferralGuides SalesReferralGuide[]
 
   @@map("warehouse")
 }
@@ -271,8 +277,12 @@ model User {
   isActive  Boolean  @default(true)
   roleId    Int?
   role      Role?    @relation(fields: [roleId], references: [id])
+  warehouseId Int?
+  warehouse   Warehouse? @relation("UserWarehouse", fields: [warehouseId], references: [id])
   dispatches Dispatch[]
 
+  @@index([roleId])
+  @@index([warehouseId])
   @@map("user")
 }
 
@@ -320,6 +330,7 @@ model Customer {
   orders     Order[]
   quotations Quotation[]
   invoices   Invoice[]
+  salesReferralGuides SalesReferralGuide[]
 
   @@map("customer")
 }
@@ -352,12 +363,15 @@ model Seller {
   phone      String?
   email      String?
   isActive   Boolean     @default(true)
+  warehouseId Int?
+  warehouse   Warehouse?  @relation("SellerWarehouse", fields: [warehouseId], references: [id])
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   orders     Order[]
   quotations Quotation[]
   invoices   Invoice[]
 
+  @@index([warehouseId])
   @@map("seller")
 }
 
@@ -478,6 +492,7 @@ model Order {
   payments           Payment[]
   movements          StockMovement[]
   invoices           Invoice[]
+  salesReferralGuides SalesReferralGuide[]
   origin             String          @default("ADMIN")
   warehouseStatus    String?         
   pickerId           Int?
@@ -537,6 +552,7 @@ model ShippingAgency {
   branches     AgencyBranch[]
   orders       Order[]
   quotations   Quotation[]
+  salesReferralGuides SalesReferralGuide[]
   zone         ShippingZone   @relation(fields: [zoneId], references: [id])
 
   @@index([zoneId], map: "shipping_agency_zoneId_fkey")
@@ -598,28 +614,30 @@ model DocumentSeries {
 }
 
 model Purchase {
-  id           Int            @id @default(autoincrement())
-  supplierId   Int
-  supplierName String
-  referenceId  Int?
-  docType      String         @default("FACTURA")
-  docSeries    String?
-  docNumber    String?
-  date         DateTime       @default(now())
-  currency     String         @default("PEN")
-  exchangeRate Decimal        @default(1.000) @db.Decimal(10, 3)
-  totalAmount  Decimal        @default(0.00) @db.Decimal(10, 2)
-  status       String         @default("COMPLETED")
-  warehouseId  Int?
-  purchaseType String         @default("NACIONAL")
-  observation  String?        @db.Text
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  supplier     Supplier       @relation(fields: [supplierId], references: [id])
-  reference    Purchase?      @relation("PurchaseReference", fields: [referenceId], references: [id])
-  referencedBy Purchase[]     @relation("PurchaseReference")
-  items        PurchaseItem[]
-  movements    StockMovement[]
+  id               Int            @id @default(autoincrement())
+  supplierId       Int
+  supplierName     String
+  referenceId      Int?
+  docType          String         @default("FACTURA")
+  docSeries        String?
+  docNumber        String?
+  date             DateTime       @default(now())
+  currency         String         @default("PEN")
+  exchangeRate     Decimal        @default(1.000) @db.Decimal(10, 3)
+  totalAmount      Decimal        @default(0.00) @db.Decimal(10, 2)
+  status           String         @default("COMPLETED")
+  warehouseId      Int?
+  purchaseType     String         @default("NACIONAL")
+  paymentCondition String?        @default("CONTADO")
+  creditDays       Int?           @default(0)
+  observation      String?        @db.Text
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  supplier         Supplier       @relation(fields: [supplierId], references: [id])
+  reference        Purchase?      @relation("PurchaseReference", fields: [referenceId], references: [id])
+  referencedBy     Purchase[]     @relation("PurchaseReference")
+  items            PurchaseItem[]
+  movements        StockMovement[]
 
   @@index([supplierId], map: "purchase_supplierId_fkey")
   @@map("purchase")
@@ -707,6 +725,18 @@ model Invoice {
   status            String               @default("ACTIVE")
   billingStatus     String               @default("PENDIENTE")
 
+  warehouseId       Int?
+  warehouse         Warehouse?           @relation(fields: [warehouseId], references: [id])
+  sunatEstablishmentCode String?         @default("0000")
+  sunatStatus       String               @default("PENDING") // PENDING, ACCEPTED, REJECTED, OBSERVED, VOIDED
+  sunatResponse     String?              @db.Text
+  sunatCdrUrl       String?
+  sunatCdrXml       String?              @db.Text
+  sunatXmlUrl       String?
+  sunatPdfUrl       String?
+  sunatHashCode     String?
+  sunatQr           String?              @db.Text
+
   sellerId          Int?
   seller            Seller?              @relation(fields: [sellerId], references: [id])
   customer          Customer?            @relation(fields: [customerId], references: [id])
@@ -720,10 +750,12 @@ model Invoice {
 
   items             InvoiceItem[]
   installments      InvoiceInstallment[]
+  salesReferralGuides SalesReferralGuide[]
 
   @@index([customerId])
   @@index([orderId])
   @@index([sellerId])
+  @@index([warehouseId])
   @@map("invoice")
 }
 
@@ -837,6 +869,21 @@ model Vehicle {
   @@map("vehicle")
 }
 
+model Driver {
+  id             Int       @id @default(autoincrement())
+  docType        String    @default("1")
+  docNumber      String    @unique
+  name           String
+  licenseNumber  String?
+  phone          String?
+  email          String?
+  status         String    @default("ACTIVE")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("driver")
+}
+
 model Dispatch {
   id               Int       @id @default(autoincrement())
   vehicleId        Int
@@ -856,4 +903,120 @@ model Dispatch {
   @@index([vehicleId])
   @@index([driverId])
   @@map("dispatch")
+}
+
+model SalesReferralGuide {
+  id                        Int                         @id @default(autoincrement())
+  documentType              String                      @default("09")
+  series                    String
+  number                    Int
+  numberFormatted           String
+  
+  issueDate                 DateTime                    @default(now())
+  transferDate              DateTime                    @default(now())
+  
+  transferReason            String                      @default("01")
+  transferReasonDescription String?                     @default("VENTA")
+  transportMode             String                      @default("02")
+  
+  // Destinatario
+  customerId                Int?
+  customerDocType           String                      @default("RUC")
+  customerDocNumber         String
+  customerName              String
+  customerAddress           String?                     @db.Text
+  
+  // Punto de Partida
+  originWarehouseId         Int?
+  originAddress             String                      @db.Text
+  originUbigeo              String?                     @default("150101")
+  originSunatCode           String?                     @default("0000")
+  
+  // Punto de Llegada
+  deliveryAddress           String                      @db.Text
+  deliveryUbigeo            String?                     @default("150101")
+  deliveryDepartment        String?
+  deliveryProvince          String?
+  deliveryDistrict          String?
+  
+  // Transporte Público
+  carrierDocType            String?                     @default("6")
+  carrierDocNumber          String?
+  carrierName               String?
+  carrierMtcNumber          String?
+  shippingAgencyId          Int?
+  shippingBranchId          Int?
+  
+  // Transporte Privado
+  driverDocType             String?                     @default("1")
+  driverDocNumber           String?
+  driverName                String?
+  driverLicenseNumber       String?
+  vehiclePlate              String?
+  vehicleSecondaryPlate     String?
+  
+  // Carga
+  totalWeight               Decimal                     @default(0.00) @db.Decimal(10, 2)
+  weightUnit                String                      @default("KGM")
+  totalPackages             Int                         @default(1)
+  
+  // Documentos Relacionados
+  orderId                   Int?
+  orderNumber               String?
+  invoiceId                 Int?
+  invoiceNumber             String?
+  relatedDocType            String?
+  relatedDocNumber          String?
+  
+  // Estado y SUNAT
+  status                    String                      @default("ACTIVE")
+  sunatStatus               String                      @default("PENDING")
+  sunatResponse             String?                     @db.Text
+  sunatCdrUrl               String?
+  sunatCdrXml               String?                     @db.Text
+  sunatXmlUrl               String?
+  sunatPdfUrl               String?
+  sunatHashCode             String?
+  sunatQr                   String?                     @db.Text
+  
+  notes                     String?                     @db.Text
+  
+  createdAt                 DateTime                    @default(now())
+  updatedAt                 DateTime                    @updatedAt
+  
+  items                     SalesReferralGuideItem[]
+  
+  customer                  Customer?                   @relation(fields: [customerId], references: [id])
+  originWarehouse           Warehouse?                  @relation(fields: [originWarehouseId], references: [id])
+  order                     Order?                      @relation(fields: [orderId], references: [id])
+  invoice                   Invoice?                    @relation(fields: [invoiceId], references: [id])
+  shippingAgency            ShippingAgency?             @relation(fields: [shippingAgencyId], references: [id])
+
+  @@index([customerId])
+  @@index([originWarehouseId])
+  @@index([orderId])
+  @@index([invoiceId])
+  @@index([shippingAgencyId])
+  @@map("sales_referral_guide")
+}
+
+model SalesReferralGuideItem {
+  id                        Int                         @id @default(autoincrement())
+  referralGuideId           Int
+  productId                 Int
+  code                      String?
+  description               String
+  quantity                  Decimal                     @db.Decimal(10, 2)
+  unitMeasure               String                      @default("NIU")
+  unitWeight                Decimal?                    @default(0.00) @db.Decimal(10, 3)
+  totalWeight               Decimal?                    @default(0.00) @db.Decimal(10, 2)
+  lotNumber                 String?
+  expiryDate                DateTime?
+  
+  referralGuide             SalesReferralGuide          @relation(fields: [referralGuideId], references: [id], onDelete: Cascade)
+  product                   Product                     @relation(fields: [productId], references: [id])
+  
+  @@index([referralGuideId])
+  @@index([productId])
+  @@map("sales_referral_guide_item")
 }

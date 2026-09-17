@@ -11,6 +11,7 @@ import sharp from 'sharp';
 import axios from 'axios';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { SunatService } from './services/sunatService';
 
 const app = express();
 const port = 3001;
@@ -230,42 +231,54 @@ app.delete('/api/vehicles/:id', authenticateToken, async (req, res) => {
 // --- DISPATCHES ---
 app.get('/api/dispatches/available-orders', authenticateToken, async (req, res) => {
   try {
-    const { includePending } = req.query;
-    const allowedStatuses = includePending === 'true' ? ['PICKED', 'PENDING'] : ['PICKED'];
-
     const orders = await prisma.order.findMany({
       where: {
-        warehouseStatus: { in: allowedStatuses },
+        warehouseStatus: 'PICKED',
         agencyId: { not: null },
         dispatchId: null,
+        status: { not: 'CANCELLED' }
       },
       include: {
         customer: true,
         agency: true,
         items: {
-          include: { product: true }
+          include: { 
+            product: {
+              include: {
+                unit: true,
+                package: true,
+                subPackage: true
+              }
+            } 
+          }
         }
-      }
+      },
+      orderBy: { createdAt: 'desc' }
     });
 
     const mapped = orders.map(o => {
       let weight = 0;
       let volume = 0;
       let qty = 0;
+      const unitsSet = new Set<string>();
+
       o.items.forEach(i => {
         weight += Number(i.product.weight || 0) * i.quantity;
         volume += Number(i.product.volume || 0) * i.quantity;
         qty += i.quantity;
+        const u = i.unitMeasure || i.product.package?.symbol || i.product.subPackage?.symbol || i.product.unit?.symbol || 'UND';
+        if (u) unitsSet.add(u.toUpperCase());
       });
 
       return {
         id: o.id,
-        code: `PED-${String(o.id).padStart(5, '0')}`,
-        customerName: o.customer?.name || 'Cliente Varios',
+        code: o.docSeries && o.docNumber ? `PED-${o.docSeries}-${o.docNumber}` : `PED-${String(o.id).padStart(5, '0')}`,
+        customerName: o.customerName || o.customer?.name || (o.customer ? `${o.customer.firstName || ''} ${o.customer.lastName || ''}`.trim() : '') || 'Cliente Varios',
         weight,
         volume,
         qty,
-        agency: o.agency?.name || 'Desconocida',
+        unitMeasure: Array.from(unitsSet).join(', ') || 'UND',
+        agency: o.agency?.name || 'Agencia Asignada',
         status: o.warehouseStatus
       };
     });
@@ -409,12 +422,23 @@ app.get('/api/dispatches', authenticateToken, async (req, res) => {
         vehicle: true, 
         orders: {
           include: {
+            customer: true,
             agency: {
               include: {
                 branches: true
               }
             },
-            items: { include: { product: true } }
+            items: { 
+              include: { 
+                product: {
+                  include: {
+                    unit: true,
+                    package: true,
+                    subPackage: true
+                  }
+                } 
+              } 
+            }
           }
         }
       },
@@ -429,10 +453,14 @@ app.get('/api/dispatches', authenticateToken, async (req, res) => {
         let weight = 0;
         let volume = 0;
         let qty = 0;
+        const unitsSet = new Set<string>();
+
         o.items.forEach(i => {
           weight += Number(i.product.weight || 0) * i.quantity;
           volume += Number(i.product.volume || 0) * i.quantity;
           qty += i.quantity;
+          const u = i.unitMeasure || i.product.package?.symbol || i.product.subPackage?.symbol || i.product.unit?.symbol || 'UND';
+          if (u) unitsSet.add(u.toUpperCase());
         });
 
         currentWeight += weight;
@@ -443,10 +471,12 @@ app.get('/api/dispatches', authenticateToken, async (req, res) => {
 
         return {
           id: o.id,
-          code: `PED-${String(o.id).padStart(5, '0')}`,
+          code: o.docSeries && o.docNumber ? `PED-${o.docSeries}-${o.docNumber}` : `PED-${String(o.id).padStart(5, '0')}`,
+          customerName: o.customerName || o.customer?.name || (o.customer ? `${o.customer.firstName || ''} ${o.customer.lastName || ''}`.trim() : '') || 'Cliente Varios',
           weight,
           volume,
           qty,
+          unitMeasure: Array.from(unitsSet).join(', ') || 'UND',
           agency: o.agency?.name || 'Desconocida',
           agencyAddress: displayAddress,
           agencyBranches: o.agency?.branches || [],
@@ -1238,7 +1268,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     const { email, password } = req.body;
     const user = await prisma.user.findUnique({ 
       where: { email },
-      include: { role: true }
+      include: { role: true, warehouse: true }
     });
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
@@ -1261,6 +1291,8 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
         email: user.email, 
         name: user.name, 
         series: (user as any).series,
+        warehouseId: user.warehouseId,
+        warehouse: user.warehouse,
         role: user.role?.name,
         permissions
       } 
@@ -1274,7 +1306,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ 
       where: { id: (req as any).user.userId },
-      select: { id: true, email: true, name: true, series: true, isActive: true, role: true }
+      select: { id: true, email: true, name: true, series: true, warehouseId: true, warehouse: true, isActive: true, role: true }
     });
     
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
@@ -1290,11 +1322,110 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
       email: user.email, 
       name: user.name, 
       series: user.series,
+      warehouseId: user.warehouseId,
+      warehouse: user.warehouse,
       role: user.role?.name,
       permissions
     });
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener usuario' });
+  }
+});
+
+// --- ACTUALIZAR PERFIL DE USUARIO ---
+app.put('/api/auth/profile', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).user.userId;
+    const { name, email } = req.body;
+
+    if (!name || !email) {
+      return res.status(400).json({ error: 'Nombre y correo son requeridos' });
+    }
+
+    // Verificar si el correo ya pertenece a otro usuario
+    const existing = await prisma.user.findFirst({
+      where: {
+        email: email.trim().toLowerCase(),
+        NOT: { id: userId }
+      }
+    });
+
+    if (existing) {
+      return res.status(400).json({ error: 'El correo electrónico ya está registrado por otro usuario' });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { name: name.trim(), email: email.trim().toLowerCase() },
+      select: { id: true, email: true, name: true, series: true, warehouseId: true, warehouse: true, role: true }
+    });
+
+    let permissions = [];
+    if (updatedUser.role && updatedUser.role.permissions) {
+      try { permissions = JSON.parse(updatedUser.role.permissions); } catch (e) {}
+    }
+
+    res.json({
+      message: 'Perfil actualizado con éxito',
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        series: updatedUser.series,
+        warehouseId: updatedUser.warehouseId,
+        warehouse: updatedUser.warehouse,
+        role: updatedUser.role?.name,
+        permissions
+      }
+    });
+  } catch (error: any) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ error: 'Error al actualizar el perfil' });
+  }
+});
+
+// --- CAMBIO DE CONTRASEÑA ---
+app.put('/api/auth/change-password', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).user.userId;
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Debe ingresar la contraseña actual y la nueva contraseña' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' });
+    }
+
+    if (confirmPassword && newPassword !== confirmPassword) {
+      return res.status(400).json({ error: 'La confirmación de la nueva contraseña no coincide' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'La contraseña actual ingresada es incorrecta' });
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedNewPassword }
+    });
+
+    res.json({ message: 'Contraseña actualizada correctamente' });
+  } catch (error: any) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: 'Error al cambiar la contraseña' });
   }
 });
 
@@ -1517,10 +1648,50 @@ app.post('/api/customers', authenticateToken, async (req, res) => {
     }
 
     // Si es persona natural, construimos el nombre completo si no viene
+    // Normalizar docType y nombre
+    const normalizeDocType = (dt?: string) => {
+      if (!dt) return 'DNI';
+      const clean = dt.trim().toUpperCase();
+      if (clean === '1' || clean === 'DNI') return 'DNI';
+      if (clean === '6' || clean === 'RUC') return 'RUC';
+      if (clean === '4' || clean === 'CE') return 'CE';
+      if (clean === '7' || clean === 'PAS') return 'PAS';
+      return clean;
+    };
+
+    docType = normalizeDocType(docType);
+
+    // Si es persona natural, construimos el nombre completo si no viene
     if (personType === 'NATURAL' && !name) {
       name = [firstName, secondName, lastName, surname].filter(Boolean).join(' ');
     }
     
+    name = name ? name.toUpperCase().trim() : '';
+    
+    // Concatenar dirección: Dirección Específica - Departamento - Provincia - Distrito
+    const formatFullAddressServer = (addr?: string | null, dist?: string | null, prov?: string | null, dept?: string | null) => {
+      const cleanStr = (s?: string | null) => (s || '').trim().toUpperCase();
+      const removeAccents = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const isNumericOnly = (s: string) => /^\d+$/.test(s.trim());
+
+      let a = cleanStr(addr);
+      a = a.replace(/(?:\s*-\s*\d{1,4})+\s*$/g, '').trim();
+
+      const de = isNumericOnly(cleanStr(dept)) ? '' : cleanStr(dept);
+      const pr = isNumericOnly(cleanStr(prov)) ? '' : cleanStr(prov);
+      const di = isNumericOnly(cleanStr(dist)) ? '' : cleanStr(dist);
+
+      if (!a) return [de, pr, di].filter(Boolean).join(' - ');
+      const normAddr = removeAccents(a);
+      const parts = [a];
+      if (de && !normAddr.includes(removeAccents(de))) parts.push(de);
+      if (pr && !normAddr.includes(removeAccents(pr))) parts.push(pr);
+      if (di && !normAddr.includes(removeAccents(di))) parts.push(di);
+      return parts.join(' - ');
+    };
+
+    address = formatFullAddressServer(address, district, province, department);
+
     // Si no hay código, usamos el número de documento
     if (!code) code = docNumber;
 
@@ -1528,8 +1699,12 @@ app.post('/api/customers', authenticateToken, async (req, res) => {
       data: { 
         name, docType, docNumber, address, phone, email, contact, code,
         personType: personType || 'NATURAL', 
-        firstName, secondName, lastName, surname,
-        country, department, province, district
+        firstName: firstName ? firstName.toUpperCase().trim() : null, 
+        secondName: secondName ? secondName.toUpperCase().trim() : null, 
+        lastName: lastName ? lastName.toUpperCase().trim() : null, 
+        surname: surname ? surname.toUpperCase().trim() : null,
+        country: country || 'PERU', 
+        department, province, district
       }
     });
     res.json(customer);
@@ -1551,8 +1726,45 @@ app.put('/api/customers/:id', authenticateToken, async (req, res) => {
       country, department, province, district 
     } = req.body;
 
+    const normalizeDocType = (dt?: string) => {
+      if (!dt) return 'DNI';
+      const clean = dt.trim().toUpperCase();
+      if (clean === '1' || clean === 'DNI') return 'DNI';
+      if (clean === '6' || clean === 'RUC') return 'RUC';
+      if (clean === '4' || clean === 'CE') return 'CE';
+      if (clean === '7' || clean === 'PAS') return 'PAS';
+      return clean;
+    };
+
+    if (docType) docType = normalizeDocType(docType);
+
     if (personType === 'NATURAL' && !name) {
       name = [firstName, secondName, lastName, surname].filter(Boolean).join(' ');
+    }
+
+    name = name ? name.toUpperCase().trim() : undefined;
+    if (address !== undefined) {
+      const formatFullAddressServer = (addr?: string | null, dist?: string | null, prov?: string | null, dept?: string | null) => {
+        const cleanStr = (s?: string | null) => (s || '').trim().toUpperCase();
+        const removeAccents = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const isNumericOnly = (s: string) => /^\d+$/.test(s.trim());
+
+        let a = cleanStr(addr);
+        a = a.replace(/(?:\s*-\s*\d{1,4})+\s*$/g, '').trim();
+
+        const de = isNumericOnly(cleanStr(dept)) ? '' : cleanStr(dept);
+        const pr = isNumericOnly(cleanStr(prov)) ? '' : cleanStr(prov);
+        const di = isNumericOnly(cleanStr(dist)) ? '' : cleanStr(dist);
+
+        if (!a) return [de, pr, di].filter(Boolean).join(' - ');
+        const normAddr = removeAccents(a);
+        const parts = [a];
+        if (de && !normAddr.includes(removeAccents(de))) parts.push(de);
+        if (pr && !normAddr.includes(removeAccents(pr))) parts.push(pr);
+        if (di && !normAddr.includes(removeAccents(di))) parts.push(di);
+        return parts.join(' - ');
+      };
+      address = formatFullAddressServer(address, district, province, department);
     }
 
     const customer = await prisma.customer.update({
@@ -1560,7 +1772,10 @@ app.put('/api/customers/:id', authenticateToken, async (req, res) => {
       data: { 
         name, docType, docNumber, address, phone, email, contact, code,
         personType: firstName ? personType : undefined, 
-        firstName, secondName, lastName, surname,
+        firstName: firstName ? firstName.toUpperCase().trim() : undefined, 
+        secondName: secondName ? secondName.toUpperCase().trim() : undefined, 
+        lastName: lastName ? lastName.toUpperCase().trim() : undefined, 
+        surname: surname ? surname.toUpperCase().trim() : undefined,
         country, department, province, district
       }
     });
@@ -2216,7 +2431,11 @@ app.get('/api/purchases/search', authenticateToken, async (req, res) => {
 
 app.post('/api/purchases', authenticateToken, async (req, res) => {
   try {
-    const { supplierId, supplierName, docType, docSeries, docNumber, date, currency, exchangeRate, warehouseId, items, observation, referenceId, purchaseType, totalAmount: bodyTotal } = req.body;
+    const { 
+      supplierId, supplierName, docType, docSeries, docNumber, date, currency, 
+      exchangeRate, warehouseId, items, observation, referenceId, purchaseType, 
+      paymentCondition, creditDays, totalAmount: bodyTotal 
+    } = req.body;
 
     // --- VALIDACIONES DE INTEGRIDAD ---
     if (!supplierId) {
@@ -2253,7 +2472,9 @@ app.post('/api/purchases', authenticateToken, async (req, res) => {
           currency,
           exchangeRate: parseFloat(exchangeRate),
           warehouseId: warehouseId ? parseInt(warehouseId) : null,
-          purchaseType: purchaseType || 'NACIONAL',
+          purchaseType: purchaseType || 'MERCADERIA',
+          paymentCondition: paymentCondition || 'CONTADO',
+          creditDays: creditDays !== undefined ? parseInt(creditDays) : 0,
           observation,
           totalAmount: finalTotal,
           items: {
@@ -2357,7 +2578,11 @@ app.post('/api/purchases', authenticateToken, async (req, res) => {
 app.put('/api/purchases/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { supplierId, supplierName, docType, docSeries, docNumber, date, currency, exchangeRate, warehouseId, items, observation, totalAmount: bodyTotal } = req.body;
+    const { 
+      supplierId, supplierName, docType, docSeries, docNumber, date, currency, 
+      exchangeRate, warehouseId, items, observation, purchaseType, 
+      paymentCondition, creditDays, totalAmount: bodyTotal 
+    } = req.body;
 
     const purchaseId = parseInt(id);
 
@@ -2422,6 +2647,9 @@ app.put('/api/purchases/:id', authenticateToken, async (req, res) => {
           currency,
           exchangeRate: parseFloat(exchangeRate),
           warehouseId: warehouseId ? parseInt(warehouseId) : null,
+          ...(purchaseType && { purchaseType }),
+          paymentCondition: paymentCondition || 'CONTADO',
+          creditDays: creditDays !== undefined ? parseInt(creditDays) : 0,
           observation,
           totalAmount: bodyTotal !== undefined ? parseFloat(bodyTotal) : items.reduce((acc: number, item: any) => acc + (Number(item.quantity) * Number(item.price)), 0),
           items: {
@@ -2675,7 +2903,14 @@ app.get('/api/stock', authenticateToken, async (req, res) => {
   try {
     const stock = await (prisma as any).stock.findMany({
       include: {
-        product: { include: { unit: true, category: true } },
+        product: { 
+          include: { 
+            unit: true, 
+            package: true, 
+            subPackage: true, 
+            category: true 
+          } 
+        },
         warehouse: true,
         zone: true
       },
@@ -3531,7 +3766,14 @@ app.post('/api/orders/:id/cancel-payment', authenticateToken, async (req, res) =
 app.get('/api/invoices', authenticateToken, async (req, res) => {
   try {
     const invoices = await prisma.invoice.findMany({
-      include: { items: { include: { product: true } }, installments: true, seller: true, customer: true, order: true },
+      include: { 
+        items: { include: { product: true } }, 
+        installments: true, 
+        seller: true, 
+        customer: true, 
+        order: true,
+        warehouse: true 
+      },
       orderBy: { id: 'desc' }
     });
     res.json(invoices);
@@ -3540,12 +3782,64 @@ app.get('/api/invoices', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/invoices/by-reference/:docType/:series/:number', authenticateToken, async (req, res) => {
+  try {
+    const { docType, series, number } = req.params;
+    const cleanSeries = (series || '').trim().toUpperCase();
+    const cleanNumber = (number || '').trim();
+    const intNum = parseInt(cleanNumber, 10);
+
+    const whereConditions: any = {
+      documentType: docType,
+      series: { equals: cleanSeries, mode: 'insensitive' }
+    };
+
+    if (!isNaN(intNum)) {
+      whereConditions.number = intNum;
+    }
+
+    const invoice = await prisma.invoice.findFirst({
+      where: whereConditions,
+      include: { 
+        items: { 
+          include: { 
+            product: { 
+              include: { package: true, subPackage: true, unit: true } 
+            } 
+          } 
+        }, 
+        installments: true, 
+        seller: true, 
+        customer: true, 
+        order: true,
+        warehouse: true 
+      }
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ error: `Comprobante ${cleanSeries}-${cleanNumber} no encontrado.` });
+    }
+
+    res.json(invoice);
+  } catch (error) {
+    console.error('Error al buscar comprobante de referencia:', error);
+    res.status(500).json({ error: 'Error al consultar comprobante de referencia' });
+  }
+});
+
 app.get('/api/invoices/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const invoice = await prisma.invoice.findUnique({
       where: { id: parseInt(id) },
-      include: { items: { include: { product: true } }, installments: true, seller: true, customer: true, order: true }
+      include: { 
+        items: { include: { product: true } }, 
+        installments: true, 
+        seller: true, 
+        customer: true, 
+        order: true,
+        warehouse: true 
+      }
     });
     if (!invoice) return res.status(404).json({ error: 'Factura no encontrada' });
     res.json(invoice);
@@ -3560,7 +3854,8 @@ app.post('/api/invoices', authenticateToken, async (req, res) => {
       documentType, series, number, customerName, customerDocType, customerDocNumber,
       customerAddress, customerEmail, customerPhone, customerId, issueDate, dueDate,
       currency, exchangeRate, paymentCondition, operationType, includeIgv, priceIncludesIgv,
-      igvPercent, sellerId, orderId, notes, items, installments
+      igvPercent, sellerId, orderId, notes, items, installments, warehouseId, sunatEstablishmentCode,
+      sendToSunatImmediately
     } = req.body;
 
     const numberFormatted = `${series}-${String(number).padStart(8, '0')}`;
@@ -3571,7 +3866,7 @@ app.post('/api/invoices', authenticateToken, async (req, res) => {
     let totalAmount = 0;
     const igvRate = (igvPercent || 18) / 100;
 
-    const invoiceItems = items.map((item: any) => {
+    const invoiceItems = (items || []).map((item: any) => {
       const price = parseFloat(item.price) || 0;
       const qty = parseInt(item.quantity) || 0;
       const discount = parseFloat(item.discount) || 0;
@@ -3581,7 +3876,7 @@ app.post('/api/invoices', authenticateToken, async (req, res) => {
       return {
         productId: parseInt(item.productId),
         quantity: qty,
-        unitMeasure: item.unitMeasure || 'UND',
+        unitMeasure: item.unitMeasure || 'NIU',
         price,
         discount,
         priceType: item.priceType || 'PRICE1',
@@ -3606,35 +3901,84 @@ app.post('/api/invoices', authenticateToken, async (req, res) => {
       totalAmount = sumOfItems;
     }
 
+    // --- VALIDACIONES NORMATIVAS SUNAT ---
+    const cleanDocNumber = (customerDocNumber || '').trim();
+
+    // 1. Facturas Electrónicas (01) requieren obligatoriamente RUC de 11 dígitos
+    if (documentType === '01') {
+      if (!cleanDocNumber || cleanDocNumber.length !== 11 || !/^\d{11}$/.test(cleanDocNumber)) {
+        return res.status(400).json({
+          error: 'Normativa SUNAT: Las Facturas Electrónicas requieren obligatoriamente un número de RUC válido de 11 dígitos numéricos.'
+        });
+      }
+    }
+
+    // 2. Boletas de Venta (03) >= S/ 700.00 requieren identificar obligatoriamente al cliente
+    if (documentType === '03' && totalAmount >= 700) {
+      if (!cleanDocNumber || cleanDocNumber === '00000000' || cleanDocNumber.length < 8) {
+        return res.status(400).json({
+          error: 'Normativa SUNAT: Las Boletas de Venta con importe igual o mayor a S/ 700.00 requieren identificar obligatoriamente al cliente con DNI, RUC o Carné de Extranjería válido.'
+        });
+      }
+    }
+
+    // 3. Ventas al CRÉDITO requieren cuotas de pago que sumen el total exacto (R.S. 193-2020/SUNAT)
+    if (paymentCondition === 'CREDITO') {
+      if (!installments || !Array.isArray(installments) || installments.length === 0) {
+        return res.status(400).json({
+          error: 'Normativa SUNAT: Las ventas al CRÉDITO requieren detallar al menos una cuota de pago con fecha de vencimiento e importe.'
+        });
+      }
+      const sumInstallments = installments.reduce((acc: number, inst: any) => acc + (parseFloat(inst.amount) || 0), 0);
+      if (Math.abs(sumInstallments - totalAmount) > 0.10) {
+        return res.status(400).json({
+          error: `Inconsistencia en cuotas a crédito: La suma de las cuotas (S/ ${sumInstallments.toFixed(2)}) no coincide con el importe total del comprobante (S/ ${totalAmount.toFixed(2)}).`
+        });
+      }
+    }
+
     const invoice = await prisma.$transaction(async (tx) => {
       let finalNumber = number;
       let finalNumberFormatted = numberFormatted;
 
-      // Generar correlativo de forma segura (Race Condition Prevent)
+      // Generar correlativo de forma atómica y segura (Race Condition Prevent)
       if (series) {
-        const seriesRec = await tx.documentSeries.findFirst({
-          where: { documentType, series }
+        const seriesWhere: any = { documentType, series };
+        if (warehouseId) {
+          seriesWhere.warehouseId = parseInt(warehouseId);
+        }
+        
+        let seriesRec = await tx.documentSeries.findFirst({
+          where: seriesWhere
         });
-        if (seriesRec) {
-          const nextNum = seriesRec.currentNumber + 1;
-          finalNumber = nextNum.toString();
-          finalNumberFormatted = `${series}-${nextNum.toString().padStart(8, '0')}`;
-          
-          await tx.documentSeries.update({
-            where: { id: seriesRec.id },
-            data: { currentNumber: nextNum }
+
+        if (!seriesRec) {
+          seriesRec = await tx.documentSeries.findFirst({
+            where: { documentType, series }
           });
+        }
+
+        if (seriesRec) {
+          const updatedSeries = await tx.documentSeries.update({
+            where: { id: seriesRec.id },
+            data: { currentNumber: { increment: 1 } }
+          });
+          finalNumber = updatedSeries.currentNumber;
+          finalNumberFormatted = `${series}-${finalNumber.toString().padStart(8, '0')}`;
         }
       }
 
       return await tx.invoice.create({
         data: {
           documentType, series, 
-          number: finalNumber, 
+          number: parseInt(String(finalNumber)) || 1, 
           numberFormatted: finalNumberFormatted,
           customerName, customerDocType, customerDocNumber,
           customerAddress, customerEmail, customerPhone,
           customerId: customerId ? parseInt(customerId) : null,
+          warehouseId: warehouseId ? parseInt(warehouseId) : null,
+          sunatEstablishmentCode: sunatEstablishmentCode || '0000',
+          sunatStatus: 'PENDING',
           issueDate: issueDate ? new Date(issueDate) : new Date(),
           dueDate: dueDate ? new Date(dueDate) : null,
           currency: currency || 'PEN',
@@ -3659,7 +4003,14 @@ app.post('/api/invoices', authenticateToken, async (req, res) => {
             }))
           } : undefined
         },
-        include: { items: { include: { product: true } }, installments: true, seller: true, customer: true, order: true }
+        include: { 
+          items: { include: { product: true } }, 
+          installments: true, 
+          seller: true, 
+          customer: true, 
+          order: true,
+          warehouse: true 
+        }
       });
     });
 
@@ -3667,14 +4018,36 @@ app.post('/api/invoices', authenticateToken, async (req, res) => {
     if (orderId) {
       await prisma.order.update({
         where: { id: parseInt(orderId) },
-        data: { voucherNumber: numberFormatted }
+        data: { voucherNumber: invoice.numberFormatted }
       });
     }
 
-    res.json(invoice);
+    // Procesar envío a SUNAT
+    let finalInvoice = invoice;
+    if (sendToSunatImmediately !== false) {
+      try {
+        finalInvoice = await SunatService.sendInvoiceToSunat(invoice.id);
+      } catch (sErr: any) {
+        console.warn('Advertencia al enviar comprobante a SUNAT:', sErr.message);
+      }
+    }
+
+    res.json(finalInvoice);
   } catch (error: any) {
     console.error('Error creating invoice:', error);
     res.status(500).json({ error: 'Error al crear factura: ' + (error.message || '') });
+  }
+});
+
+// Endpoint para enviar o reintentar envío a SUNAT
+app.post('/api/invoices/:id/send-sunat', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await SunatService.sendInvoiceToSunat(parseInt(id));
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error al enviar a SUNAT:', error);
+    res.status(500).json({ error: error.message || 'Error al enviar comprobante a SUNAT' });
   }
 });
 
@@ -3774,6 +4147,488 @@ app.delete('/api/invoices/:id', authenticateToken, async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: 'Error al eliminar factura: ' + (error.message || '') });
+  }
+});
+
+// ==========================================
+// GUÍAS DE REMISIÓN DE VENTA (GRE-REMITENTE)
+// ==========================================
+
+app.get('/api/sales-referral-guides', authenticateToken, async (req, res) => {
+  try {
+    const { search, startDate, endDate, status, warehouseId } = req.query;
+
+    const where: any = {};
+
+    if (status && status !== 'ALL') {
+      where.status = String(status);
+    }
+
+    if (warehouseId) {
+      where.originWarehouseId = parseInt(String(warehouseId));
+    }
+
+    if (startDate || endDate) {
+      where.issueDate = {};
+      if (startDate) {
+        where.issueDate.gte = new Date(String(startDate) + 'T00:00:00.000Z');
+      }
+      if (endDate) {
+        where.issueDate.lte = new Date(String(endDate) + 'T23:59:59.999Z');
+      }
+    }
+
+    if (search) {
+      const q = String(search).trim();
+      where.OR = [
+        { numberFormatted: { contains: q } },
+        { customerName: { contains: q } },
+        { customerDocNumber: { contains: q } },
+        { deliveryAddress: { contains: q } },
+        { carrierName: { contains: q } },
+        { orderNumber: { contains: q } },
+        { vehiclePlate: { contains: q } }
+      ];
+    }
+
+    const guides = await prisma.salesReferralGuide.findMany({
+      where,
+      include: {
+        customer: true,
+        originWarehouse: true,
+        order: true,
+        invoice: true,
+        shippingAgency: true,
+        items: {
+          include: {
+            product: true
+          }
+        }
+      },
+      orderBy: { id: 'desc' }
+    });
+
+    res.json(guides);
+  } catch (error: any) {
+    console.error('Error fetching sales referral guides:', error);
+    res.status(500).json({ error: 'Error al obtener guías de remisión: ' + (error.message || '') });
+  }
+});
+
+app.get('/api/sales-referral-guides/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const guide = await prisma.salesReferralGuide.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        customer: true,
+        originWarehouse: true,
+        order: {
+          include: {
+            items: { include: { product: true } }
+          }
+        },
+        invoice: true,
+        shippingAgency: true,
+        items: {
+          include: {
+            product: true
+          }
+        }
+      }
+    });
+
+    if (!guide) {
+      return res.status(404).json({ error: 'Guía de remisión no encontrada' });
+    }
+
+    res.json(guide);
+  } catch (error: any) {
+    console.error('Error fetching sales referral guide:', error);
+    res.status(500).json({ error: 'Error al obtener guía de remisión' });
+  }
+});
+
+app.post('/api/sales-referral-guides', authenticateToken, async (req, res) => {
+  try {
+    const {
+      documentType, series, number,
+      issueDate, transferDate, transferReason, transferReasonDescription,
+      transportMode,
+      customerId, customerDocType, customerDocNumber, customerName, customerAddress,
+      originWarehouseId, originAddress, originUbigeo, originSunatCode,
+      deliveryAddress, deliveryUbigeo, deliveryDepartment, deliveryProvince, deliveryDistrict,
+      carrierDocType, carrierDocNumber, carrierName, carrierMtcNumber, shippingAgencyId, shippingBranchId,
+      driverDocType, driverDocNumber, driverName, driverLicenseNumber, vehiclePlate, vehicleSecondaryPlate,
+      totalWeight, weightUnit, totalPackages,
+      orderId, orderNumber, invoiceId, invoiceNumber, relatedDocType, relatedDocNumber,
+      notes, items, sendToSunatImmediately
+    } = req.body;
+
+    const docType = documentType || '09';
+    let finalNumber = number;
+    let finalNumberFormatted = series && number ? `${series}-${String(number).padStart(8, '0')}` : '';
+
+    const guide = await prisma.$transaction(async (tx) => {
+      // Auto numeración si hay serie
+      if (series) {
+        const seriesWhere: any = { 
+          series, 
+          documentType: { in: ['09', 'GRM', 'GRE', 'GUIA'] } 
+        };
+        if (originWarehouseId) {
+          seriesWhere.warehouseId = parseInt(String(originWarehouseId));
+        }
+
+        let seriesRec = await tx.documentSeries.findFirst({ where: seriesWhere });
+        if (!seriesRec) {
+          seriesRec = await tx.documentSeries.findFirst({
+            where: { series, documentType: { in: ['09', 'GRM', 'GRE', 'GUIA'] } }
+          });
+        }
+
+        if (seriesRec) {
+          const updatedSeries = await tx.documentSeries.update({
+            where: { id: seriesRec.id },
+            data: { currentNumber: { increment: 1 } }
+          });
+          finalNumber = updatedSeries.currentNumber;
+          finalNumberFormatted = `${series}-${finalNumber.toString().padStart(8, '0')}`;
+        }
+      }
+
+      if (!finalNumberFormatted) {
+        finalNumber = finalNumber || 1;
+        finalNumberFormatted = `${series || 'T001'}-${String(finalNumber).padStart(8, '0')}`;
+      }
+
+      // Preparar ítems
+      const guideItems = (items || []).map((item: any) => {
+        const qty = parseFloat(item.quantity) || 1;
+        const uWeight = parseFloat(item.unitWeight) || 0;
+        const tWeight = parseFloat(item.totalWeight) || (qty * uWeight);
+        return {
+          productId: parseInt(item.productId),
+          code: item.code || item.product?.code || '',
+          description: item.description || item.product?.name || 'Producto',
+          quantity: qty,
+          unitMeasure: item.unitMeasure || 'NIU',
+          unitWeight: uWeight,
+          totalWeight: tWeight,
+          lotNumber: item.lotNumber || null,
+          expiryDate: item.expiryDate ? new Date(item.expiryDate) : null
+        };
+      });
+
+      // Calcular peso total acumulado si no viene explícito
+      const calculatedWeight = guideItems.reduce((sum: number, it: any) => sum + (Number(it.totalWeight) || 0), 0);
+      const computedWeight = parseFloat(totalWeight) || calculatedWeight || 1.0;
+
+      const created = await tx.salesReferralGuide.create({
+        data: {
+          documentType: docType,
+          series: series || 'T001',
+          number: parseInt(String(finalNumber)) || 1,
+          numberFormatted: finalNumberFormatted,
+          issueDate: issueDate ? new Date(issueDate) : new Date(),
+          transferDate: transferDate ? new Date(transferDate) : new Date(),
+          transferReason: transferReason || '01',
+          transferReasonDescription: transferReasonDescription || 'VENTA',
+          transportMode: transportMode || '02',
+          customerId: customerId ? parseInt(String(customerId)) : null,
+          customerDocType: customerDocType || 'RUC',
+          customerDocNumber: customerDocNumber || '',
+          customerName: customerName || '',
+          customerAddress: customerAddress || '',
+          originWarehouseId: originWarehouseId ? parseInt(String(originWarehouseId)) : null,
+          originAddress: originAddress || '',
+          originUbigeo: originUbigeo || '150101',
+          originSunatCode: originSunatCode || '0000',
+          deliveryAddress: deliveryAddress || '',
+          deliveryUbigeo: deliveryUbigeo || '150101',
+          deliveryDepartment: deliveryDepartment || null,
+          deliveryProvince: deliveryProvince || null,
+          deliveryDistrict: deliveryDistrict || null,
+          carrierDocType: carrierDocType || '6',
+          carrierDocNumber: carrierDocNumber || null,
+          carrierName: carrierName || null,
+          carrierMtcNumber: carrierMtcNumber || null,
+          shippingAgencyId: shippingAgencyId ? parseInt(String(shippingAgencyId)) : null,
+          shippingBranchId: shippingBranchId ? parseInt(String(shippingBranchId)) : null,
+          driverDocType: driverDocType || '1',
+          driverDocNumber: driverDocNumber || null,
+          driverName: driverName || null,
+          driverLicenseNumber: driverLicenseNumber || null,
+          vehiclePlate: vehiclePlate ? vehiclePlate.toUpperCase().trim() : null,
+          vehicleSecondaryPlate: vehicleSecondaryPlate ? vehicleSecondaryPlate.toUpperCase().trim() : null,
+          totalWeight: computedWeight,
+          weightUnit: weightUnit || 'KGM',
+          totalPackages: parseInt(String(totalPackages)) || (guideItems.length || 1),
+          orderId: orderId ? parseInt(String(orderId)) : null,
+          orderNumber: orderNumber || null,
+          invoiceId: invoiceId ? parseInt(String(invoiceId)) : null,
+          invoiceNumber: invoiceNumber || null,
+          relatedDocType: relatedDocType || null,
+          relatedDocNumber: relatedDocNumber || null,
+          notes: notes || null,
+          status: 'ACTIVE',
+          sunatStatus: 'PENDING',
+          items: {
+            create: guideItems
+          }
+        },
+        include: {
+          customer: true,
+          originWarehouse: true,
+          order: true,
+          invoice: true,
+          shippingAgency: true,
+          items: {
+            include: { product: true }
+          }
+        }
+      });
+
+      // Si proviene de un pedido, vincular la guía en el pedido
+      if (orderId) {
+        await tx.order.update({
+          where: { id: parseInt(String(orderId)) },
+          data: {
+            referralGuide: created.numberFormatted
+          }
+        });
+      }
+
+      return created;
+    });
+
+    // Procesar envío automático a SUNAT
+    let finalGuide = guide;
+    if (sendToSunatImmediately !== false) {
+      try {
+        finalGuide = await SunatService.sendSalesReferralGuideToSunat(guide.id);
+      } catch (sErr: any) {
+        console.warn('Advertencia al enviar Guía a SUNAT:', sErr.message);
+      }
+    }
+
+    res.json(finalGuide);
+  } catch (error: any) {
+    console.error('Error creating sales referral guide:', error);
+    res.status(500).json({ error: 'Error al crear guía de remisión: ' + (error.message || '') });
+  }
+});
+
+// Endpoint para enviar o reintentar envío de Guía a SUNAT
+app.post('/api/sales-referral-guides/:id/send-sunat', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await SunatService.sendSalesReferralGuideToSunat(parseInt(id));
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error al enviar Guía a SUNAT:', error);
+    res.status(500).json({ error: error.message || 'Error al enviar guía a SUNAT' });
+  }
+});
+
+app.put('/api/sales-referral-guides/:id/status', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, notes } = req.body;
+    const updated = await prisma.salesReferralGuide.update({
+      where: { id: parseInt(id) },
+      data: {
+        ...(status && { status }),
+        ...(notes !== undefined && { notes })
+      },
+      include: {
+        customer: true,
+        originWarehouse: true,
+        items: { include: { product: true } }
+      }
+    });
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error updating guide status:', error);
+    res.status(500).json({ error: 'Error al actualizar estado de la guía' });
+  }
+});
+
+app.delete('/api/sales-referral-guides/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.salesReferralGuide.delete({
+      where: { id: parseInt(id) }
+    });
+    res.json({ success: true, message: 'Guía de remisión eliminada' });
+  } catch (error: any) {
+    console.error('Error deleting guide:', error);
+    res.status(500).json({ error: 'Error al eliminar guía de remisión' });
+  }
+});
+
+// ==========================================
+// VEHÍCULOS Y FLOTA (CONFIG. LOGÍSTICA)
+// ==========================================
+
+app.get('/api/vehicles', authenticateToken, async (req, res) => {
+  try {
+    const vehicles = await prisma.vehicle.findMany({
+      orderBy: { plate: 'asc' }
+    });
+    res.json(vehicles);
+  } catch (error: any) {
+    console.error('Error fetching vehicles:', error);
+    res.status(500).json({ error: 'Error al obtener vehículos' });
+  }
+});
+
+app.post('/api/vehicles', authenticateToken, async (req, res) => {
+  try {
+    const { plate, brand, model, capacityWeight, capacityVolume, status } = req.body;
+    if (!plate) return res.status(400).json({ error: 'La placa del vehículo es obligatoria' });
+
+    const cleanPlate = plate.trim().toUpperCase();
+    const vehicle = await prisma.vehicle.create({
+      data: {
+        plate: cleanPlate,
+        brand: brand ? brand.trim().toUpperCase() : null,
+        model: model ? model.trim().toUpperCase() : null,
+        capacityWeight: parseFloat(capacityWeight) || 0,
+        capacityVolume: parseFloat(capacityVolume) || 0,
+        status: status || 'ACTIVE'
+      }
+    });
+    res.json(vehicle);
+  } catch (error: any) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ error: 'Ya existe un vehículo registrado con esta placa' });
+    }
+    console.error('Error creating vehicle:', error);
+    res.status(500).json({ error: 'Error al registrar vehículo: ' + error.message });
+  }
+});
+
+app.put('/api/vehicles/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { plate, brand, model, capacityWeight, capacityVolume, status } = req.body;
+
+    const vehicle = await prisma.vehicle.update({
+      where: { id: parseInt(id) },
+      data: {
+        plate: plate ? plate.trim().toUpperCase() : undefined,
+        brand: brand !== undefined ? (brand ? brand.trim().toUpperCase() : null) : undefined,
+        model: model !== undefined ? (model ? model.trim().toUpperCase() : null) : undefined,
+        capacityWeight: capacityWeight !== undefined ? parseFloat(capacityWeight) || 0 : undefined,
+        capacityVolume: capacityVolume !== undefined ? parseFloat(capacityVolume) || 0 : undefined,
+        status: status || undefined
+      }
+    });
+    res.json(vehicle);
+  } catch (error: any) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ error: 'Ya existe otro vehículo con esta placa' });
+    }
+    console.error('Error updating vehicle:', error);
+    res.status(500).json({ error: 'Error al actualizar vehículo' });
+  }
+});
+
+app.delete('/api/vehicles/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.vehicle.delete({
+      where: { id: parseInt(id) }
+    });
+    res.json({ success: true, message: 'Vehículo eliminado correctamente' });
+  } catch (error: any) {
+    console.error('Error deleting vehicle:', error);
+    res.status(500).json({ error: 'Error al eliminar vehículo' });
+  }
+});
+
+// ==========================================
+// CONDUCTORES Y CHOFERES (CONFIG. LOGÍSTICA)
+// ==========================================
+
+app.get('/api/drivers', authenticateToken, async (req, res) => {
+  try {
+    const drivers = await prisma.driver.findMany({
+      orderBy: { name: 'asc' }
+    });
+    res.json(drivers);
+  } catch (error: any) {
+    console.error('Error fetching drivers:', error);
+    res.status(500).json({ error: 'Error al obtener lista de conductores' });
+  }
+});
+
+app.post('/api/drivers', authenticateToken, async (req, res) => {
+  try {
+    const { docType, docNumber, name, licenseNumber, phone, email, status } = req.body;
+    if (!docNumber || !name) {
+      return res.status(400).json({ error: 'El número de documento y el nombre del conductor son obligatorios' });
+    }
+
+    const driver = await prisma.driver.create({
+      data: {
+        docType: docType || '1',
+        docNumber: docNumber.trim(),
+        name: name.trim().toUpperCase(),
+        licenseNumber: licenseNumber ? licenseNumber.trim().toUpperCase() : null,
+        phone: phone ? phone.trim() : null,
+        email: email ? email.trim() : null,
+        status: status || 'ACTIVE'
+      }
+    });
+    res.json(driver);
+  } catch (error: any) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ error: 'Ya existe un conductor registrado con este número de documento' });
+    }
+    console.error('Error creating driver:', error);
+    res.status(500).json({ error: 'Error al registrar conductor: ' + error.message });
+  }
+});
+
+app.put('/api/drivers/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { docType, docNumber, name, licenseNumber, phone, email, status } = req.body;
+
+    const driver = await prisma.driver.update({
+      where: { id: parseInt(id) },
+      data: {
+        docType: docType || undefined,
+        docNumber: docNumber ? docNumber.trim() : undefined,
+        name: name ? name.trim().toUpperCase() : undefined,
+        licenseNumber: licenseNumber !== undefined ? (licenseNumber ? licenseNumber.trim().toUpperCase() : null) : undefined,
+        phone: phone !== undefined ? (phone ? phone.trim() : null) : undefined,
+        email: email !== undefined ? (email ? email.trim() : null) : undefined,
+        status: status || undefined
+      }
+    });
+    res.json(driver);
+  } catch (error: any) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ error: 'Ya existe otro conductor con este número de documento' });
+    }
+    console.error('Error updating driver:', error);
+    res.status(500).json({ error: 'Error al actualizar conductor' });
+  }
+});
+
+app.delete('/api/drivers/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.driver.delete({
+      where: { id: parseInt(id) }
+    });
+    res.json({ success: true, message: 'Conductor eliminado correctamente' });
+  } catch (error: any) {
+    console.error('Error deleting driver:', error);
+    res.status(500).json({ error: 'Error al eliminar conductor' });
   }
 });
 
@@ -4205,7 +5060,10 @@ app.delete('/api/payments/:id', authenticateToken, async (req, res) => {
 // --- API SELLERS ---
 app.get('/api/sellers', authenticateToken, async (req, res) => {
   try {
-    const sellers = await (prisma as any).seller.findMany({ orderBy: { name: 'asc' } });
+    const sellers = await (prisma as any).seller.findMany({ 
+      include: { warehouse: true },
+      orderBy: { name: 'asc' } 
+    });
     res.json(sellers);
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener vendedores' });
@@ -4214,7 +5072,15 @@ app.get('/api/sellers', authenticateToken, async (req, res) => {
 
 app.post('/api/sellers', authenticateToken, async (req, res) => {
   try {
-    const seller = await (prisma as any).seller.create({ data: req.body });
+    const { name, dni, phone, email, isActive, warehouseId } = req.body;
+    const seller = await (prisma as any).seller.create({ 
+      data: {
+        name, dni, phone, email, 
+        isActive: isActive !== undefined ? isActive : true,
+        warehouseId: warehouseId ? parseInt(warehouseId) : null
+      },
+      include: { warehouse: true }
+    });
     res.json(seller);
   } catch (error) {
     res.status(500).json({ error: 'Error al crear vendedor' });
@@ -4224,7 +5090,16 @@ app.post('/api/sellers', authenticateToken, async (req, res) => {
 app.put('/api/sellers/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const seller = await (prisma as any).seller.update({ where: { id: parseInt(id) }, data: req.body });
+    const { name, dni, phone, email, isActive, warehouseId } = req.body;
+    const seller = await (prisma as any).seller.update({ 
+      where: { id: parseInt(id) }, 
+      data: {
+        name, dni, phone, email, 
+        isActive,
+        warehouseId: warehouseId !== undefined ? (warehouseId ? parseInt(warehouseId) : null) : undefined
+      },
+      include: { warehouse: true }
+    });
     res.json(seller);
   } catch (error) {
     res.status(500).json({ error: 'Error al actualizar vendedor' });
@@ -4363,7 +5238,7 @@ app.get('/api/warehouses', authenticateToken, async (req, res) => {
 
 app.post('/api/warehouses', authenticateToken, async (req, res) => {
   try {
-    const { name, code, commercialName, address, ruc, ubigeo, observation, phones, type, validateStock, isActive } = req.body;
+    const { name, code, commercialName, address, ruc, ubigeo, sunatCode, observation, phones, type, validateStock, isActive } = req.body;
     const warehouse = await (prisma as any).warehouse.create({
       data: {
         name,
@@ -4372,6 +5247,7 @@ app.post('/api/warehouses', authenticateToken, async (req, res) => {
         address,
         ruc,
         ubigeo,
+        sunatCode: sunatCode || '0000',
         observation,
         phones,
         type,
@@ -4541,19 +5417,29 @@ app.get('/api/exchange-rates/fetch-by-date/:date', authenticateToken, async (req
 app.get('/api/web/consult/:type/:number', async (req, res) => {
   try {
     const { type, number } = req.params;
+    const cleanNum = (number || '').trim();
+
+    if (type === 'ruc' && cleanNum.length !== 11) {
+      return res.status(400).json({ error: `El RUC debe tener exactamente 11 dígitos numéricos (se recibieron ${cleanNum.length}).` });
+    }
+    if (type === 'dni' && cleanNum.length !== 8) {
+      return res.status(400).json({ error: `El DNI debe tener exactamente 8 dígitos numéricos (se recibieron ${cleanNum.length}).` });
+    }
+
     let token = process.env.APIPERU_TOKEN;
     if (!token || token === 'YOUR_TOKEN_HERE') {
       token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6InNpc3RlbWFzQGdydXBvY2FybWVsaXRhLmNvbSJ9.txnBfIsj3SR322JLvUWooD74_HdypX-FcFgr5C2xMCY';
     }
     let url = '';
-    if (type === 'ruc') url = `https://dniruc.apisperu.com/api/v1/ruc/${number}?token=${token}`;
-    else if (type === 'dni') url = `https://dniruc.apisperu.com/api/v1/dni/${number}?token=${token}`;
+    if (type === 'ruc') url = `https://dniruc.apisperu.com/api/v1/ruc/${cleanNum}?token=${token}`;
+    else if (type === 'dni') url = `https://dniruc.apisperu.com/api/v1/dni/${cleanNum}?token=${token}`;
     else return res.status(400).json({ error: 'Tipo de consulta no válido' });
 
     const response = await axios.get(url, { timeout: 10000 });
     res.json(response.data);
   } catch (error: any) {
-    res.status(error.response?.status || 500).json({ error: 'Error en servicio de consulta' });
+    const msg = error.response?.data?.message || error.response?.data?.error || 'Error en servicio de consulta';
+    res.status(error.response?.status || 500).json({ error: msg });
   }
 });
 
@@ -4561,6 +5447,15 @@ app.get('/api/web/consult/:type/:number', async (req, res) => {
 app.get('/api/consult/:type/:number', authenticateToken, async (req, res) => {
   try {
     const { type, number } = req.params;
+    const cleanNum = (number || '').trim();
+
+    if (type === 'ruc' && cleanNum.length !== 11) {
+      return res.status(400).json({ error: `El RUC debe tener exactamente 11 dígitos numéricos (se recibieron ${cleanNum.length}).` });
+    }
+    if (type === 'dni' && cleanNum.length !== 8) {
+      return res.status(400).json({ error: `El DNI debe tener exactamente 8 dígitos numéricos (se recibieron ${cleanNum.length}).` });
+    }
+
     let token = process.env.APIPERU_TOKEN;
 
     // Fallback con el token proporcionado por el usuario
@@ -4571,15 +5466,16 @@ app.get('/api/consult/:type/:number', authenticateToken, async (req, res) => {
     if (!token) return res.status(500).json({ error: 'Token de APIPeru no configurado' });
 
     let url = '';
-    if (type === 'ruc') url = `https://dniruc.apisperu.com/api/v1/ruc/${number}?token=${token}`;
-    else if (type === 'dni') url = `https://dniruc.apisperu.com/api/v1/dni/${number}?token=${token}`;
+    if (type === 'ruc') url = `https://dniruc.apisperu.com/api/v1/ruc/${cleanNum}?token=${token}`;
+    else if (type === 'dni') url = `https://dniruc.apisperu.com/api/v1/dni/${cleanNum}?token=${token}`;
     else return res.status(400).json({ error: 'Tipo de consulta no válido' });
 
     const response = await axios.get(url, { timeout: 10000 });
     res.json(response.data);
   } catch (error: any) {
     console.error('APIPeru Error:', error.message);
-    res.status(error.response?.status || 500).json({ error: 'Error en servicio de consulta' });
+    const msg = error.response?.data?.message || error.response?.data?.error || 'Error en servicio de consulta';
+    res.status(error.response?.status || 500).json({ error: msg });
   }
 });
 
@@ -4631,7 +5527,17 @@ app.get('/api/users', authenticateToken, async (req, res) => {
       : {};
     const users = await prisma.user.findMany({
       where,
-      select: { id: true, email: true, name: true, isActive: true, roleId: true, role: { select: { name: true } }, createdAt: true }
+      select: { 
+        id: true, 
+        email: true, 
+        name: true, 
+        isActive: true, 
+        roleId: true, 
+        role: { select: { name: true } }, 
+        warehouseId: true,
+        warehouse: { select: { id: true, name: true, sunatCode: true } },
+        createdAt: true 
+      }
     });
     res.json(users);
   } catch (error: any) {
@@ -4641,12 +5547,19 @@ app.get('/api/users', authenticateToken, async (req, res) => {
 
 app.post('/api/users', authenticateToken, async (req, res) => {
   try {
-    const { email, password, name, roleId, isActive } = req.body;
+    const { email, password, name, roleId, warehouseId, isActive } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
-      data: { email, password: hashedPassword, name, roleId: roleId ? parseInt(roleId) : null, isActive: isActive ?? true }
+      data: { 
+        email, 
+        password: hashedPassword, 
+        name, 
+        roleId: roleId ? parseInt(roleId) : null, 
+        warehouseId: warehouseId ? parseInt(warehouseId) : null,
+        isActive: isActive ?? true 
+      }
     });
-    res.json({ id: user.id, email: user.email, name: user.name });
+    res.json({ id: user.id, email: user.email, name: user.name, warehouseId: user.warehouseId });
   } catch (error: any) {
     if (error.code === 'P2002') return res.status(400).json({ error: 'El email ya está registrado' });
     res.status(500).json({ error: 'Error al crear usuario' });
@@ -4656,8 +5569,14 @@ app.post('/api/users', authenticateToken, async (req, res) => {
 app.put('/api/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { email, password, name, roleId, isActive } = req.body;
-    const data: any = { email, name, roleId: roleId ? parseInt(roleId) : null, isActive };
+    const { email, password, name, roleId, warehouseId, isActive } = req.body;
+    const data: any = { 
+      email, 
+      name, 
+      roleId: roleId ? parseInt(roleId) : null, 
+      warehouseId: warehouseId !== undefined ? (warehouseId ? parseInt(warehouseId) : null) : undefined,
+      isActive 
+    };
     if (password) {
       data.password = await bcrypt.hash(password, 10);
     }
@@ -4665,7 +5584,7 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
       where: { id: parseInt(id) },
       data
     });
-    res.json({ id: user.id, email: user.email, name: user.name });
+    res.json({ id: user.id, email: user.email, name: user.name, warehouseId: user.warehouseId });
   } catch (error: any) {
     res.status(500).json({ error: 'Error al actualizar usuario' });
   }
@@ -4725,6 +5644,8 @@ app.get('/api/picking/orders', authenticateToken, async (req, res) => {
             product: {
               include: {
                 unit: true,
+                package: true,
+                subPackage: true,
               }
             }
           }

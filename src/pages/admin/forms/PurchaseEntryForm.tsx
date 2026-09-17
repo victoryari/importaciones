@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShoppingCart, X, Search, Save, Package, Truck, Landmark, FileText, Calendar, DollarSign, UserPlus, AlertCircle } from 'lucide-react';
+import { 
+  ShoppingCart, X, Search, Save, Package, Truck, 
+  Landmark, FileText, Calendar, DollarSign, UserPlus, 
+  AlertCircle, RefreshCw, Trash2, Plus
+} from 'lucide-react';
 import axios from 'axios';
 import { formatNumber } from '../../../lib/utils';
 import { ProductSearchModal } from './ProductSearchModal';
@@ -17,17 +21,47 @@ interface PurchaseFormProps {
   mode?: 'invoices' | 'guides';
 }
 
-export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({ isOpen, onClose, onSuccess, token, formData, setFormData }) => {
+const DEFAULT_PURCHASE_DOC_TYPES = [
+  { code: '01', name: 'Factura' },
+  { code: '03', name: 'Boleta de Venta' },
+  { code: '50', name: 'Declaración Única de Aduanas - Importación definitiva' },
+  { code: '02', name: 'Recibo por Honorarios' },
+  { code: '00', name: 'Otros' }
+];
+
+export const SUNAT_PURCHASE_TYPES = [
+  { code: 'MERCADERIA', name: '01 | MERCADERÍAS (COMPRA NACIONAL)' },
+  { code: 'IMPORTACION', name: '02 | IMPORTACIÓN / DUA (MERCADERÍA EXTERIOR)' },
+  { code: 'MATERIA_PRIMA', name: '03 | MATERIAS PRIMAS E INSUMOS' },
+  { code: 'ACTIVO', name: '04 | ACTIVOS FIJOS (MAQUINARIA Y EQUIPO)' },
+  { code: 'SUMINISTROS', name: '05 | SUMINISTROS, ENVASES Y EMBALAJES' },
+  { code: 'GASTO', name: '06 | GASTOS Y SERVICIOS / HONORARIOS' },
+  { code: 'OTROS', name: '99 | OTROS REGISTROS DE COMPRA' }
+];
+
+export const SUNAT_PURCHASE_PAYMENT_CONDITIONS = [
+  { code: 'CONTADO', name: 'CONTADO' },
+  { code: 'CREDITO', name: 'CRÉDITO' }
+];
+
+export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({ 
+  isOpen, 
+  onClose, 
+  onSuccess, 
+  token, 
+  formData, 
+  setFormData 
+}) => {
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
-  const [docTypes, setDocTypes] = useState<any[]>([]);
+  const [docTypes, setDocTypes] = useState<any[]>(DEFAULT_PURCHASE_DOC_TYPES);
   const [currencies, setCurrencies] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [prodSearch, setProdSearch] = useState('');
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   
-  // Nuevos estados para Proveedores
+  // Estados para Proveedores
   const [isSupplierSearchOpen, setIsSupplierSearchOpen] = useState(false);
   const [isSupplierFormOpen, setIsSupplierFormOpen] = useState(false);
   const [supplierFormData, setSupplierFormData] = useState({ 
@@ -37,6 +71,23 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({ isOpen, onClose
   });
   const [tcWarning, setTcWarning] = useState('');
 
+  const getDueDate = (dateStr: string, days: number) => {
+    if (!dateStr || !days) return '';
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        d.setDate(d.getDate() + Number(days));
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${dd}/${mm}/${yyyy}`;
+      }
+    } catch {
+      return '';
+    }
+    return '';
+  };
 
   useEffect(() => {
     if (isOpen) fetchInitialData();
@@ -56,7 +107,6 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({ isOpen, onClose
       });
       if (res.data && res.data.sell_rate) {
         setFormData((prev: any) => ({ ...prev, exchangeRate: res.data.sell_rate.toString() }));
-        // Si la fecha coincide exactamente, quitar advertencia
         const rateDate = res.data.date?.split('T')[0];
         if (rateDate === date) {
           setTcWarning('');
@@ -78,7 +128,7 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({ isOpen, onClose
         axios.get('/api/suppliers', config).catch(() => ({ data: [] })),
         axios.get('/api/products', config).catch(() => ({ data: [] })),
         axios.get('/api/warehouses', config).catch(() => ({ data: [] })),
-        axios.get('/api/sunat/TABLA_02', config).catch(() => ({ data: [] })),
+        axios.get('/api/sunat/TABLA_10', config).catch(() => ({ data: [] })),
         axios.get('/api/sunat/TABLA_04', config).catch(() => ({ data: [] }))
       ]);
       
@@ -87,11 +137,12 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({ isOpen, onClose
       const whs = Array.isArray(wRes.data) ? wRes.data.filter((w: any) => w.isActive !== false) : [];
       setWarehouses(whs);
       
-      // Solo Facturas, Boletas, DUA
-      const filteredDocs = (Array.isArray(dRes.data) ? dRes.data : []).filter((d: any) => 
-        ['01', '03', '50'].includes(d.code)
+      // Comprobantes de compra: Facturas (01), Boletas (03), DUA (50), Recibos (02), Otros (00)
+      const rawDocs = Array.isArray(dRes.data) && dRes.data.length > 0 ? dRes.data : DEFAULT_PURCHASE_DOC_TYPES;
+      const filteredDocs = rawDocs.filter((d: any) => 
+        ['01', '03', '50', '02', '00', '07', '08', '91', '97', '98'].includes(d.code)
       );
-      setDocTypes(filteredDocs);
+      setDocTypes(filteredDocs.length > 0 ? filteredDocs : DEFAULT_PURCHASE_DOC_TYPES);
       setCurrencies(Array.isArray(cRes.data) ? cRes.data : []);
       
       const defaultWh = whs.find((w: any) => w.name.toUpperCase().includes('COMPRAS IMP/NAC'))?.id?.toString();
@@ -107,6 +158,8 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({ isOpen, onClose
         afectoIgv: prev.afectoIgv ?? false,
         preciosIncluyenIgv: prev.preciosIncluyenIgv ?? true,
         purchaseType: prev.purchaseType || 'MERCADERIA',
+        paymentCondition: prev.paymentCondition || 'CONTADO',
+        creditDays: prev.creditDays ?? 0,
         observation: prev.observation || '',
         guideSeries: prev.guideSeries || '',
         guideNumber: prev.guideNumber || ''
@@ -193,372 +246,607 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({ isOpen, onClose
     setFormData((prev: any) => ({
       ...prev,
       items: [...(prev.items || []), { 
-        productId: p.id, name: p.name, code: p.code, unitSymbol: p.package?.symbol || p.subPackage?.symbol || p.unit?.symbol || 'UND',
+        productId: p.id, 
+        name: p.name, 
+        code: p.code, 
+        unitSymbol: p.package?.symbol || p.subPackage?.symbol || p.unit?.symbol || 'UND',
         quantity: 1, 
         price: precio,
         valorCompra: valor,
         igv: igv,
-        lotNumber: '', 
-        expiryDate: '', 
-        entranceDate: new Date().toISOString().split('T')[0],
-        observation: ''
+        lotNumber: '',
+        expiryDate: '',
+        entranceDate: new Date().toISOString().split('T')[0]
       }]
     }));
-    setProdSearch('');
   };
 
   const updateItem = (index: number, field: string, value: any) => {
-    const newItems = [...(formData.items || [])];
-    const item = newItems[index];
-    if (!item) return;
-
-    item[field] = value;
-
-    if (field === 'price' || field === 'valorCompra' || field === 'quantity') {
-      const val = parseFloat(value) || 0;
+    const newItems = [...formData.items];
+    const item = { ...newItems[index], [field]: value };
+    
+    if (field === 'price') {
+      const price = parseFloat(value) || 0;
       if (formData.afectoIgv) {
-        if (field === 'price') {
-          // Si el usuario ingresa el PRECIO (Total)
-          item.valorCompra = val / 1.18;
-          item.igv = val - item.valorCompra;
-        } else if (field === 'valorCompra') {
-          // Si el usuario ingresa el VALOR (Neto)
-          item.price = val * 1.18;
-          item.igv = item.price - val;
+        if (formData.preciosIncluyenIgv) {
+          item.valorCompra = price / 1.18;
+          item.igv = price - item.valorCompra;
+        } else {
+          item.valorCompra = price;
+          item.igv = price * 0.18;
         }
       } else {
-        // Operación Exonerada / No Afecta
+        item.valorCompra = price;
         item.igv = 0;
-        if (field === 'price') item.valorCompra = val;
-        else if (field === 'valorCompra') item.price = val;
+      }
+    } else if (field === 'valorCompra') {
+      const valor = parseFloat(value) || 0;
+      if (formData.afectoIgv) {
+        item.igv = valor * 0.18;
+        item.price = valor + item.igv;
+      } else {
+        item.igv = 0;
+        item.price = valor;
       }
     }
-
+    
+    newItems[index] = item;
     setFormData({ ...formData, items: newItems });
   };
 
-  const subtotalGeneral = (formData.items || []).reduce((acc: number, item: any) => acc + (Number(item.valorCompra || 0) * Number(item.quantity || 0)), 0);
-  const totalIgv = formData.afectoIgv ? (formData.items || []).reduce((acc: number, item: any) => acc + (Number(item.igv || 0) * Number(item.quantity || 0)), 0) : 0;
-  const totalGeneral = subtotalGeneral + totalIgv;
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.supplierId || formData.items.length === 0 || !formData.warehouseId) return alert('Campos incompletos');
+    if (!formData.supplierId) return alert('Seleccione un Proveedor');
+    if (!formData.warehouseId) return alert('Seleccione un Almacén de Ingreso');
+    if (!formData.docSeries || !formData.docNumber) return alert('Ingrese Serie y Número del comprobante');
+    if (!formData.items || formData.items.length === 0) return alert('Agregue al menos un producto a la compra');
+
     setLoading(true);
     try {
-      const selectedSupplier = suppliers.find(s => s.id.toString() === formData.supplierId.toString());
-      const payload = { ...formData, supplierName: selectedSupplier?.name, totalAmount: totalGeneral };
-      
-      if (formData.id) await axios.put(`/api/purchases/${formData.id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
-      else await axios.post('/api/purchases', payload, { headers: { Authorization: `Bearer ${token}` } });
-      onSuccess(); onClose();
-    } catch (err: any) { alert(err.response?.data?.error || 'Error'); } finally { setLoading(false); }
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      await axios.post('/api/purchases', formData, config);
+      onSuccess();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.error || 'Error al registrar la compra');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (!isOpen) return null;
+  // Cálculos de totales
+  const subtotalGeneral = (formData.items || []).reduce((acc: number, item: any) => {
+    return acc + (Number(item.valorCompra || 0) * Number(item.quantity || 0));
+  }, 0);
 
-  const selectedSupplier = suppliers.find(s => s.id.toString() === formData.supplierId.toString());
+  const totalIgv = (formData.items || []).reduce((acc: number, item: any) => {
+    return acc + (Number(item.igv || 0) * Number(item.quantity || 0));
+  }, 0);
+
+  const totalGeneral = (formData.items || []).reduce((acc: number, item: any) => {
+    return acc + (Number(item.price || 0) * Number(item.quantity || 0));
+  }, 0);
+
+  const selectedSupplier = suppliers.find(s => s.id.toString() === (formData.supplierId || '').toString());
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div key="purchase-entry"
+        <motion.div 
+          key="purchase-entry"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="absolute inset-0 z-[150] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-hidden"
+          className="absolute inset-0 z-[110] flex items-center justify-center bg-slate-900/40 backdrop-blur-2xs p-2 overflow-hidden"
         >
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-7xl max-h-full bg-[#D4D9E2] flex flex-col border border-[#8A9DB8] shadow-2xl overflow-hidden rounded-sm">
-            
-            <div className="bg-[#4A628A] px-3 py-1.5 flex items-center justify-between border-b border-white shadow-sm">
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="w-4 h-4 text-white" />
-              <h2 className="text-xs font-bold text-white uppercase tracking-wider">
-                Registro de Compra / Factura / Boleta / DUA
-              </h2>
-            </div>
-            <button onClick={onClose} className="text-white hover:text-red-200 transition-colors"><X className="w-4 h-4" /></button>
-          </div>
-
-          <form 
-            onSubmit={handleSubmit} 
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
-                e.preventDefault();
-              }
-            }}
-            className="flex-1 overflow-hidden flex flex-col p-3 gap-3"
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.98, y: 10 }} 
+            animate={{ opacity: 1, scale: 1, y: 0 }} 
+            exit={{ opacity: 0, scale: 0.98, y: 10 }} 
+            className="relative w-full h-full max-w-[98%] max-h-[98vh] bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-300"
           >
-            
-            <div className="bg-white p-4 border border-[#B0BCCB] rounded shadow-sm flex flex-col gap-4 text-[11px]">
-              
-              <div className="grid grid-cols-12 gap-4">
-                <div className="col-span-12 lg:col-span-5 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px] flex justify-between">
-                    <span>Proveedor:</span>
-                    <span className="text-blue-600 cursor-pointer hover:underline flex items-center gap-1" onClick={() => setIsSupplierFormOpen(true)}>
-                      <UserPlus className="w-3 h-3" /> REGISTRO RÁPIDO
-                    </span>
-                  </label>
-                  <div className="flex gap-1">
-                    <div className="relative flex-1">
-                      <select value={formData.supplierId} onChange={e => setFormData({...formData, supplierId: e.target.value})} className="w-full h-7 bg-slate-50 border border-slate-200 px-2 outline-none font-bold">
+            {/* Header Compacto ERP */}
+            <div className="bg-[#004A99] px-4 py-2 flex items-center justify-between text-white shadow-sm shrink-0 border-b border-blue-900">
+              <div className="flex items-center gap-2">
+                <div className="p-1 bg-white/10 rounded">
+                  <ShoppingCart className="w-4 h-4 text-blue-200" />
+                </div>
+                <div>
+                  <h2 className="text-xs font-bold text-white uppercase tracking-tight">
+                    Registro de Compra (Factura / Boleta / DUA)
+                  </h2>
+                  <p className="text-[9px] text-blue-200 uppercase font-medium">Módulo de Compras e Ingreso a Almacén</p>
+                </div>
+              </div>
+              <button 
+                onClick={onClose} 
+                className="p-1 hover:bg-red-600 rounded text-white/80 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form 
+              onSubmit={handleSubmit} 
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+                  e.preventDefault();
+                }
+              }}
+              className="flex-1 overflow-hidden flex flex-col bg-slate-50/70 p-2.5 gap-2"
+            >
+              {/* Sección 1: Datos del Comprobante y Proveedor */}
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs space-y-2 text-xs">
+                
+                {/* Fila 1: Proveedor, Tipo Doc, Serie, Número */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+                  <div className="md:col-span-6 space-y-1">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase">Proveedor</label>
+                      <button 
+                        type="button" 
+                        onClick={() => setIsSupplierFormOpen(true)}
+                        className="text-[10px] text-blue-700 hover:text-blue-800 font-bold uppercase flex items-center gap-1 cursor-pointer"
+                      >
+                        <UserPlus className="w-3 h-3" /> + Registro Rápido
+                      </button>
+                    </div>
+                    <div className="flex gap-1">
+                      <select 
+                        value={formData.supplierId || ''} 
+                        onChange={e => setFormData({...formData, supplierId: e.target.value})} 
+                        className="w-full h-8 px-2 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800 focus:border-blue-500 outline-none uppercase"
+                      >
                         <option value="">-- SELECCIONE PROVEEDOR --</option>
                         {suppliers.map(s => <option key={s.id} value={s.id}>{s.docNumber} | {s.name.toUpperCase()}</option>)}
                       </select>
+                      <button 
+                        type="button" 
+                        onClick={() => setIsSupplierSearchOpen(true)} 
+                        className="w-8 h-8 bg-blue-700 hover:bg-blue-800 text-white rounded flex items-center justify-center shrink-0 transition-colors shadow-2xs cursor-pointer"
+                        title="Buscar Proveedor"
+                      >
+                        <Search className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    <button type="button" onClick={() => setIsSupplierSearchOpen(true)} className="w-8 h-7 bg-blue-600 text-white rounded flex items-center justify-center hover:bg-blue-700 shadow-sm">
-                      <Search className="w-4 h-4" />
-                    </button>
+                    {selectedSupplier && (
+                      <div className="text-[9px] text-slate-500 font-bold truncate bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                        📍 {selectedSupplier.address || 'Sin dirección fiscal registrada'}
+                      </div>
+                    )}
                   </div>
-                  {selectedSupplier && (
-                    <div className="text-[10px] text-slate-400 font-bold px-2 py-0.5 bg-slate-50 rounded italic mt-0.5">
-                      Dirección: {selectedSupplier.address || 'No especificada'}
-                    </div>
-                  )}
-                </div>
 
-                <div className="col-span-12 lg:col-span-3 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px]">Tipo de Documento:</label>
-                  <select value={formData.docType} onChange={e => setFormData({...formData, docType: e.target.value})} className="w-full h-7 bg-slate-50 border border-slate-200 px-2 outline-none font-bold">
-                    {docTypes.map(d => <option key={d.code} value={d.code}>{d.code} | {d.name}</option>)}
-                  </select>
-                </div>
-
-                <div className="col-span-12 lg:col-span-2 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px]">Serie:</label>
-                  <input placeholder="SERIE" value={formData.docSeries} onChange={e => setFormData({...formData, docSeries: e.target.value.toUpperCase()})} className="w-full h-7 border border-slate-200 px-2 outline-none font-bold text-center" />
-                </div>
-
-                <div className="col-span-12 lg:col-span-2 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px]">Número:</label>
-                  <input placeholder="NÚMERO" value={formData.docNumber} onChange={e => setFormData({...formData, docNumber: e.target.value})} className="w-full h-7 border border-slate-200 px-2 outline-none font-bold text-center" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-12 gap-4 border-t border-slate-100 pt-3">
-                <div className="col-span-2 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px]">Fecha Registro:</label>
-                  <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="h-7 border border-slate-200 px-2 outline-none" />
-                </div>
-
-                <div className="col-span-3 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px]">Moneda / T. Cambio:</label>
-                  <div className="flex gap-1 items-center">
-                    <select value={formData.currency} onChange={e => setFormData({...formData, currency: e.target.value})} className="flex-1 h-7 border border-slate-200 px-2 outline-none font-black text-blue-600">
-                      {currencies.map(c => <option key={c.code} value={c.code}>{c.code} | {c.name}</option>)}
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Tipo Documento</label>
+                    <select 
+                      value={formData.docType || '01'} 
+                      onChange={e => setFormData({...formData, docType: e.target.value})} 
+                      className="w-full h-8 px-2 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800 focus:border-blue-500 outline-none"
+                    >
+                      {docTypes.map(d => <option key={d.code} value={d.code}>{d.code} | {d.name}</option>)}
                     </select>
-                    <input value={formData.exchangeRate} onChange={e => setFormData({...formData, exchangeRate: e.target.value})} className={`w-16 h-7 border rounded px-1 text-right font-black ${tcWarning ? 'border-amber-400 bg-amber-50' : 'border-slate-200'}`} />
-                    {tcWarning && (
-                      <div className="group relative">
-                        <AlertCircle className="w-4 h-4 text-amber-500 cursor-help" />
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-amber-600 text-white text-[9px] p-2 rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
-                          {tcWarning}
-                        </div>
-                      </div>
-                    )}
+                  </div>
+
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Serie</label>
+                    <input 
+                      placeholder="F001 / E001" 
+                      value={formData.docSeries || ''} 
+                      onChange={e => setFormData({...formData, docSeries: e.target.value.toUpperCase()})} 
+                      className="w-full h-8 px-2 border border-slate-300 rounded text-xs font-bold font-mono text-center uppercase focus:border-blue-500 outline-none bg-white" 
+                      required
+                    />
+                  </div>
+
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Número</label>
+                    <input 
+                      placeholder="00001234" 
+                      value={formData.docNumber || ''} 
+                      onChange={e => setFormData({...formData, docNumber: e.target.value})} 
+                      className="w-full h-8 px-2 border border-slate-300 rounded text-xs font-bold font-mono text-center focus:border-blue-500 outline-none bg-white" 
+                      required
+                    />
                   </div>
                 </div>
 
-                <div className="col-span-3 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px]">Almacén de Ingreso:</label>
-                  <select value={formData.warehouseId} onChange={e => setFormData({...formData, warehouseId: e.target.value})} className="w-full h-7 bg-blue-50 border border-blue-200 px-2 outline-none font-black text-blue-900">
-                    <option value="">-- SELECCIONE DESTINO --</option>
-                    {warehouses.map(w => <option key={w.id} value={w.id}>{w.name.toUpperCase()}</option>)}
-                  </select>
-                </div>
+                {/* Fila 2: Fecha, Moneda/TC, Almacén, Tipo Compra, Condición de Pago */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-2 border-t border-slate-100 pt-2">
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Fecha Emisión</label>
+                    <input 
+                      type="date" 
+                      value={formData.date || ''} 
+                      onChange={e => setFormData({...formData, date: e.target.value})} 
+                      className="w-full h-8 px-2 border border-slate-300 rounded text-xs font-medium focus:border-blue-500 outline-none bg-white" 
+                      required
+                    />
+                  </div>
 
-                <div className="col-span-2 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px]">Tipo de Compra:</label>
-                  <select value={formData.purchaseType} onChange={e => setFormData({...formData, purchaseType: e.target.value})} className="w-full h-7 bg-slate-50 border border-slate-200 px-2 outline-none font-bold text-blue-700">
-                    <option value="MERCADERIA">01 | MERCADERÍA</option>
-                    <option value="ACTIVO">02 | ACTIVO FIJO</option>
-                    <option value="GASTO">03 | GASTO / OTROS</option>
-                  </select>
-                </div>
-
-                <div className="col-span-2 flex items-center gap-4 pt-4">
-                  <label className="flex items-center gap-2 cursor-pointer group">
-                    <input type="checkbox" checked={formData.afectoIgv} onChange={e => setFormData({...formData, afectoIgv: e.target.checked})} className="w-4 h-4 accent-blue-600" />
-                    <span className="font-black text-slate-500 uppercase text-[9px] group-hover:text-blue-600 transition-colors">Afecto IGV</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer group">
-                    <input type="checkbox" checked={formData.preciosIncluyenIgv} onChange={e => setFormData({...formData, preciosIncluyenIgv: e.target.checked})} className="w-4 h-4 accent-blue-600" />
-                    <span className="font-black text-slate-500 uppercase text-[9px] group-hover:text-blue-600 transition-colors">Inc. IGV</span>
-                  </label>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 p-2 border border-dashed border-slate-300 rounded flex items-center gap-4">
-                 <div className="flex items-center gap-2">
-                    <Truck className="w-4 h-4 text-slate-400" />
-                    <span className="font-black text-slate-500 uppercase text-[9px]">Referencia de Guía:</span>
-                 </div>
-                 <input placeholder="SERIE" value={formData.guideSeries} onChange={e => setFormData({...formData, guideSeries: e.target.value.toUpperCase()})} className="w-16 h-7 border border-slate-200 px-2 outline-none font-bold text-center" />
-                 <input placeholder="NÚMERO" value={formData.guideNumber} onChange={e => setFormData({...formData, guideNumber: e.target.value})} className="w-24 h-7 border border-slate-200 px-2 outline-none font-bold text-center" />
-                 <button type="button" onClick={handleConsultGuide} className="h-7 px-3 bg-slate-700 text-white font-bold rounded flex items-center gap-1 hover:bg-slate-800 transition-colors">
-                    <Search className="w-3 h-3" /> CONSULTAR
-                 </button>
-                 <div className="ml-auto w-1/3">
-                    <input placeholder="Glosa / Observaciones..." value={formData.observation} onChange={e => setFormData({...formData, observation: e.target.value})} className="w-full h-7 border border-slate-200 px-2 outline-none" />
-                 </div>
-              </div>
-            </div>
-
-            <div className="flex-1 flex flex-col bg-white border border-[#B0BCCB] rounded shadow-inner overflow-hidden">
-              <div className="bg-[#E0E5ED] px-4 py-1.5 flex justify-between items-center border-b border-[#B0BCCB]">
-                <span className="text-[10px] font-black text-slate-700 uppercase">Detalle de Productos</span>
-                <div className="flex gap-2 items-center">
-                  <div className="relative w-64">
-                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input placeholder="F1 Buscar producto..." value={prodSearch} onChange={e => setProdSearch(e.target.value)} className="w-full h-7 pl-9 pr-3 text-[11px] border border-[#B0BCCB] rounded-full outline-none focus:ring-2 focus:ring-blue-500/20" />
-                    {prodSearch && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#B0BCCB] shadow-2xl z-50 max-h-60 overflow-auto rounded-md">
-                        {products.filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase()) || p.code?.toLowerCase().includes(prodSearch.toLowerCase())).map(p => (
-                          <div key={p.id} onClick={() => addItem(p)} className="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-50 flex justify-between items-center transition-colors">
-                            <div className="flex flex-col">
-                              <span className="text-[11px] font-bold text-slate-800">{p.name}</span>
-                              <span className="text-[9px] text-slate-400">{p.code}</span>
-                            </div>
-                            <span className="text-[10px] font-bold text-blue-600">S/ {p.costPrice}</span>
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Moneda / T. Cambio</label>
+                    <div className="flex gap-1 items-center">
+                      <select 
+                        value={formData.currency || 'PEN'} 
+                        onChange={e => setFormData({...formData, currency: e.target.value})} 
+                        className="w-full h-8 px-1.5 border border-slate-300 rounded text-xs font-bold text-blue-900 bg-white focus:border-blue-500 outline-none"
+                      >
+                        {currencies.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+                      </select>
+                      <input 
+                        value={formData.exchangeRate || ''} 
+                        onChange={e => setFormData({...formData, exchangeRate: e.target.value})} 
+                        className={`w-16 h-8 border rounded px-1.5 text-right font-mono font-bold text-xs ${tcWarning ? 'border-amber-400 bg-amber-50 text-amber-900' : 'border-slate-300 bg-white'}`} 
+                        title="Tipo de Cambio"
+                      />
+                      {tcWarning && (
+                        <div className="group relative">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-500 cursor-help shrink-0" />
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 bg-amber-700 text-white text-[9px] p-2 rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+                            {tcWarning}
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        </div>
+                      )}
+                    </div>
                   </div>
+
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Almacén Destino</label>
+                    <select 
+                      value={formData.warehouseId || ''} 
+                      onChange={e => setFormData({...formData, warehouseId: e.target.value})} 
+                      className="w-full h-8 px-2 bg-blue-50/70 border border-blue-200 rounded text-xs font-bold text-blue-950 focus:border-blue-500 outline-none uppercase truncate"
+                      required
+                    >
+                      <option value="">-- SELECCIONE --</option>
+                      {warehouses.map(w => <option key={w.id} value={w.id}>{w.name.toUpperCase()}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-3 space-y-1">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Tipo Compra (SUNAT)</label>
+                    <select 
+                      value={formData.purchaseType || 'MERCADERIA'} 
+                      onChange={e => setFormData({...formData, purchaseType: e.target.value})} 
+                      className="w-full h-8 px-2 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800 focus:border-blue-500 outline-none truncate"
+                    >
+                      {SUNAT_PURCHASE_TYPES.map(t => (
+                        <option key={t.code} value={t.code}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-3 space-y-1">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase">Condición de Pago</label>
+                      {formData.paymentCondition === 'CREDITO' && (formData.creditDays || 0) > 0 && formData.date && (
+                        <span className="text-[9px] text-blue-700 font-bold tracking-tight truncate">
+                          Vence: {getDueDate(formData.date, formData.creditDays)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-1 items-center">
+                      <select 
+                        value={formData.paymentCondition || 'CONTADO'} 
+                        onChange={e => {
+                          const val = e.target.value;
+                          setFormData({
+                            ...formData, 
+                            paymentCondition: val,
+                            creditDays: val === 'CREDITO' ? (formData.creditDays || 30) : 0
+                          });
+                        }} 
+                        className="w-full h-8 px-2 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800 focus:border-blue-500 outline-none"
+                      >
+                        {SUNAT_PURCHASE_PAYMENT_CONDITIONS.map(p => (
+                          <option key={p.code} value={p.code}>{p.name}</option>
+                        ))}
+                      </select>
+                      {formData.paymentCondition === 'CREDITO' && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <input 
+                            type="number"
+                            min="1"
+                            max="365"
+                            placeholder="Días"
+                            title="Días de crédito"
+                            value={formData.creditDays || ''} 
+                            onChange={e => setFormData({...formData, creditDays: parseInt(e.target.value) || 0})} 
+                            className="w-14 h-8 px-1 border border-blue-400 bg-blue-50/70 rounded text-xs font-bold font-mono text-center text-blue-950 focus:border-blue-600 outline-none" 
+                          />
+                          <span className="text-[10px] font-bold text-slate-500">D</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fila 3: Opciones IGV, Referencia de Guía y Glosa */}
+                <div className="bg-slate-50 p-2 rounded border border-slate-200 flex flex-wrap items-center gap-3">
+                  {/* Checks IGV */}
+                  <div className="flex items-center gap-3 pr-2.5 border-r border-slate-200">
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input 
+                        type="checkbox" 
+                        checked={formData.afectoIgv} 
+                        onChange={e => setFormData({...formData, afectoIgv: e.target.checked})} 
+                        className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                      />
+                      <span className="text-[10px] font-bold text-slate-700 uppercase">Afecto IGV</span>
+                    </label>
+
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input 
+                        type="checkbox" 
+                        checked={formData.preciosIncluyenIgv} 
+                        onChange={e => setFormData({...formData, preciosIncluyenIgv: e.target.checked})} 
+                        className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" 
+                      />
+                      <span className="text-[10px] font-bold text-slate-700 uppercase">Inc. IGV</span>
+                    </label>
+                  </div>
+
+                  {/* Doc Ref Guía */}
+                  <div className="flex items-center gap-1.5">
+                    <Truck className="w-3.5 h-3.5 text-blue-700" />
+                    <span className="text-[10px] font-bold text-slate-700 uppercase">Doc. Ref. Guía:</span>
+                  </div>
+                  <input 
+                    placeholder="SERIE" 
+                    value={formData.guideSeries || ''} 
+                    onChange={e => setFormData({...formData, guideSeries: e.target.value.toUpperCase()})} 
+                    className="w-16 h-7 border border-slate-300 rounded px-2 text-xs font-mono font-bold text-center uppercase bg-white focus:border-blue-500 outline-none" 
+                  />
+                  <input 
+                    placeholder="NÚMERO" 
+                    value={formData.guideNumber || ''} 
+                    onChange={e => setFormData({...formData, guideNumber: e.target.value})} 
+                    className="w-24 h-7 border border-slate-300 rounded px-2 text-xs font-mono font-bold text-center bg-white focus:border-blue-500 outline-none" 
+                  />
                   <button 
                     type="button" 
-                    onClick={() => setIsSearchModalOpen(true)}
-                    className="h-7 px-3 bg-blue-600 text-white text-[10px] font-bold rounded-full hover:bg-blue-700 transition-all shadow-sm flex items-center gap-1"
+                    onClick={handleConsultGuide} 
+                    className="h-7 px-2.5 bg-slate-700 hover:bg-slate-800 text-white text-[10px] font-bold uppercase rounded flex items-center gap-1 transition-colors cursor-pointer"
                   >
-                    + AGREGAR DETALLE
+                    <Search className="w-3 h-3" /> Consultar
+                  </button>
+
+                  {/* Glosa */}
+                  <div className="flex-1 min-w-[200px] ml-auto">
+                    <input 
+                      placeholder="Glosa / Observación del registro de compra..." 
+                      value={formData.observation || ''} 
+                      onChange={e => setFormData({...formData, observation: e.target.value})} 
+                      className="w-full h-7 border border-slate-300 rounded px-2 text-xs bg-white focus:border-blue-500 outline-none" 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Sección 2: Detalle de Productos */}
+              <div className="flex-1 flex flex-col bg-white border border-slate-200 rounded-lg shadow-2xs overflow-hidden min-h-[220px]">
+                <div className="bg-slate-100 px-3 py-1.5 flex justify-between items-center border-b border-slate-200">
+                  <div className="flex items-center gap-1.5">
+                    <Package className="w-3.5 h-3.5 text-blue-700" />
+                    <span className="text-[11px] font-bold text-blue-950 uppercase tracking-tight">
+                      Detalle de Productos ({formData.items?.length || 0})
+                    </span>
+                  </div>
+
+                  <div className="flex gap-2 items-center">
+                    <div className="relative w-64">
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input 
+                        placeholder="Buscar producto por nombre/código..." 
+                        value={prodSearch} 
+                        onChange={e => setProdSearch(e.target.value)} 
+                        className="w-full h-7 pl-8 pr-3 text-xs border border-slate-300 rounded-lg outline-none focus:border-blue-500 bg-white" 
+                      />
+                      {prodSearch && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-300 shadow-2xl z-50 max-h-56 overflow-auto rounded-lg">
+                          {products
+                            .filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase()) || p.code?.toLowerCase().includes(prodSearch.toLowerCase()))
+                            .slice(0, 15)
+                            .map(p => (
+                              <div 
+                                key={p.id} 
+                                onClick={() => { addItem(p); setProdSearch(''); }} 
+                                className="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 flex justify-between items-center transition-colors"
+                              >
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-bold text-slate-800 uppercase">{p.name}</span>
+                                  <span className="text-[10px] text-slate-400 font-mono">{p.code}</span>
+                                </div>
+                                <span className="text-xs font-bold text-blue-700">S/ {formatNumber(p.costPrice || 0)}</span>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <button 
+                      type="button" 
+                      onClick={() => setIsSearchModalOpen(true)}
+                      className="h-7 px-3 bg-[#004A99] hover:bg-blue-800 text-white text-[10px] font-bold uppercase rounded-lg flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Agregar Detalle
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-auto">
+                  <table className="w-full border-collapse text-xs">
+                    <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 z-10">
+                      <tr className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">
+                        <th className="p-2 text-left w-24">Código</th>
+                        <th className="p-2 text-left">Descripción</th>
+                        <th className="p-2 text-center w-16">Cant.</th>
+                        <th className="p-2 text-center w-14">U.M.</th>
+                        <th className="p-2 text-right w-24 bg-blue-50/40">Valor Compra</th>
+                        {formData.afectoIgv && <th className="p-2 text-right w-20">IGV</th>}
+                        <th className="p-2 text-right w-24 bg-emerald-50/40">Precio Compra</th>
+                        <th className="p-2 text-center w-24">Lote</th>
+                        <th className="p-2 text-center w-28">F. Ingreso</th>
+                        <th className="p-2 text-center w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {formData.items.map((item: any, idx: number) => (
+                        <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
+                          <td className="p-2 font-mono text-[11px] font-bold text-slate-700">{item.code}</td>
+                          <td className="p-2 font-bold text-slate-900 uppercase text-xs">{item.name}</td>
+                          <td className="p-1">
+                            <input 
+                              type="number" 
+                              min="1"
+                              value={item.quantity} 
+                              onChange={e => updateItem(idx, 'quantity', e.target.value)} 
+                              className="w-full h-7 text-center border border-slate-200 rounded focus:border-blue-500 bg-white outline-none font-bold text-xs text-blue-900" 
+                            />
+                          </td>
+                          <td className="p-2 text-center">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-black bg-slate-100 text-slate-700 uppercase">
+                              {item.unitSymbol || 'UND'}
+                            </span>
+                          </td>
+                          <td className="p-1 bg-blue-50/20">
+                            <input 
+                              type="number" 
+                              step="0.0001" 
+                              value={item.valorCompra} 
+                              onChange={e => updateItem(idx, 'valorCompra', e.target.value)} 
+                              className={`w-full h-7 text-right px-1.5 border rounded text-xs font-bold ${formData.preciosIncluyenIgv ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-300 text-slate-800 focus:border-blue-500'} outline-none`} 
+                              readOnly={formData.preciosIncluyenIgv}
+                            />
+                          </td>
+                          {formData.afectoIgv && (
+                            <td className="p-2 text-right font-bold text-slate-500 text-xs">
+                              {formatNumber(Number(item.igv || 0) * Number(item.quantity || 0))}
+                            </td>
+                          )}
+                          <td className="p-1 bg-emerald-50/20">
+                            <input 
+                              type="number" 
+                              step="0.0001" 
+                              value={item.price} 
+                              onChange={e => updateItem(idx, 'price', e.target.value)} 
+                              className={`w-full h-7 text-right px-1.5 border rounded text-xs font-bold ${!formData.preciosIncluyenIgv ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-white border-slate-300 text-emerald-800 focus:border-emerald-500'} outline-none`} 
+                              readOnly={!formData.preciosIncluyenIgv}
+                            />
+                          </td>
+                          <td className="p-1">
+                            <input 
+                              placeholder="LOTE" 
+                              value={item.lotNumber || ''} 
+                              onChange={e => updateItem(idx, 'lotNumber', e.target.value.toUpperCase())} 
+                              className="w-full h-7 text-center border border-slate-200 rounded focus:border-blue-500 bg-white outline-none font-bold font-mono text-[10px]" 
+                            />
+                          </td>
+                          <td className="p-1">
+                            <input 
+                              type="date" 
+                              value={item.entranceDate || ''} 
+                              onChange={e => updateItem(idx, 'entranceDate', e.target.value)} 
+                              className="w-full h-7 text-center border border-slate-200 rounded focus:border-blue-500 bg-white outline-none text-[10px]" 
+                            />
+                          </td>
+                          <td className="p-2 text-center">
+                            <button 
+                              type="button" 
+                              onClick={() => { 
+                                const itms = [...formData.items]; 
+                                itms.splice(idx, 1); 
+                                setFormData({...formData, items: itms}); 
+                              }} 
+                              className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
+                              title="Remover Item"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {(!formData.items || formData.items.length === 0) && (
+                        <tr>
+                          <td colSpan={10} className="p-8 text-center text-slate-400 italic">
+                            No hay productos agregados. Utilice el buscador superior o el botón "+ Agregar Detalle".
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Sección 3: Totales y Acciones */}
+              <div className="px-4 py-2 bg-slate-100/90 border border-slate-200 rounded-lg flex items-center justify-between shrink-0 shadow-2xs">
+                <div className="flex gap-2">
+                  <button 
+                    type="button" 
+                    onClick={onClose} 
+                    className="h-8 px-4 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5 text-red-500" /> Cancelar
+                  </button>
+
+                  <button 
+                    type="submit" 
+                    disabled={loading} 
+                    className="h-8 px-6 bg-[#004A99] hover:bg-blue-800 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md disabled:opacity-50 cursor-pointer"
+                  >
+                    {loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    {loading ? 'Procesando...' : 'Guardar Registro'}
                   </button>
                 </div>
-              </div>
 
-              <div className="flex-1 overflow-auto">
-                <table className="w-full border-collapse text-[10px]">
-                  <thead className="sticky top-0 bg-slate-50 border-b border-[#B0BCCB] shadow-sm z-10">
-                    <tr className="text-slate-500 font-bold uppercase tracking-tighter">
-                      <th className="p-2 text-left w-20">Código</th>
-                      <th className="p-2 text-left">Descripción</th>
-                      <th className="p-2 text-center w-16">Cant.</th>
-                      <th className="p-2 text-center w-12">U.M.</th>
-                      <th className="p-2 text-right w-24 bg-blue-50/30">Valor Compra</th>
-                      {formData.afectoIgv && <th className="p-2 text-right w-20 bg-slate-50">IGV</th>}
-                      <th className="p-2 text-right w-24 bg-blue-50/50">Precio Compra</th>
-                      <th className="p-2 text-center w-24">Lote</th>
-                      <th className="p-2 text-center w-24">F. Ingreso</th>
-                      <th className="p-2 w-8"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {formData.items.map((item: any, idx: number) => (
-                      <tr key={idx} className="hover:bg-blue-50/50 transition-colors">
-                        <td className="p-2 font-mono text-slate-500">{item.code}</td>
-                        <td className="p-2 font-bold text-slate-800 uppercase">{item.name}</td>
-                        <td className="p-1">
-                          <input type="number" value={item.quantity} onChange={e => updateItem(idx, 'quantity', e.target.value)} className="w-full h-7 text-center border-transparent focus:border-blue-400 focus:bg-white bg-transparent outline-none font-black text-slate-700" />
-                        </td>
-                        <td className="p-2 text-center text-slate-500 font-bold">{item.unitSymbol}</td>
-                        <td className="p-1 bg-blue-50/10">
-                          <input 
-                            type="number" 
-                            step="0.0001" 
-                            value={item.valorCompra} 
-                            onChange={e => updateItem(idx, 'valorCompra', e.target.value)} 
-                            className={`w-full h-7 text-right border-transparent focus:border-blue-400 focus:bg-white outline-none font-bold ${formData.preciosIncluyenIgv ? 'bg-slate-100 cursor-not-allowed opacity-60' : 'bg-transparent'}`} 
-                            readOnly={formData.preciosIncluyenIgv}
-                          />
-                        </td>
-                        {formData.afectoIgv && (
-                          <td className="p-2 text-right font-bold text-slate-400">
-                            {formatNumber(Number(item.igv || 0) * Number(item.quantity || 0))}
-                          </td>
-                        )}
-                        <td className="p-1 bg-blue-50/20">
-                          <input 
-                            type="number" 
-                            step="0.0001" 
-                            value={item.price} 
-                            onChange={e => updateItem(idx, 'price', e.target.value)} 
-                            className={`w-full h-7 text-right border-transparent focus:border-blue-400 focus:bg-white outline-none font-black text-blue-700 ${!formData.preciosIncluyenIgv ? 'bg-slate-100 cursor-not-allowed opacity-60' : 'bg-transparent'}`} 
-                            readOnly={!formData.preciosIncluyenIgv}
-                          />
-                        </td>
-                        <td className="p-1">
-                          <input placeholder="LOTE" value={item.lotNumber} onChange={e => updateItem(idx, 'lotNumber', e.target.value.toUpperCase())} className="w-full h-7 text-center border-slate-200 focus:border-blue-400 focus:bg-white bg-transparent outline-none font-bold text-[9px]" />
-                        </td>
-                        <td className="p-1">
-                          <input type="date" value={item.entranceDate} onChange={e => updateItem(idx, 'entranceDate', e.target.value)} className="w-full h-7 text-center border-transparent focus:border-blue-400 focus:bg-white bg-transparent outline-none text-[9px]" />
-                        </td>
-                        <td className="p-2 text-center">
-                          <button type="button" onClick={() => { const itms = [...formData.items]; itms.splice(idx,1); setFormData({...formData, items: itms}); }} className="text-slate-300 hover:text-red-500 transition-colors">✕</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="flex justify-between items-center bg-[#F0F4F8] p-3 border border-[#B0BCCB] rounded shadow-sm">
-              <div className="flex gap-2">
-                <button type="submit" disabled={loading} className="h-10 px-8 bg-blue-600 text-white font-black rounded flex items-center gap-2 hover:bg-blue-700 shadow-lg transition-all transform active:scale-95">
-                  <Save className="w-5 h-5" /> {loading ? 'PROCESANDO...' : 'GUARDAR REGISTRO'}
-                </button>
-                <button type="button" onClick={onClose} className="h-10 px-6 bg-white border border-[#B0BCCB] text-slate-600 font-bold rounded flex items-center gap-2 hover:bg-slate-50 transition-all">
-                  <X className="w-5 h-5" /> CANCELAR
-                </button>
-              </div>
-
-              <div className="flex gap-6 items-center">
-                <div className="flex flex-col items-end">
-                  <span className="text-[9px] font-black text-slate-400 uppercase">Base Imponible</span>
-                  <span className="text-sm font-black text-slate-700">S/ {formatNumber(subtotalGeneral)}</span>
-                </div>
-                {formData.afectoIgv && (
+                <div className="flex gap-4 items-center">
                   <div className="flex flex-col items-end">
-                    <span className="text-[9px] font-black text-slate-400 uppercase">IGV (18%)</span>
-                    <span className="text-sm font-black text-slate-500">S/ {formatNumber(totalIgv)}</span>
+                    <span className="text-[9px] font-bold text-slate-500 uppercase">Base Imponible</span>
+                    <span className="text-xs font-bold text-slate-800 font-mono">S/ {formatNumber(subtotalGeneral)}</span>
                   </div>
-                )}
-                <div className="bg-blue-900 text-white px-6 py-2 rounded shadow-inner flex flex-col items-end">
-                  <span className="text-[9px] font-black opacity-70 uppercase">Total a Pagar</span>
-                  <span className="text-2xl font-black">S/ {formatNumber(totalGeneral)}</span>
+
+                  {formData.afectoIgv && (
+                    <div className="flex flex-col items-end">
+                      <span className="text-[9px] font-bold text-slate-500 uppercase">IGV (18%)</span>
+                      <span className="text-xs font-bold text-slate-600 font-mono">S/ {formatNumber(totalIgv)}</span>
+                    </div>
+                  )}
+
+                  <div className="bg-[#004A99] text-white px-4 py-1.5 rounded-lg flex flex-col items-end shadow-sm">
+                    <span className="text-[9px] font-bold text-blue-200 uppercase">Total a Pagar</span>
+                    <span className="text-base font-black font-mono">S/ {formatNumber(totalGeneral)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            </form>
 
-          </form>
+            <ProductSearchModal 
+              isOpen={isSearchModalOpen}
+              onClose={() => setIsSearchModalOpen(false)}
+              onSelect={(p) => { addItem(p); setIsSearchModalOpen(false); }}
+              token={token || ''}
+            />
 
-          <ProductSearchModal 
-            isOpen={isSearchModalOpen}
-            onClose={() => setIsSearchModalOpen(false)}
-            onSelect={(p) => { addItem(p); setIsSearchModalOpen(false); }}
-            token={token || ''}
-          />
+            <SupplierSearchModal 
+              isOpen={isSupplierSearchOpen}
+              onClose={() => setIsSupplierSearchOpen(false)}
+              onSelect={(s) => { setFormData({...formData, supplierId: s.id.toString()}); setIsSupplierSearchOpen(false); }}
+              token={token || ''}
+            />
 
-          <SupplierSearchModal 
-            isOpen={isSupplierSearchOpen}
-            onClose={() => setIsSupplierSearchOpen(false)}
-            onSelect={(s) => { setFormData({...formData, supplierId: s.id.toString()}); setIsSupplierSearchOpen(false); }}
-            token={token || ''}
-          />
-
-          <SupplierForm 
-            isOpen={isSupplierFormOpen}
-            onClose={() => setIsSupplierFormOpen(false)}
-            onSubmit={handleQuickRegisterSupplier}
-            formData={supplierFormData}
-            setFormData={setSupplierFormData}
-            editingItem={null}
-            loading={loading}
-            token={token || ''}
-          />
+            <SupplierForm 
+              isOpen={isSupplierFormOpen}
+              onClose={() => setIsSupplierFormOpen(false)}
+              onSubmit={handleQuickRegisterSupplier}
+              formData={supplierFormData}
+              setFormData={setSupplierFormData}
+              editingItem={null}
+              loading={loading}
+              token={token || ''}
+            />
+          </motion.div>
         </motion.div>
-      </motion.div>
-    )}
-  </AnimatePresence>
+      )}
+    </AnimatePresence>
   );
 };
