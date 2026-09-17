@@ -350,7 +350,12 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
     setLoading(true);
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
-      await axios.post('/api/purchases', formData, config);
+      const supp = suppliers.find(s => s.id.toString() === (formData.supplierId || '').toString());
+      const payload = {
+        ...formData,
+        supplierName: formData.supplierName || (supp ? supp.name : '')
+      };
+      await axios.post('/api/purchases', payload, config);
       onSuccess();
     } catch (err: any) {
       console.error(err);
@@ -448,7 +453,14 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                     <div className="flex gap-1">
                       <select 
                         value={formData.supplierId || ''} 
-                        onChange={e => setFormData({...formData, supplierId: e.target.value})} 
+                        onChange={e => {
+                          const supp = suppliers.find(s => s.id.toString() === e.target.value);
+                          setFormData({
+                            ...formData, 
+                            supplierId: e.target.value,
+                            supplierName: supp ? supp.name : ''
+                          });
+                        }} 
                         className="w-full h-8 px-2 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800 focus:border-blue-500 outline-none uppercase"
                       >
                         <option value="">-- SELECCIONE PROVEEDOR --</option>
@@ -954,7 +966,14 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
             <SupplierSearchModal 
               isOpen={isSupplierSearchOpen}
               onClose={() => setIsSupplierSearchOpen(false)}
-              onSelect={(s) => { setFormData({...formData, supplierId: s.id.toString()}); setIsSupplierSearchOpen(false); }}
+              onSelect={(s) => { 
+                setFormData({
+                  ...formData, 
+                  supplierId: s.id.toString(),
+                  supplierName: s.name
+                }); 
+                setIsSupplierSearchOpen(false); 
+              }}
               token={token || ''}
             />
 

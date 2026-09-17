@@ -2455,6 +2455,12 @@ app.post('/api/purchases', authenticateToken, async (req, res) => {
       }
     }
     
+    let finalSupplierName = supplierName;
+    if (!finalSupplierName && supplierId) {
+      const supp = await prisma.supplier.findUnique({ where: { id: parseInt(supplierId) } });
+      if (supp) finalSupplierName = supp.name;
+    }
+
     const purchase = await prisma.$transaction(async (tx) => {
       // 1. Create Purchase
       const calculatedTotal = items.reduce((acc: number, item: any) => {
@@ -2466,7 +2472,7 @@ app.post('/api/purchases', authenticateToken, async (req, res) => {
       const newPurchase = await (tx as any).purchase.create({
         data: {
           supplierId: parseInt(supplierId),
-          supplierName,
+          supplierName: finalSupplierName || 'PROVEEDOR',
           referenceId: referenceId ? parseInt(referenceId) : null,
           docType,
           docSeries,
@@ -2641,11 +2647,17 @@ app.put('/api/purchases/:id', authenticateToken, async (req, res) => {
       await (tx as any).stockMovement.deleteMany({ where: { purchaseId } });
 
       // 4. Update Purchase header and create new items
+      let finalSupplierName = supplierName;
+      if (!finalSupplierName && supplierId) {
+        const supp = await prisma.supplier.findUnique({ where: { id: parseInt(supplierId) } });
+        if (supp) finalSupplierName = supp.name;
+      }
+
       const updatedPurchase = await (tx as any).purchase.update({
         where: { id: purchaseId },
         data: {
           supplierId: parseInt(supplierId),
-          supplierName,
+          supplierName: finalSupplierName || 'PROVEEDOR',
           docType,
           docSeries,
           docNumber,
