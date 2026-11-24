@@ -3,9 +3,10 @@ import { motion } from 'motion/react';
 import { 
   Package, Layers, Tag, Scale, PlusCircle, Search, 
   Edit2, Trash2, Eye, Filter, ChevronRight, LayoutGrid, 
-  List, MoreVertical, Image as ImageIcon, Globe, Calendar, Power, Lock, Sparkles, Box
+  List, MoreVertical, Image as ImageIcon, Globe, Calendar, Power, Lock, Sparkles, Box,
+  GitBranch, Palette
 } from 'lucide-react';
-import { formatNumber, calculateTotalUnitsPerPackage, convertFromBaseUnits } from '../../lib/utils';
+import { formatNumber, calculateTotalUnitsPerPackage } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 
 interface Category {
@@ -27,6 +28,8 @@ interface Unit {
   id: number;
   name: string;
   symbol: string;
+  sunatCode?: string;
+  equivalence?: number;
 }
 
 interface Product {
@@ -38,6 +41,8 @@ interface Product {
   images?: string[];
   category?: { name: string };
   brand?: { name: string };
+  line?: { name: string };
+  color?: { name: string; hexCode?: string };
   unit?: { name?: string; symbol?: string };
   package?: { name?: string; symbol?: string };
   subPackage?: { name?: string; symbol?: string };
@@ -51,12 +56,15 @@ interface Product {
   discountPercent?: number;
   weight?: number;
   volume?: number;
+  brandCertificate?: string;
 }
 
 interface ProductModuleProps {
   products: Product[];
   categories: Category[];
   brands: Brand[];
+  lines: any[];
+  colors: any[];
   units: Unit[];
   onDelete: (type: string, id: number) => void;
   onEdit: (type: string, item: any) => void;
@@ -67,6 +75,8 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
   products,
   categories,
   brands,
+  lines,
+  colors,
   units,
   onDelete,
   onEdit,
@@ -74,31 +84,35 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
 }) => {
   const { hasPermission } = useAuth();
   const canWrite = hasPermission?.('WRITE_PRODUCTS') || hasPermission?.('ALL');
-  const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'brands' | 'units'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'brands' | 'lines' | 'colors' | 'units'>('products');
   const [searchTerm, setSearchTerm] = useState('');
 
   const tabs = [
     { id: 'products', label: 'Productos', icon: Package, count: products.length },
     { id: 'categories', label: 'Categorías', icon: Layers, count: categories.length },
     { id: 'brands', label: 'Marcas', icon: Tag, count: brands.length },
+    { id: 'lines', label: 'Líneas', icon: GitBranch, count: lines.length },
+    { id: 'colors', label: 'Colores', icon: Palette, count: colors.length },
     { id: 'units', label: 'Unidades', icon: Scale, count: units.length },
   ];
 
   const getFilteredItems = () => {
     const term = searchTerm.toLowerCase();
     switch (activeTab) {
-      case 'products': return products.filter(p => p.name.toLowerCase().includes(term) || p.code?.toLowerCase().includes(term));
+      case 'products': return products.filter(p => p.name.toLowerCase().includes(term) || p.code?.toLowerCase().includes(term) || p.brandCertificate?.toLowerCase().includes(term) || p.line?.name?.toLowerCase().includes(term) || p.color?.name?.toLowerCase().includes(term));
       case 'categories': return categories.filter(c => c.name.toLowerCase().includes(term));
       case 'brands': return brands.filter(b => b.name.toLowerCase().includes(term));
+      case 'lines': return lines.filter(l => l.name.toLowerCase().includes(term));
+      case 'colors': return colors.filter(c => c.name.toLowerCase().includes(term));
       case 'units': return units.filter(u => u.name.toLowerCase().includes(term) || u.symbol.toLowerCase().includes(term));
       default: return [];
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Tab Navigation */}
-      <div className="flex flex-wrap gap-2 bg-slate-100/50 p-1.5 rounded-4xl w-fit">
+      <div className="flex flex-wrap gap-1.5 bg-slate-100/80 p-1 rounded-xl w-fit border border-slate-200/80">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -106,15 +120,15 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
             <button
               key={tab.id}
               onClick={() => { setActiveTab(tab.id as any); setSearchTerm(''); }}
-              className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 isActive 
-                  ? 'bg-white text-blue-900 shadow-sm scale-105' 
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                  ? 'bg-white text-[#004A99] shadow-2xs border border-slate-200/60' 
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
               }`}
             >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+              <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-[#004A99]' : 'text-slate-400'}`} />
               {tab.label}
-              <span className={`text-[10px] px-2 py-0.5 rounded-full ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-500'}`}>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold tabular-nums ${isActive ? 'bg-blue-50 text-[#004A99]' : 'bg-slate-200/80 text-slate-600'}`}>
                 {tab.count}
               </span>
             </button>
@@ -123,29 +137,29 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
       </div>
 
       {/* Actions Bar */}
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-        <div className="relative w-full md:w-96">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+      <div className="flex flex-col md:flex-row gap-2.5 justify-between items-center">
+        <div className="relative w-full md:w-80">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
           <input 
             type="text"
-            placeholder={`Buscar ${activeTab}...`}
+            placeholder={`Buscar ${activeTab === 'products' ? 'productos' : activeTab === 'categories' ? 'categorías' : activeTab === 'brands' ? 'marcas' : activeTab === 'lines' ? 'líneas' : activeTab === 'colors' ? 'colores' : 'unidades'}...`}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all outline-none"
+            className="w-full h-8 pl-8 pr-3 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-800 focus:border-blue-500 outline-none transition-colors"
           />
         </div>
         {canWrite ? (
           <button 
             onClick={() => onNew(activeTab)}
-            className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-100"
+            className="w-full md:w-auto h-8 bg-[#004A99] hover:bg-blue-800 text-white px-4 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
           >
-            <PlusCircle className="w-5 h-5" />
-            Nuevo {activeTab === 'products' ? 'Producto' : activeTab === 'categories' ? 'Categoría' : activeTab === 'brands' ? 'Marca' : 'Unidad'}
+            <PlusCircle className="w-3.5 h-3.5" />
+            Nuevo {activeTab === 'products' ? 'Producto' : activeTab === 'categories' ? 'Categoría' : activeTab === 'brands' ? 'Marca' : activeTab === 'lines' ? 'Línea' : activeTab === 'colors' ? 'Color' : 'Unidad'}
           </button>
         ) : (
-          <div className="flex items-center gap-2 bg-slate-100 text-slate-400 px-8 py-3 rounded-2xl font-bold cursor-not-allowed">
-            <Lock className="w-5 h-5" />
-            Nuevo {activeTab === 'products' ? 'Producto' : activeTab === 'categories' ? 'Categoría' : activeTab === 'brands' ? 'Marca' : 'Unidad'}
+          <div className="flex items-center gap-1.5 h-8 bg-slate-100 text-slate-400 px-4 rounded-lg text-xs font-bold cursor-not-allowed">
+            <Lock className="w-3.5 h-3.5" />
+            Nuevo {activeTab === 'products' ? 'Producto' : activeTab === 'categories' ? 'Categoría' : activeTab === 'brands' ? 'Marca' : activeTab === 'lines' ? 'Línea' : activeTab === 'colors' ? 'Color' : 'Unidad'}
           </div>
         )}
       </div>
@@ -155,36 +169,35 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
         key={activeTab}
         initial={{ opacity: 0, x: 10 }}
         animate={{ opacity: 1, x: 0 }}
-        className="bg-white rounded-4xl border border-slate-200 shadow-sm overflow-hidden"
+        className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden"
       >
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-slate-50/50 border-b border-slate-100">
+            <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 {activeTab === 'products' ? (
                   <>
-                    <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400">Producto</th>
-                    <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400">Categoría / Marca</th>
-                    <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400">Empaque</th>
-                    <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400 text-center">Stock</th>
-                    <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400 text-right">Precio</th>
+                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">Producto</th>
+                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">Categoría / Marca</th>
+                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">Empaque</th>
+                    <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-600 text-right">Precio</th>
                   </>
                 ) : (
                   <>
-                    <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400">Nombre</th>
-                    <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400 text-center">Relacionados</th>
+                    <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">Nombre</th>
+                    <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-600 text-center">Relacionados</th>
                   </>
                 )}
-                <th className="px-6 py-5 text-xs font-black uppercase tracking-widest text-slate-400 text-right">Acciones</th>
+                <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-600 text-right">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-100 text-xs">
               {getFilteredItems().map((item: any) => (
-                <tr key={item.id} className={`hover:bg-slate-50/80 transition-colors group ${!item.isActive ? 'opacity-60 bg-slate-50/30' : ''}`}>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-4">
+                <tr key={item.id} className={`hover:bg-blue-50/30 transition-colors group ${!item.isActive && activeTab === 'products' ? 'opacity-60 bg-slate-50/30' : ''}`}>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-3">
                       {activeTab === 'products' && (
-                        <div className="w-12 h-12 bg-slate-100 rounded-xl overflow-hidden flex items-center justify-center border border-slate-200">
+                        <div className="w-10 h-10 bg-slate-100 rounded-lg overflow-hidden flex items-center justify-center border border-slate-200 shrink-0">
                           {item.images?.[0] ? (
                             <img src={item.images[0]} alt="" className="w-full h-full object-cover" />
                           ) : (
@@ -193,9 +206,29 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
                         </div>
                       )}
                         <div className="flex flex-col">
-                        <span className="font-bold text-slate-900">{item.name}</span>
+                        <div className="flex items-center gap-2">
+                          {activeTab === 'colors' && item.hexCode && (
+                            <span
+                              className="w-4 h-4 rounded-full border border-slate-300 shrink-0 shadow-2xs"
+                              style={{ backgroundColor: item.hexCode }}
+                              title={item.hexCode}
+                            />
+                          )}
+                          <span className="font-bold text-slate-900">{item.name}</span>
+                        </div>
                         {item.code && <span className="text-[10px] text-slate-400 font-black tracking-widest uppercase">{item.code}</span>}
-                        {activeTab === 'units' && <span className="text-xs text-blue-600 font-bold">{item.symbol}</span>}
+                        {activeTab === 'units' && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                            <span className="text-xs text-blue-600 font-bold">{item.symbol}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-blue-50 border border-blue-200 text-[9px] font-mono font-bold text-blue-700 uppercase">
+                              SUNAT: {item.sunatCode || 'NIU'}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-[9px] font-mono font-bold text-slate-600">
+                              Equiv: {item.equivalence ?? 1}
+                            </span>
+                          </div>
+                        )}
+                        {activeTab === 'colors' && item.hexCode && <span className="text-[10px] text-slate-400 font-mono">{item.hexCode}</span>}
                         
                         {activeTab === 'products' && (
                           <div className="flex items-center gap-2 mt-1">
@@ -234,6 +267,28 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
                         <div className="flex flex-col">
                           <span className="text-xs font-bold text-slate-600">{item.category?.name || 'S/C'}</span>
                           <span className="text-[10px] text-slate-400 font-medium uppercase">{item.brand?.name || 'S/M'}</span>
+                          {(item.line?.name || item.color?.name) && (
+                            <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                              {item.line?.name && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-[9px] font-bold text-slate-600 uppercase">
+                                  {item.line.name}
+                                </span>
+                              )}
+                              {item.color?.name && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-[9px] font-bold text-slate-600 uppercase">
+                                  {item.color.hexCode && (
+                                    <span className="w-2 h-2 rounded-full border border-slate-300" style={{ backgroundColor: item.color.hexCode }} />
+                                  )}
+                                  {item.color.name}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {item.brandCertificate && (
+                            <span className="mt-0.5 inline-flex w-fit items-center px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-[9px] font-mono font-bold text-indigo-700 uppercase">
+                              Cert: {item.brandCertificate}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -274,70 +329,25 @@ export const ProductModule: React.FC<ProductModuleProps> = ({
                           <span className="text-[10px] text-slate-400 italic">Sin empaque</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        {(() => {
-                          const totalStock = (item.stockRecords || []).reduce((acc: number, s: any) => {
-                            const wType = s.warehouse?.type?.toUpperCase() || '';
-                            const wName = s.warehouse?.name?.toUpperCase() || '';
-                            const isInternal = ['TRANSITORIO', 'DESPACHO', 'COMPROBANTES', 'SISTEMA', 'CONTROL', 'EXISTENCIAS'].includes(wType) || 
-                                             wName.includes('DESPACHO') || 
-                                             wName.includes('COMPROBANTE') || 
-                                             wName.includes('TRANSITO') ||
-                                             wName.includes('EXISTENCIAS');
-                            if (isInternal) return acc;
-                            return acc + s.quantity;
-                          }, 0);
-                          const hasPackaging = item.package?.name || item.subPackage?.name;
-                          const breakdown = hasPackaging ? convertFromBaseUnits(totalStock, {
-                            quantityPerPackage: item.quantityPerPackage,
-                            quantityPerSubPackage: item.quantityPerSubPackage,
-                          }) : null;
-
-                          return (
-                            <div className="flex flex-col items-center gap-1">
-                              <span className={`px-3 py-1 rounded-full text-[10px] font-black border ${
-                                totalStock <= 0 ? 'bg-red-50 text-red-600 border-red-100' :
-                                totalStock <= 10 ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                                'bg-emerald-50 text-emerald-600 border-emerald-100'
-                              }`}>
-                                {totalStock} {item.unit?.symbol || 'un.'}
-                              </span>
-                              {breakdown && (item.package?.name || item.subPackage?.name) && (
-                                <div className="text-[9px] font-bold text-slate-500 flex items-center gap-1">
-                                  {breakdown.packages > 0 && item.package?.name && (
-                                    <span>{breakdown.packages} {item.package.name}</span>
-                                  )}
-                                  {breakdown.subPackages > 0 && item.subPackage?.name && (
-                                    <span>{breakdown.subPackages} {item.subPackage.name}</span>
-                                  )}
-                                  {breakdown.units > 0 && (
-                                    <span>{breakdown.units} {item.unit?.symbol || 'un.'}</span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex flex-col items-end">
-                          <span className="font-black text-slate-900 text-lg">S/ {formatNumber(item.salePrice)}</span>
-                          <div className="flex items-center gap-2 text-[9px] font-bold">
+                      <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                        <div className="flex flex-col items-end tabular-nums">
+                          <span className="font-bold text-slate-900 text-xs whitespace-nowrap">S/ {formatNumber(item.salePrice)}</span>
+                          <div className="flex items-center gap-1.5 text-[10px] font-medium whitespace-nowrap">
                             <span className="text-slate-400">Costo: S/ {formatNumber(item.costPrice || 0)}</span>
-                            <span className="text-blue-500">({item.profitMargin || 0}%)</span>
+                            <span className="text-blue-600 font-bold">({item.profitMargin || 0}%)</span>
                           </div>
                         </div>
                       </td>
                     </>
                   ) : (
-                    <td className="px-6 py-4 text-center">
-                      <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-[10px] font-black">
+                    <td className="px-4 py-2.5 text-center">
+                      <span className="bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
                         {item._count?.products || 0} Productos
                       </span>
                     </td>
                   )}
 
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-3 py-2.5 text-right">
                     <div className="flex justify-end gap-1.5">
                       <button 
                         onClick={() => onEdit(activeTab, item)}

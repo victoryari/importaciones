@@ -32,7 +32,8 @@ interface PickingOrder {
   carrierGuide?: string;
   items: PickingItem[];
   payments?: { amount: number }[];
-  agency?: { id: number; name: string } | null;
+  agency?: { id: number; name: string; address?: string | null; department?: string | null; province?: string | null; district?: string | null } | null;
+  branch?: { id: number; address?: string | null; department?: string | null; province?: string | null; district?: string | null } | null;
 }
 
 interface Operator {
@@ -471,7 +472,7 @@ export default function WarehousePickingModule() {
                       {order.voucherNumber && (
                         <span className="flex items-center gap-1.5">
                           <FileText className="w-3.5 h-3.5 text-slate-400" />
-                          Factura: {order.voucherNumber}
+                          {String(order.voucherNumber).toUpperCase().startsWith('B') ? 'Boleta' : String(order.voucherNumber).toUpperCase().startsWith('F') ? 'Factura' : 'Comprobante'}: {order.voucherNumber}
                         </span>
                       )}
                       {order.referralGuide && (
@@ -560,7 +561,26 @@ export default function WarehousePickingModule() {
                       </p>
                     )}
                     {selectedOrder.agency && (
-                      <p className="text-sm text-slate-500 mt-1">{selectedOrder.agency.name}</p>
+                      <div className="mt-2 pt-2 border-t border-slate-200/70 space-y-0.5">
+                        <p className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                          <Truck className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          {selectedOrder.agency.name}
+                        </p>
+                        {(() => {
+                          const addrParts = [
+                            selectedOrder.branch?.address || selectedOrder.agency?.address,
+                            selectedOrder.branch?.district || selectedOrder.agency?.district,
+                            selectedOrder.branch?.province || selectedOrder.agency?.province,
+                            selectedOrder.branch?.department || selectedOrder.agency?.department,
+                          ].filter(Boolean);
+                          if (addrParts.length === 0) return null;
+                          return (
+                            <p className="text-xs text-slate-500 pl-5">
+                              {addrParts.join(' - ')}
+                            </p>
+                          );
+                        })()}
+                      </div>
                     )}
                   </div>
                   <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
@@ -571,17 +591,16 @@ export default function WarehousePickingModule() {
                         <span className="text-slate-500">Pedido:</span>
                         <span className="font-bold text-slate-800">#PED-{selectedOrder.docSeries || ''}{selectedOrder.docNumber ? `-${selectedOrder.docNumber}` : selectedOrder.id}</span>
                       </div>
-                      {(selectedOrder.docSeries || selectedOrder.docNumber) && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <ScrollText className="w-4 h-4 text-slate-400 shrink-0" />
-                          <span className="text-slate-500">{selectedOrder.docType === '01' ? 'Factura' : 'Documento'}:</span>
-                          <span className="font-bold text-slate-800">{selectedOrder.docSeries || ''}{selectedOrder.docNumber ? `-${selectedOrder.docNumber}` : ''}</span>
-                        </div>
-                      )}
                       {selectedOrder.voucherNumber && (
                         <div className="flex items-center gap-2 text-sm">
                           <FileText className="w-4 h-4 text-slate-400 shrink-0" />
-                          <span className="text-slate-500">Comprobante:</span>
+                          <span className="text-slate-500">
+                            {String(selectedOrder.voucherNumber).toUpperCase().startsWith('B')
+                              ? 'Boleta:'
+                              : String(selectedOrder.voucherNumber).toUpperCase().startsWith('F')
+                                ? 'Factura:'
+                                : 'Comprobante:'}
+                          </span>
                           <span className="font-bold text-slate-800">{selectedOrder.voucherNumber}</span>
                         </div>
                       )}
@@ -597,13 +616,6 @@ export default function WarehousePickingModule() {
                           <Truck className="w-4 h-4 text-slate-400 shrink-0" />
                           <span className="text-slate-500">Guía Transportista:</span>
                           <span className="font-bold text-slate-800">{selectedOrder.carrierGuide}</span>
-                        </div>
-                      )}
-                      {selectedOrder.agency && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
-                          <span className="text-slate-500">Agencia:</span>
-                          <span className="font-bold text-slate-800">{selectedOrder.agency.name}</span>
                         </div>
                       )}
                     </div>

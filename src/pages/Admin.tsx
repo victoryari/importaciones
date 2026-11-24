@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, Package, Save, Image as ImageIcon, Settings as SettingsIcon, LogOut, Trash2, X, CheckCircle, AlertCircle, FileText, BarChart3, Star, ShoppingCart, Truck, DollarSign, User, MapPin, Hash, ArrowRightLeft, Building2, Users, ShieldCheck, PackageSearch, ChevronDown, Receipt } from 'lucide-react';
+import { LayoutDashboard, Package, Save, Image as ImageIcon, Settings as SettingsIcon, LogOut, Trash2, X, CheckCircle, AlertCircle, FileText, BarChart3, Star, ShoppingCart, Truck, DollarSign, User, MapPin, Hash, ArrowRightLeft, Building2, Users, ShieldCheck, PackageSearch, ChevronDown, Receipt, CreditCard, Landmark, FileSpreadsheet, Bell, Check, XCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { SettingsModule } from './admin/SettingsModule';
+import { KardexModule } from './admin/KardexModule';
+import { PaymentMethodModule } from './admin/PaymentMethodModule';
+import { BankAccountModule } from './admin/BankAccountModule';
 import { ExchangeRateModule } from './admin/ExchangeRateModule';
 import { LogisticsModule } from './admin/LogisticsModule';
 import { QuotationModule } from './admin/QuotationModule';
@@ -13,6 +16,7 @@ import { CustomerModule } from './admin/CustomerModule';
 import { DashboardModule } from './admin/DashboardModule';
 import { SellerModule } from './admin/SellerModule';
 import { WarehouseModule } from './admin/WarehouseModule';
+import { CarrierModule } from './admin/CarrierModule';
 import WarehousePickingModule from './admin/WarehousePickingModule';
 import { SeriesModule } from './admin/SeriesModule';
 import { InvoiceModule } from './admin/InvoiceModule';
@@ -42,6 +46,7 @@ import { SupplierForm } from './admin/forms/SupplierForm';
 import { TransferForm } from './admin/forms/TransferForm';
 import { MovementAssistantForm } from './admin/forms/MovementAssistantForm';
 import PaymentForm from './admin/forms/PaymentForm';
+import { PaymentModule, PaymentRecord } from './admin/PaymentModule';
 import { InvoiceForm } from './admin/forms/InvoiceForm';
 import { OrderDetailModal } from './admin/OrderDetailModal';
 import { formatFullCustomerAddress } from '../lib/utils';
@@ -52,8 +57,8 @@ import { getDeptId, getProvId, getDistId, resolveUbigeoInfo } from '../lib/ubige
 // --- Interfaces Globales Estrictas ---
 interface Category { id: number; name: string; slug: string; image?: string; isFeatured: boolean; _count?: { products: number }; }
 interface Brand { id: number; name: string; logo?: string; _count?: { products: number }; }
-interface Unit { id: number; name: string; symbol: string; }
-interface Product { id: number; code?: string; name: string; slug: string; weight?: number; volume?: number; description?: string; features?: string; sanitaryRegister?: string; certificate?: string; igv: number; costPrice: number; salePrice: number; minSalePrice?: number; maxSalePrice?: number; stock: number; images?: string[]; isActive: boolean; categoryId: number; category?: { name: string }; brandId?: number; brand?: { name: string }; unitId?: number; unit?: { name?: string; symbol?: string }; packageId?: number; package?: { name?: string; symbol?: string }; subPackageId?: number; subPackage?: { name?: string; symbol?: string }; quantityPerPackage?: number; quantityPerSubPackage?: number; showInWeb: boolean; manageLots: boolean; useExpiryDate: boolean; }
+interface Unit { id: number; name: string; symbol: string; sunatCode?: string; equivalence?: number; }
+interface Product { id: number; code?: string; name: string; slug: string; weight?: number; volume?: number; description?: string; features?: string; sanitaryRegister?: string; certificate?: string; brandCertificate?: string; igv: number; igvAffectationCode?: string; sunatProductCode?: string; costPrice: number; salePrice: number; minSalePrice?: number; maxSalePrice?: number; stock: number; images?: string[]; isActive: boolean; categoryId: number; category?: { name: string }; brandId?: number; brand?: { name: string }; lineId?: number; line?: { name: string }; colorId?: number; color?: { name: string; hexCode?: string }; unitId?: number; unit?: { name?: string; symbol?: string }; packageId?: number; package?: { name?: string; symbol?: string }; subPackageId?: number; subPackage?: { name?: string; symbol?: string }; quantityPerPackage?: number; quantityPerSubPackage?: number; showInWeb: boolean; manageLots: boolean; useExpiryDate: boolean; }
 interface Order { id: number; customerName: string; customerEmail?: string; customerPhone: string; totalAmount: number; status: string; createdAt: string; items: any[]; paymentStatus: string; }
 interface Customer { id: number; code?: string; name: string; personType: string; docType: string; docNumber: string; address?: string; phone?: string; email?: string; country: string; department?: string; province?: string; district?: string; firstName?: string; lastName?: string; }
 interface Quotation { id: number; customerName: string; totalAmount: number; status: string; createdAt: string; items: any[]; exchangeRate: number; docSeries?: string; docNumber?: string; customerDocNumber?: string; customerPhone?: string; customerAddress?: string; currency?: string; pickupPlace?: string; sellerId?: number; customerId?: number; }
@@ -64,6 +69,8 @@ export default function Admin() {
   // Estados de Datos
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [lines, setLines] = useState<any[]>([]);
+  const [colors, setColors] = useState<any[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -89,6 +96,7 @@ export default function Admin() {
   const [movements, setMovements] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [stockDetails, setStockDetails] = useState<any[]>([]);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
 
   // Estados de UI
   const [openTabs, setOpenTabs] = useState<{id: string, label: string}[]>([{ id: 'dashboard', label: 'Resumen' }]);
@@ -131,6 +139,7 @@ export default function Admin() {
   const [isAgencyModalOpen, setIsAgencyModalOpen] = useState(false);
   const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false);
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
+  const [isPurchaseGuideModalOpen, setIsPurchaseGuideModalOpen] = useState(false);
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isMovementAssistantOpen, setIsMovementAssistantOpen] = useState(false);
@@ -139,16 +148,17 @@ export default function Admin() {
   const [isReferralGuideModalOpen, setIsReferralGuideModalOpen] = useState(false);
   const [selectedOrderIdForGuide, setSelectedOrderIdForGuide] = useState<number | null>(null);
   const [referralGuideRefreshTrigger, setReferralGuideRefreshTrigger] = useState(0);
-  const [simpleModalType, setSimpleModalType] = useState<'categories' | 'brands' | 'units' | 'warehouses'>('categories');
+  const [simpleModalType, setSimpleModalType] = useState<'categories' | 'brands' | 'units' | 'warehouses' | 'lines' | 'colors'>('categories');
   const [logisticsTab, setLogisticsTab] = useState<'agencies' | 'zones'>('agencies');
 
   // Formularios iniciales
-  const initialSellerData = { name: '', dni: '', phone: '', email: '', warehouseId: '', isActive: true };
-  const initialProductData = { code: '', name: '', slug: '', weight: '', description: '', features: '', sanitaryRegister: '', certificate: '', igv: 18, costPrice: 0, salePrice: 0, profitMargin: 30, minSalePrice: 0, maxSalePrice: 0, stock: 0, categoryId: '', brandId: '', unitId: '', packageId: '', quantityPerPackage: 1, subPackageId: '', quantityPerSubPackage: 1, images: [], isActive: true, isFeatured: false, showInWeb: true, manageLots: false, useExpiryDate: false, isOnSale: false, discountPercent: '' };
+  const initialSellerData = { name: '', dni: '', phone: '', email: '', warehouseId: '', monthlyQuota: 0, isActive: true };
+  const initialProductData = { code: '', name: '', slug: '', weight: '', description: '', features: '', sanitaryRegister: '', certificate: '', brandCertificate: '', igv: 18, igvAffectationCode: '10', sunatProductCode: '', costPrice: 0, salePrice: 0, profitMargin: 30, minSalePrice: 0, maxSalePrice: 0, stock: 0, categoryId: '', brandId: '', lineId: '', colorId: '', unitId: '', packageId: '', quantityPerPackage: 1, subPackageId: '', quantityPerSubPackage: 1, images: [], isActive: true, isFeatured: false, showInWeb: true, manageLots: false, useExpiryDate: false, isOnSale: false, discountPercent: '' };
   const initialQuotationData = { 
     igvPercent: 18,
     docType: 'COT',
-    docSeries: '0005',
+    origin: 'ADMIN',
+    docSeries: '',
     docNumber: '',
     internalCode: '',
     date: new Date().toISOString().split('T')[0], 
@@ -177,7 +187,7 @@ export default function Admin() {
     includeIgv: true 
   };
   const initialCustomerData = { personType: 'NATURAL', docType: 'DNI', docNumber: '', firstName: '', secondName: '', lastName: '', surname: '', name: '', email: '', phone: '', address: '', country: 'PERU', department: '', province: '', district: '' };
-  const initialSimpleData = { name: '', slug: '', image: '', logo: '', symbol: '' };
+  const initialSimpleData = { name: '', slug: '', image: '', logo: '', symbol: '', sunatCode: 'NIU', equivalence: 1, hexCode: '' };
   const initialAgencyData = { name: '', ruc: '', address: '', legalAddress: '', phone: '', email: '', contact: '', department: '', province: '', district: '', zoneId: '', isActive: true, branches: [] };
   const initialSeriesData = { documentType: 'COT', series: '', currentNumber: 0, warehouseId: '', isActive: true };
   const initialInvoiceData = {
@@ -214,6 +224,12 @@ export default function Admin() {
     warehouseId: '', purchaseType: 'MERCADERIA', paymentCondition: 'CONTADO', creditDays: 0,
     observation: '', items: [] as any[]
   });
+  const [purchaseGuideFormData, setPurchaseGuideFormData] = useState({
+    supplierId: '', supplierName: '', docType: '09', docSeries: '', docNumber: '',
+    date: new Date().toISOString().split('T')[0], currency: 'PEN', exchangeRate: '1.00',
+    warehouseId: '', purchaseType: 'MERCADERIA', paymentCondition: 'CONTADO', creditDays: 0,
+    observation: '', items: [] as any[]
+  });
   const [supplierFormData, setSupplierFormData] = useState({
     name: '', docType: 'RUC', docNumber: '', address: '', phone: '', email: '', contact: ''
   });
@@ -226,6 +242,87 @@ export default function Admin() {
   const [quotationItems, setQuotationItems] = useState<any[]>([]);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [quotationTotal, setQuotationTotal] = useState(0);
+  const [authRequests, setAuthRequests] = useState<any[]>([]);
+  const [authPendingCount, setAuthPendingCount] = useState(0);
+  const [isSupervisorAuth, setIsSupervisorAuth] = useState(false);
+  const [isAuthNotifOpen, setIsAuthNotifOpen] = useState(false);
+
+  const loadAuthRequests = async () => {
+    if (!token) return;
+    try {
+      const res = await axios.get('/api/quotations/auth-requests', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAuthRequests(Array.isArray(res.data?.requests) ? res.data.requests : []);
+      setAuthPendingCount(Number(res.data?.pendingCount || 0));
+      setIsSupervisorAuth(Boolean(res.data?.isSupervisor));
+    } catch {
+      // ignore silent polling errors
+    }
+  };
+
+  useEffect(() => {
+    if (!token) return;
+    loadAuthRequests();
+    const timer = setInterval(loadAuthRequests, 10000);
+    return () => clearInterval(timer);
+  }, [token]);
+
+  useEffect(() => {
+    const handleEscKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+
+      // 1. Cerrar popover de notificaciones si está abierto
+      if (isAuthNotifOpen) {
+        e.preventDefault();
+        setIsAuthNotifOpen(false);
+        return;
+      }
+
+      // 2. Buscar overlays/modales visibles y cerrar el que está más arriba (mayor z-index / último en DOM)
+      const candidates = Array.from(document.querySelectorAll<HTMLElement>('div.fixed.inset-0, div.absolute.inset-0'))
+        .filter((el) => {
+          const style = window.getComputedStyle(el);
+          return style.display !== 'none' && style.visibility !== 'hidden' && el.getClientRects().length > 0;
+        })
+        .map((el, idx) => ({
+          el,
+          idx,
+          z: parseInt(window.getComputedStyle(el).zIndex || '0', 10) || 0
+        }))
+        .sort((a, b) => (b.z - a.z) || (b.idx - a.idx));
+
+      for (const { el } of candidates) {
+        const closeBtn =
+          el.querySelector<HTMLButtonElement>('button[aria-label*="Cerrar" i], button[title*="Cerrar" i]') ||
+          el.querySelector<HTMLButtonElement>('button:has(svg.lucide-x)') ||
+          Array.from(el.querySelectorAll<HTMLButtonElement>('button')).find(btn =>
+            /^(cerrar|cancelar|salir)$/i.test((btn.textContent || '').trim())
+          );
+        if (closeBtn && !closeBtn.disabled) {
+          e.preventDefault();
+          e.stopPropagation();
+          closeBtn.click();
+          return;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleEscKey);
+    return () => window.removeEventListener('keydown', handleEscKey);
+  }, [isAuthNotifOpen]);
+
+  const handleReviewAuthRequest = async (reqId: number, decision: 'APPROVED' | 'REJECTED') => {
+    try {
+      await axios.put(`/api/quotations/auth-requests/${reqId}/review`, { decision }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      await loadAuthRequests();
+      showSuccess(decision === 'APPROVED' ? 'Solicitud aprobada' : 'Solicitud rechazada');
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Error al procesar solicitud');
+    }
+  };
 
   useEffect(() => { fetchData(); }, []);
   useEffect(() => {
@@ -251,6 +348,42 @@ export default function Admin() {
 
   const showSuccess = (msg: string) => { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(''), 3000); };
   const showError = (msg: string) => { setErrorMsg(msg); setTimeout(() => setErrorMsg(''), 4000); };
+
+  const mapQuotationItemsForForm = (items: any[] = []) => items.map((i: any) => {
+    const prod = i.product || {};
+    const unitOptions: any[] = [];
+    if (prod.subPackage) {
+      unitOptions.push({ symbol: prod.subPackage.symbol, name: prod.subPackage.name, qtyPerBase: (prod.quantityPerSubPackage || 1) * (prod.quantityPerPackage || 1) });
+    }
+    if (prod.package) {
+      unitOptions.push({ symbol: prod.package.symbol, name: prod.package.name, qtyPerBase: prod.quantityPerPackage || 1 });
+    }
+    if (prod.unit) {
+      unitOptions.push({ symbol: prod.unit.symbol, name: prod.unit.name, qtyPerBase: 1 });
+    }
+    if (i.unitMeasure && !unitOptions.some((u: any) => u.symbol === i.unitMeasure)) {
+      unitOptions.unshift({ symbol: i.unitMeasure, name: i.unitMeasure, qtyPerBase: 1 });
+    }
+    return {
+      productId: i.productId,
+      name: prod.name || i.name || 'Producto',
+      code: prod.code || i.code || '',
+      price: Number(i.price || 0),
+      quantity: Number(i.quantity || 0),
+      discount: Number(i.discount || 0),
+      unit: prod.unit,
+      package: prod.package,
+      subPackage: prod.subPackage,
+      quantityPerPackage: prod.quantityPerPackage || 1,
+      quantityPerSubPackage: prod.quantityPerSubPackage || 1,
+      unitOptions,
+      unitMeasure: i.unitMeasure || prod.package?.symbol || prod.subPackage?.symbol || prod.unit?.symbol || 'UND',
+      lot: i.lotNumber || i.lot || null,
+      warehouseName: i.warehouseName || null,
+      expiryDate: i.expiryDate || null,
+      stockRecords: prod.stockRecords || []
+    };
+  });
 
   const handleResetQuotationForm = () => {
     setQuotationFormData(initialQuotationData);
@@ -345,7 +478,7 @@ export default function Admin() {
         '/api/orders', '/api/quotations', '/api/customers', '/api/shipping-agencies', 
         '/api/shipping-zones', '/api/sunat/TABLA_02', '/api/stats', '/api/exchange-rates',
         '/api/sellers', '/api/warehouses', '/api/sunat/TABLA_04', 
-        '/api/sunat/CAT_PAY', '/api/sunat/CAT_51', '/api/sunat/TABLA_12', '/api/sunat/TABLA_10', '/api/series', '/api/purchases', '/api/movements', '/api/suppliers', '/api/stock', '/api/document-types', '/api/invoices'
+        '/api/sunat/CAT_PAY', '/api/sunat/CAT_51', '/api/sunat/TABLA_12', '/api/sunat/TABLA_10', '/api/series', '/api/purchases', '/api/movements', '/api/suppliers', '/api/stock', '/api/document-types', '/api/invoices', '/api/payments', '/api/lines', '/api/colors'
       ];
       const responses = await Promise.all(endpoints.map(url => axios.get(url, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] }))));
       setCategories(responses[0].data); 
@@ -382,10 +515,16 @@ export default function Admin() {
       setStockDetails(responses[23].data);
       setSeriesDocTypes(responses[24].data);
       setInvoices(responses[25].data);
+      setPayments(responses[26].data);
+      setLines(responses[27].data);
+      setColors(responses[28].data);
       
       const todayRate = responses[11].data[0]?.sell_rate;
       if (todayRate) setQuotationFormData((prev: any) => ({ ...prev, exchangeRate: todayRate }));
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.error || 'Error al guardar');
+    } finally { setLoading(false); }
   };
 
   const getMediaUrl = (path: string) => {
@@ -409,7 +548,7 @@ export default function Admin() {
     console.log(`[FRONTEND] openForm called for type: ${type}`, item);
     setEditingItem(item);
     if (type === 'products') { setProductFormData(item || initialProductData); setIsProductModalOpen(true); }
-    else if (['categories', 'brands', 'units'].includes(type)) { 
+    else if (['categories', 'brands', 'units', 'lines', 'colors'].includes(type)) { 
       setSimpleModalType(type as any);
       setSimpleFormData(item || initialSimpleData);
       setIsSimpleModalOpen(true); 
@@ -471,7 +610,23 @@ export default function Admin() {
             series: matchingSeries ? matchingSeries.id.toString() : '',
             docSeries: matchingSeries ? matchingSeries.series : '',
           });
-          setQuotationItems(item.items?.map((i: any) => {
+          const invoicedByProduct = new Map<number, number>();
+          (item.invoices || []).forEach((inv: any) => {
+            if (['REJECTED', 'VOIDED', 'ANULADO'].includes(inv.sunatStatus)) return;
+            (inv.items || []).forEach((ii: any) => {
+              invoicedByProduct.set(ii.productId, (invoicedByProduct.get(ii.productId) || 0) + Number(ii.quantity || 0));
+            });
+          });
+
+          const remainingItems: any[] = [];
+          (item.items || []).forEach((i: any) => {
+            const orderedQty = Number(i.quantity || 0);
+            const alreadyInvoiced = invoicedByProduct.get(i.productId) || 0;
+            const toSubtract = Math.min(orderedQty, alreadyInvoiced);
+            invoicedByProduct.set(i.productId, Math.max(0, alreadyInvoiced - toSubtract));
+            const pendingQty = orderedQty - toSubtract;
+            if (pendingQty <= 0) return;
+
             const prod = i.product || {};
             const unitOptions: any[] = [];
             if (prod.subPackage) {
@@ -483,12 +638,12 @@ export default function Admin() {
             if (prod.unit) {
               unitOptions.push({ symbol: prod.unit.symbol, name: prod.unit.name, qtyPerBase: 1 });
             }
-            return {
+            remainingItems.push({
               productId: i.productId,
               name: prod.name || i.name || 'Producto',
               code: prod.code || i.code || '',
               price: Number(i.price || 0),
-              quantity: Number(i.quantity || 0),
+              quantity: pendingQty,
               discount: Number(i.discount || 0),
               unitOptions,
               unitMeasure: i.unitMeasure || prod.package?.symbol || prod.subPackage?.symbol || prod.unit?.symbol || 'UND',
@@ -497,8 +652,9 @@ export default function Admin() {
               isFree: i.isFree || i.isBonus || Number(i.price) === 0,
               referencePrice: Number(i.referencePrice || i.originalPrice || prod.salePrice || i.price || 0),
               unit: prod.unit || { symbol: 'UND' },
-            };
-          }) || []);
+            });
+          });
+          setQuotationItems(remainingItems);
         } else {
           // Edit existing invoice
           const matchingSeries = series.find(s => s.series === item.series && s.documentType === item.documentType);
@@ -555,46 +711,49 @@ export default function Admin() {
       console.log(`[FRONTEND] Setting purchase mode to: ${modeToSet}`);
       setPurchaseMode(modeToSet);
       
-      if (item) {
-        setPurchaseFormData({
-          ...item,
-          date: item.date?.split('T')[0] || new Date().toISOString().split('T')[0],
-          items: item.items?.map((i: any) => {
-            const isFree = Boolean(i.isFree);
-            const price = Number(i.price || 0);
-            const refPrice = Number(i.referencePrice || price || 0);
-            const valor = price / 1.18;
-            const refCost = refPrice / 1.18;
-            return {
-              productId: i.productId,
-              name: i.product?.name || i.name || 'Producto',
-              code: i.product?.code || i.code || '',
-              unitSymbol: i.unitSymbol || i.product?.package?.symbol || i.product?.subPackage?.symbol || i.product?.unit?.symbol || 'UND',
-              quantity: Number(i.quantity || 1),
-              price: price,
-              valorCompra: isFree ? 0 : Number(i.valorCompra || valor),
-              referenceCost: refCost,
-              referencePrice: refPrice,
-              isFree: isFree,
-              freeType: i.freeType || '14',
-              igv: isFree ? 0 : (price - valor),
-              lotNumber: i.lotNumber || '',
-              seriesNumber: i.seriesNumber || '',
-              expiryDate: i.expiryDate ? i.expiryDate.split('T')[0] : '',
-              entranceDate: i.entranceDate ? i.entranceDate.split('T')[0] : (i.expiryDate ? i.expiryDate.split('T')[0] : new Date().toISOString().split('T')[0]),
-              observation: i.observation || ''
-            };
-          }) || []
-        });
+      const nextData = item ? {
+        ...item,
+        date: item.date?.split('T')[0] || new Date().toISOString().split('T')[0],
+        items: item.items?.map((i: any) => {
+          const isFree = Boolean(i.isFree);
+          const price = Number(i.price || 0);
+          const refPrice = Number(i.referencePrice || price || 0);
+          const valor = price / 1.18;
+          const refCost = refPrice / 1.18;
+          return {
+            productId: i.productId,
+            name: i.product?.name || i.name || 'Producto',
+            code: i.product?.code || i.code || '',
+            unitSymbol: i.unitSymbol || i.product?.package?.symbol || i.product?.subPackage?.symbol || i.product?.unit?.symbol || 'UND',
+            quantity: Number(i.quantity || 1),
+            price: price,
+            valorCompra: isFree ? 0 : Number(i.valorCompra || valor),
+            referenceCost: refCost,
+            referencePrice: refPrice,
+            isFree: isFree,
+            freeType: i.freeType || '14',
+            igv: isFree ? 0 : (price - valor),
+            lotNumber: i.lotNumber || '',
+            seriesNumber: i.seriesNumber || '',
+            expiryDate: i.expiryDate ? i.expiryDate.split('T')[0] : '',
+            entranceDate: i.entranceDate ? i.entranceDate.split('T')[0] : (i.expiryDate ? i.expiryDate.split('T')[0] : new Date().toISOString().split('T')[0]),
+            observation: i.observation || ''
+          };
+        }) || []
+      } : {
+        supplierId: '', supplierName: '', docType: modeToSet === 'guides' ? '09' : '01', docSeries: '', docNumber: '',
+        date: new Date().toISOString().split('T')[0], currency: 'PEN', exchangeRate: '1.00',
+        warehouseId: '', purchaseType: 'MERCADERIA', paymentCondition: 'CONTADO', creditDays: 0,
+        observation: '', items: []
+      };
+
+      if (modeToSet === 'guides') {
+        setPurchaseGuideFormData(nextData);
+        setIsPurchaseGuideModalOpen(true);
       } else {
-        setPurchaseFormData({
-          supplierId: '', supplierName: '', docType: modeToSet === 'guides' ? '09' : '01', docSeries: '', docNumber: '',
-          date: new Date().toISOString().split('T')[0], currency: 'PEN', exchangeRate: '1.00',
-          warehouseId: '', purchaseType: 'MERCADERIA', paymentCondition: 'CONTADO', creditDays: 0,
-          observation: '', items: []
-        });
+        setPurchaseFormData(nextData);
+        setIsPurchaseModalOpen(true);
       }
-      setIsPurchaseModalOpen(true);
     }
     else if (type === 'suppliers') {
       setSupplierFormData(item || { name: '', docType: 'RUC', docNumber: '', address: '', phone: '', email: '', contact: '' });
@@ -625,44 +784,16 @@ export default function Admin() {
           customerId: item.customerId?.toString() || '',
           agencyId: item.agencyId?.toString() || '',
           docType: 'COT',
+          editToken: item._editToken || '',
           date: item.createdAt?.split('T')[0] || item.date || new Date().toISOString().split('T')[0],
           expiryDate: item.dueDate?.split('T')[0] || item.expiryDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         });
         
-        setQuotationItems(item.items?.map((i: any) => {
-          const prod = i.product || {};
-          const unitOptions: any[] = [];
-          if (prod.subPackage) {
-            unitOptions.push({ symbol: prod.subPackage.symbol, name: prod.subPackage.name, qtyPerBase: (prod.quantityPerSubPackage || 1) * (prod.quantityPerPackage || 1) });
-          }
-          if (prod.package) {
-            unitOptions.push({ symbol: prod.package.symbol, name: prod.package.name, qtyPerBase: prod.quantityPerPackage || 1 });
-          }
-          if (prod.unit) {
-            unitOptions.push({ symbol: prod.unit.symbol, name: prod.unit.name, qtyPerBase: 1 });
-          }
-          return {
-            productId: i.productId,
-            name: prod.name || i.name || 'Producto',
-            code: prod.code || i.code || '',
-            price: Number(i.price || 0),
-            quantity: Number(i.quantity || 0),
-            discount: Number(i.discount || 0),
-            unit: prod.unit,
-            package: prod.package,
-            subPackage: prod.subPackage,
-            quantityPerPackage: prod.quantityPerPackage || 1,
-            quantityPerSubPackage: prod.quantityPerSubPackage || 1,
-            unitOptions,
-            unitMeasure: i.unitMeasure || prod.package?.symbol || prod.subPackage?.symbol || prod.unit?.symbol || 'UND',
-            lot: i.lotNumber || i.lot || null,
-            warehouseName: i.warehouseName || null,
-            expiryDate: i.expiryDate || null,
-            stockRecords: prod.stockRecords || []
-          };
-        }) || []);
+        setQuotationItems(mapQuotationItemsForForm(item.items));
       } else {
         const matchedSeller = sellers.find(s => 
+          (user?.sellerId && s.id === user.sellerId) ||
+          (user?.id && s.userId === user.id) ||
           (user?.email && s.email?.toLowerCase() === user.email.toLowerCase()) ||
           (user?.name && (s.name?.toLowerCase().trim() === user.name.toLowerCase().trim() || user.name.toLowerCase().includes(s.name.toLowerCase().trim()))) ||
           (user?.warehouseId && s.warehouseId === user.warehouseId)
@@ -702,38 +833,7 @@ export default function Admin() {
           expiryDate: item.dueDate?.split('T')[0] || item.expiryDate || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         });
         
-        setQuotationItems(item.items?.map((i: any) => {
-          const prod = i.product || {};
-          const unitOptions: any[] = [];
-          if (prod.subPackage) {
-            unitOptions.push({ symbol: prod.subPackage.symbol, name: prod.subPackage.name, qtyPerBase: (prod.quantityPerSubPackage || 1) * (prod.quantityPerPackage || 1) });
-          }
-          if (prod.package) {
-            unitOptions.push({ symbol: prod.package.symbol, name: prod.package.name, qtyPerBase: prod.quantityPerPackage || 1 });
-          }
-          if (prod.unit) {
-            unitOptions.push({ symbol: prod.unit.symbol, name: prod.unit.name, qtyPerBase: 1 });
-          }
-          return {
-            productId: i.productId,
-            name: prod.name || i.name || 'Producto',
-            code: prod.code || i.code || '',
-            price: Number(i.price || 0),
-            quantity: Number(i.quantity || 0),
-            discount: Number(i.discount || 0),
-            unit: prod.unit,
-            package: prod.package,
-            subPackage: prod.subPackage,
-            quantityPerPackage: prod.quantityPerPackage || 1,
-            quantityPerSubPackage: prod.quantityPerSubPackage || 1,
-            unitOptions,
-            unitMeasure: i.unitMeasure || prod.package?.symbol || prod.subPackage?.symbol || prod.unit?.symbol || 'UND',
-            lot: i.lotNumber || i.lot || null,
-            warehouseName: i.warehouseName || null,
-            expiryDate: i.expiryDate || null,
-            stockRecords: prod.stockRecords || []
-          };
-        }) || []);
+        setQuotationItems(mapQuotationItemsForForm(item.items));
       } else {
         const matchedSeller = sellers.find(s => 
           (user?.email && s.email?.toLowerCase() === user.email.toLowerCase()) ||
@@ -775,7 +875,10 @@ export default function Admin() {
       const url = editingItem ? `/api/${simpleModalType}/${editingItem.id}` : `/api/${simpleModalType}`;
       await axios({ method: editingItem ? 'PUT' : 'POST', url, data: simpleFormData, headers: { Authorization: `Bearer ${token}` } });
       showSuccess('Guardado correctamente'); setIsSimpleModalOpen(false); fetchData();
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.error || 'Error al guardar');
+    } finally { setLoading(false); }
   };
 
   const handleSubmitProduct = async (e: any) => {
@@ -812,7 +915,10 @@ export default function Admin() {
       const url = editingItem ? `/api/sellers/${editingItem.id}` : '/api/sellers';
       await axios({ method: editingItem ? 'PUT' : 'POST', url, data: sellerFormData, headers: { Authorization: `Bearer ${token}` } });
       showSuccess('Vendedor guardado'); setIsSellerModalOpen(false); fetchData();
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.error || 'Error al guardar');
+    } finally { setLoading(false); }
   };
 
   const handleSubmitWarehouse = async (e: any) => {
@@ -850,7 +956,10 @@ export default function Admin() {
       const url = editingItem ? `/api/shipping-agencies/${editingItem.id}` : '/api/shipping-agencies';
       await axios({ method: editingItem ? 'PUT' : 'POST', url, data: agencyFormData, headers: { Authorization: `Bearer ${token}` } });
       showSuccess('Agencia guardada'); setIsAgencyModalOpen(false); fetchData();
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.error || 'Error al guardar');
+    } finally { setLoading(false); }
   };
 
   const handleSubmitQuotation = async (e: any) => {
@@ -891,25 +1000,26 @@ export default function Admin() {
         dueDate: quotationFormData.expiryDate,
         items: quotationItems, 
         totalAmount: quotationTotal,
-        warehouseStatus: editingItem?.warehouseStatus || null
+        warehouseStatus: quotationFormData.warehouseStatus || null
       };
       const isOrder = quotationFormData.docType === 'PED';
+      const existingId = quotationFormData.id;
       
       let url = '';
       let method = 'POST';
       
       if (isOrder) {
-        if (editingItem && editingItem.docType === 'PED') {
-          url = `/api/orders/${editingItem.id}`;
+        if (existingId) {
+          url = `/api/orders/${existingId}`;
           method = 'PUT';
         } else {
           url = '/api/orders';
           method = 'POST';
-          if (editingItem) payload.quotationId = editingItem.id;
+          if (quotationFormData.quotationId) payload.quotationId = quotationFormData.quotationId;
         }
       } else {
-        if (editingItem && editingItem.docType !== 'PED') {
-          url = `/api/quotations/${editingItem.id}`;
+        if (existingId) {
+          url = `/api/quotations/${existingId}`;
           method = 'PUT';
         } else {
           url = '/api/quotations';
@@ -923,7 +1033,14 @@ export default function Admin() {
       setIsOrderModalOpen(false);
       fetchData();
       
-      if (isOrder) handleOpenTab('orders', 'Pedidos');
+      if (isOrder) {
+        handleOpenTab('orders', 'Pedidos');
+        const isCashOrder = (quotationFormData.paymentCondition || 'CONTADO').toUpperCase() === 'CONTADO';
+        if (!existingId && isCashOrder && res.data?.id) {
+          setSelectedOrderForPayment({ ...res.data, payments: res.data.payments || [] });
+          setIsPaymentModalOpen(true);
+        }
+      }
     } catch (err: any) { 
       console.error(err);
       alert(err.response?.data?.error || 'Error al guardar la cotización'); 
@@ -1051,6 +1168,24 @@ export default function Admin() {
       fetchData();
     } catch (err: any) {
       alert(err.response?.data?.error || 'Error al eliminar pago');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdatePayment = async (paymentId: number, data: any) => {
+    setLoading(true);
+    try {
+      await axios.put(`/api/payments/${paymentId}`, data, { headers: { Authorization: `Bearer ${token}` } });
+      showSuccess('Cobro actualizado');
+      if (selectedOrderForPayment) {
+        const res = await axios.get(`/api/orders/${selectedOrderForPayment.id}`, { headers: { Authorization: `Bearer ${token}` } });
+        setSelectedOrderForPayment(res.data);
+      }
+      await fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Error al actualizar cobro');
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -1262,14 +1397,14 @@ export default function Admin() {
             title="Haga clic para ver y editar su perfil de usuario"
           >
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-linear-to-tr from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center font-black text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform shrink-0">
+              <div className="w-8 h-8 bg-[#004A99] rounded-lg flex items-center justify-center font-bold text-white shadow-xs group-hover:bg-[#003B7A] transition-colors duration-150 shrink-0">
                 {user?.name ? user.name.charAt(0).toUpperCase() : 'C'}
               </div>
               <div className="flex-1 min-w-0">
-                <span className="font-bold text-slate-800 text-sm tracking-tight block truncate group-hover:text-blue-600 transition-colors">
-                  Panel Admin
+                <span className="font-bold text-slate-900 text-sm tracking-tight block truncate group-hover:text-[#004A99] transition-colors duration-150">
+                  Panel de Administración
                 </span>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider truncate">
+                <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider truncate">
                   {user?.name || 'Administrador'}
                 </p>
               </div>
@@ -1277,19 +1412,20 @@ export default function Admin() {
           </div>
           {/* --- MENU AGRUPADO --- */}
           {/* Resumen (standalone) */}
-          <button onClick={() => handleOpenTab('dashboard', 'Resumen')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all ${activeTabId === 'dashboard' ? 'bg-sky-500 text-white font-semibold shadow-md shadow-sky-100' : 'text-slate-600 hover:bg-slate-50'}`}><LayoutDashboard className="w-5 h-5" /> Resumen</button>
+          <button onClick={() => handleOpenTab('dashboard', 'Resumen')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm transition-colors duration-150 ${activeTabId === 'dashboard' ? 'bg-[#004A99] text-white font-semibold shadow-xs' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'}`}><LayoutDashboard className="w-4 h-4 shrink-0" /> Resumen</button>
 
           {/* Ventas */}
           <div className="space-y-0.5">
-            <button onClick={() => setCollapsedSections(prev => ({...prev, ventas: !prev.ventas}))} className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
+            <button onClick={() => setCollapsedSections(prev => ({...prev, ventas: !prev.ventas}))} className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors duration-150">
               Ventas
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsedSections.ventas ? '-rotate-90' : ''}`} />
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${collapsedSections.ventas ? '-rotate-90' : ''}`} />
             </button>
             {!collapsedSections.ventas && (
               <div className="space-y-0.5 pl-2">
                 {[
                   { id: 'quotations', icon: FileText, label: 'Cotizaciones', permission: 'VIEW_QUOTATIONS' },
                   { id: 'orders', icon: ShoppingCart, label: 'Pedidos', permission: 'VIEW_ORDERS' },
+                  { id: 'payments', icon: DollarSign, label: 'Cobros y Adelantos', permission: 'VIEW_ORDERS' },
                   { id: 'invoices', icon: Receipt, label: 'Facturación', permission: 'VIEW_ORDERS' },
                   { id: 'customers', icon: Star, label: 'Clientes', permission: 'VIEW_CUSTOMERS' },
                   { id: 'sellers', icon: User, label: 'Vendedores', permission: 'VIEW_SELLERS' },
@@ -1297,7 +1433,7 @@ export default function Admin() {
                   const hasAccess = item.permission ? hasPermission?.(item.permission) : true;
                   if (!hasAccess) return null;
                   return (
-                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all ${activeTabId === item.id ? 'bg-sky-500 text-white font-semibold shadow-md shadow-sky-100' : 'text-slate-600 hover:bg-slate-50'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
+                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-3.5 py-2 rounded-lg text-sm transition-colors duration-150 ${activeTabId === item.id ? 'bg-[#004A99] text-white font-semibold shadow-xs' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'}`}><item.icon className="w-4 h-4 shrink-0" /> {item.label}</button>
                   );
                 })}
               </div>
@@ -1305,24 +1441,25 @@ export default function Admin() {
           </div>
 
           {/* Productos (standalone) */}
-          <button onClick={() => handleOpenTab('products', 'Productos')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all ${activeTabId === 'products' || ['categories', 'brands', 'units'].includes(activeTabId) ? 'bg-sky-500 text-white font-semibold shadow-md shadow-sky-100' : 'text-slate-600 hover:bg-slate-50'}`}><Package className="w-5 h-5" /> Productos</button>
+          <button onClick={() => handleOpenTab('products', 'Productos')} className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm transition-colors duration-150 ${activeTabId === 'products' || ['categories', 'brands', 'units'].includes(activeTabId) ? 'bg-[#004A99] text-white font-semibold shadow-xs' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'}`}><Package className="w-4 h-4 shrink-0" /> Productos</button>
 
           {/* Compras */}
           <div className="space-y-0.5">
-            <button onClick={() => setCollapsedSections(prev => ({...prev, compras: !prev.compras}))} className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
+            <button onClick={() => setCollapsedSections(prev => ({...prev, compras: !prev.compras}))} className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors duration-150">
               Compras
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsedSections.compras ? '-rotate-90' : ''}`} />
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${collapsedSections.compras ? '-rotate-90' : ''}`} />
             </button>
             {!collapsedSections.compras && (
               <div className="space-y-0.5 pl-2">
                 {[
                   { id: 'purchases', icon: ShoppingCart, label: 'Compras', permission: 'VIEW_PURCHASES' },
+                  { id: 'purchase-guides', icon: FileText, label: 'Guías de Compra', permission: 'VIEW_PURCHASES' },
                   { id: 'suppliers', icon: Building2, label: 'Proveedores', permission: 'VIEW_SUPPLIERS' },
                 ].map(item => {
                   const hasAccess = item.permission ? hasPermission?.(item.permission) : true;
                   if (!hasAccess) return null;
                   return (
-                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all ${activeTabId === item.id ? 'bg-sky-500 text-white font-semibold shadow-md shadow-sky-100' : 'text-slate-600 hover:bg-slate-50'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
+                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-3.5 py-2 rounded-lg text-sm transition-colors duration-150 ${activeTabId === item.id ? 'bg-[#004A99] text-white font-semibold shadow-xs' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'}`}><item.icon className="w-4 h-4 shrink-0" /> {item.label}</button>
                   );
                 })}
               </div>
@@ -1331,9 +1468,9 @@ export default function Admin() {
 
           {/* Logística */}
           <div className="space-y-0.5">
-            <button onClick={() => setCollapsedSections(prev => ({...prev, logistica: !prev.logistica}))} className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
+            <button onClick={() => setCollapsedSections(prev => ({...prev, logistica: !prev.logistica}))} className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors duration-150">
               Logística
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsedSections.logistica ? '-rotate-90' : ''}`} />
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${collapsedSections.logistica ? '-rotate-90' : ''}`} />
             </button>
             {!collapsedSections.logistica && (
               <div className="space-y-0.5 pl-2">
@@ -1341,14 +1478,16 @@ export default function Admin() {
                   { id: 'referral-guides', icon: FileText, label: 'Guías de Remisión', permission: 'VIEW_LOGISTICS' },
                   { id: 'picking', icon: PackageSearch, label: 'Picking / Almacén', permission: 'VIEW_PICKING' },
                   { id: 'inventory', icon: BarChart3, label: 'Inventario / Stock', permission: 'VIEW_INVENTORY' },
+                  { id: 'kardex', icon: FileSpreadsheet, label: 'Kardex SUNAT', permission: 'VIEW_INVENTORY' },
                   { id: 'warehouses', icon: MapPin, label: 'Almacenes / Sedes', permission: 'VIEW_WAREHOUSES' },
+                  { id: 'carriers', icon: Truck, label: 'Transportistas', permission: 'VIEW_LOGISTICS' },
                   { id: 'shipping', icon: Truck, label: 'Agencias', permission: 'VIEW_LOGISTICS' },
                   { id: 'logistics', icon: Truck, label: 'Config. Logística', permission: 'VIEW_LOGISTICS' },
                 ].map(item => {
                   const hasAccess = item.permission ? hasPermission?.(item.permission) : true;
                   if (!hasAccess) return null;
                   return (
-                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all ${activeTabId === item.id ? 'bg-sky-500 text-white font-semibold shadow-md shadow-sky-100' : 'text-slate-600 hover:bg-slate-50'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
+                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-3.5 py-2 rounded-lg text-sm transition-colors duration-150 ${activeTabId === item.id ? 'bg-[#004A99] text-white font-semibold shadow-xs' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'}`}><item.icon className="w-4 h-4 shrink-0" /> {item.label}</button>
                   );
                 })}
               </div>
@@ -1357,15 +1496,17 @@ export default function Admin() {
 
           {/* General */}
           <div className="space-y-0.5">
-            <button onClick={() => setCollapsedSections(prev => ({...prev, general: !prev.general}))} className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
+            <button onClick={() => setCollapsedSections(prev => ({...prev, general: !prev.general}))} className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wider text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors duration-150">
               General
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${collapsedSections.general ? '-rotate-90' : ''}`} />
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${collapsedSections.general ? '-rotate-90' : ''}`} />
             </button>
             {!collapsedSections.general && (
               <div className="space-y-0.5 pl-2">
                 {[
                   { id: 'exchange-rates', icon: DollarSign, label: 'T. Cambio', permission: 'VIEW_EXCHANGE_RATES' },
                   { id: 'series', icon: Hash, label: 'Series', permission: 'VIEW_SERIES' },
+                  { id: 'payment-methods', icon: CreditCard, label: 'Métodos de Pago', permission: 'VIEW_SETTINGS' },
+                  { id: 'bank-accounts', icon: Landmark, label: 'Bancos / Cuentas', permission: 'VIEW_SETTINGS' },
                   { id: 'settings', icon: SettingsIcon, label: 'Ajustes', permission: 'VIEW_SETTINGS' },
                   { id: 'users', icon: Users, label: 'Usuarios', permission: 'ALL' },
                   { id: 'roles', icon: ShieldCheck, label: 'Roles', permission: 'ALL' },
@@ -1373,33 +1514,140 @@ export default function Admin() {
                   const hasAccess = item.permission ? hasPermission?.(item.permission) : true;
                   if (!hasAccess) return null;
                   return (
-                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all ${activeTabId === item.id ? 'bg-sky-500 text-white font-semibold shadow-md shadow-sky-100' : 'text-slate-600 hover:bg-slate-50'}`}><item.icon className="w-4 h-4" /> {item.label}</button>
+                    <button key={item.id} onClick={() => handleOpenTab(item.id, item.label)} className={`w-full flex items-center gap-3 px-3.5 py-2 rounded-lg text-sm transition-colors duration-150 ${activeTabId === item.id ? 'bg-[#004A99] text-white font-semibold shadow-xs' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'}`}><item.icon className="w-4 h-4 shrink-0" /> {item.label}</button>
                   );
                 })}
               </div>
             )}
           </div>
-          <div className="pt-6 mt-6 border-t border-slate-100"><button onClick={logout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50/50 transition-colors"><LogOut className="w-5 h-5" />Cerrar Sesión</button></div>
+          <div className="pt-4 mt-4 border-t border-slate-200"><button onClick={logout} className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors duration-150"><LogOut className="w-4 h-4 shrink-0" />Cerrar Sesión</button></div>
         </aside>
 
-        <main className="flex-1 min-w-0 flex flex-col h-full bg-[#f8fafc] rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
-          {/* Tab Bar */}
-          <div className="flex items-center gap-2 px-4 pt-4 pb-0 bg-white border-b border-slate-100 overflow-x-auto custom-scrollbar shrink-0">
-            {openTabs.map(tab => (
+        <main className="flex-1 min-w-0 flex flex-col h-full bg-[#F8FAFC] rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+          {/* Tab Bar + Notification Bell */}
+          <div className="flex items-center justify-between gap-2 px-4 pt-3 pb-0 bg-white border-b border-slate-200 shrink-0">
+            <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar min-w-0">
+              {openTabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTabId(tab.id)}
+                  className={`group flex items-center gap-2 px-3.5 py-2 rounded-t-lg text-sm font-semibold border-b-2 transition-colors duration-150 whitespace-nowrap ${activeTabId === tab.id ? 'border-[#004A99] text-[#004A99] bg-[#F8FAFC]' : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
+                >
+                  {tab.label}
+                  {tab.id !== 'dashboard' && (
+                    <X 
+                      aria-label={`Cerrar pestaña ${tab.label}`}
+                      className={`w-3.5 h-3.5 transition-colors duration-150 rounded p-0.5 ${activeTabId === tab.id ? 'text-slate-500 hover:text-white hover:bg-red-600' : 'opacity-0 group-hover:opacity-100 text-slate-500 hover:text-white hover:bg-red-600'}`} 
+                      onClick={(e) => handleCloseTab(tab.id, e)} 
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative pb-2 shrink-0">
               <button
-                key={tab.id}
-                onClick={() => setActiveTabId(tab.id)}
-                className={`group flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTabId === tab.id ? 'border-sky-500 text-sky-500 bg-[#f8fafc]' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
+                type="button"
+                onClick={() => { setIsAuthNotifOpen(prev => !prev); loadAuthRequests(); }}
+                className={`relative p-2 rounded-lg border transition-colors cursor-pointer ${
+                  authPendingCount > 0
+                    ? (isSupervisorAuth ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100' : 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100')
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+                title={isSupervisorAuth ? 'Solicitudes de autorización de cotizaciones' : 'Estado de mis solicitudes de autorización'}
               >
-                {tab.label}
-                {tab.id !== 'dashboard' && (
-                  <X 
-                    className={`w-3.5 h-3.5 transition-all rounded-full p-0.5 ${activeTabId === tab.id ? 'text-sky-400 hover:text-white hover:bg-red-500' : 'opacity-0 group-hover:opacity-100 hover:text-white hover:bg-red-500'}`} 
-                    onClick={(e) => handleCloseTab(tab.id, e)} 
-                  />
+                <Bell className="w-4 h-4" />
+                {authPendingCount > 0 && (
+                  <span className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black text-white flex items-center justify-center shadow-sm ${
+                    isSupervisorAuth ? 'bg-red-600' : 'bg-emerald-600'
+                  }`}>
+                    {authPendingCount}
+                  </span>
                 )}
               </button>
-            ))}
+
+              {isAuthNotifOpen && (
+                <div className="absolute right-0 top-full mt-1.5 w-96 max-w-[90vw] bg-white rounded-2xl shadow-2xl border border-slate-200 z-[120] overflow-hidden">
+                  <div className="px-4 py-3 bg-[#004A99] text-white flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-tight">
+                        {isSupervisorAuth ? 'Solicitudes de Autorización' : 'Mis Solicitudes'}
+                      </h4>
+                      <p className="text-[10px] text-blue-200">
+                        {isSupervisorAuth ? 'Aprueba o rechaza ediciones y pases a pedido' : 'Estado de permisos solicitados'}
+                      </p>
+                    </div>
+                    <button type="button" onClick={() => setIsAuthNotifOpen(false)} className="p-1 hover:bg-white/10 rounded cursor-pointer">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                    {authRequests.length === 0 ? (
+                      <p className="py-8 text-center text-xs text-slate-400">No hay solicitudes registradas</p>
+                    ) : (
+                      authRequests.map(reqItem => (
+                        <div key={reqItem.id} className="p-3 space-y-2 hover:bg-slate-50/60">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-800 truncate">
+                                {isSupervisorAuth ? reqItem.requestedByName : (reqItem.quotation?.sellerName || 'Cotización')}
+                              </p>
+                              <p className="text-[11px] text-slate-600 font-medium">
+                                {reqItem.action === 'CONVERT' ? 'Pasar a Pedido' : 'Editar'} •{' '}
+                                <span className="px-1.5 py-0.5 rounded bg-blue-50 text-[#004A99] font-black text-[10px] mr-1">
+                                  {reqItem.quotation?.docType || 'COT'}
+                                </span>
+                                <span className="font-mono font-bold text-[#004A99]">
+                                  {reqItem.quotation?.docSeries}-{reqItem.quotation?.docNumber}
+                                </span>
+                              </p>
+                              <p className="text-[10px] text-slate-500 truncate">
+                                Cliente: {reqItem.quotation?.customerName}
+                              </p>
+                              <p className="text-[10px] text-slate-400 font-medium">
+                                Solicitado: {reqItem.createdAt ? new Date(reqItem.createdAt).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                                {reqItem.quotation?.createdAt ? ` · Doc: ${new Date(reqItem.quotation.createdAt).toLocaleDateString('es-PE')}` : ''}
+                              </p>
+                              {reqItem.reason && (
+                                <p className="text-[10px] text-slate-600 italic mt-0.5">"{reqItem.reason}"</p>
+                              )}
+                            </div>
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase shrink-0 ${
+                              reqItem.status === 'PENDING' ? 'bg-amber-100 text-amber-800' :
+                              reqItem.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-700' :
+                              reqItem.status === 'CONSUMED' ? 'bg-blue-100 text-blue-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>
+                              {reqItem.status === 'PENDING' ? 'Pendiente' :
+                               reqItem.status === 'APPROVED' ? 'Aprobada' :
+                               reqItem.status === 'CONSUMED' ? 'Usada' : 'Rechazada'}
+                            </span>
+                          </div>
+                          {isSupervisorAuth && reqItem.status === 'PENDING' && (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleReviewAuthRequest(reqItem.id, 'REJECTED')}
+                                className="px-2.5 py-1 bg-red-50 hover:bg-red-600 text-red-700 hover:text-white border border-red-200 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                <XCircle className="w-3.5 h-3.5" /> Rechazar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleReviewAuthRequest(reqItem.id, 'APPROVED')}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                <Check className="w-3.5 h-3.5" /> Aprobar
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Content Area */}
@@ -1409,8 +1657,8 @@ export default function Admin() {
               return (
                 <div key={tab.id} className="absolute inset-0 overflow-y-auto" style={{ display: activeTabId === tab.id ? 'block' : 'none', zIndex: activeTabId === tab.id ? 10 : 0 }}>
                   <div className="p-4 md:p-8">
-                    {currentTab === 'dashboard' && <DashboardModule stats={stats} onNavigate={(v: any) => handleOpenTab(v, 'Módulo')} />}
-                    {['products', 'categories', 'brands', 'units'].includes(currentTab) && <ProductModule products={products} categories={categories} brands={brands} units={units} onDelete={(t,id)=>handleDelete(t,id)} onEdit={openForm} onNew={openForm} />}
+                    {currentTab === 'dashboard' && <DashboardModule stats={stats} token={token} onNavigate={(v: any, label?: string) => handleOpenTab(v, label || 'Módulo')} />}
+                    {['products', 'categories', 'brands', 'units'].includes(currentTab) && <ProductModule products={products} categories={categories} brands={brands} lines={lines} colors={colors} units={units} onDelete={(t,id)=>handleDelete(t,id)} onEdit={openForm} onNew={openForm} />}
                     {currentTab === 'quotations' && (
                       <QuotationModule 
                         quotations={quotations} 
@@ -1423,6 +1671,8 @@ export default function Admin() {
                             ...q,
                             id: undefined,
                             quotationId: q.id,
+                            editToken: (q as any)._editToken || '',
+                            origin: (q.docSeries === 'WEB1' || (q as any).origin === 'WEB') ? 'WEB' : 'ADMIN',
                             docType: 'PED',
                             docSeries: '', // Resetear serie para que elija una de pedido
                             docNumber: '', // Resetear número
@@ -1431,7 +1681,12 @@ export default function Admin() {
                             address: q.customerAddress,
                             date: new Date().toISOString().split('T')[0],
                             expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                            pickupPlace: q.pickupPlace || '',
+                            pickupPlace: (() => {
+                              const raw = String(q.pickupPlace || '').trim();
+                              if (!raw) return '';
+                              const matchedWh = warehouses.find((w: any) => String(w.id) === raw || w.name.toUpperCase() === raw.toUpperCase());
+                              return matchedWh ? String(matchedWh.id) : raw;
+                            })(),
                             sellerId: q.sellerId?.toString() || '',
                             customerId: q.customerId?.toString() || '',
                           });
@@ -1450,12 +1705,60 @@ export default function Admin() {
                             stockRecords: i.product?.stockRecords || []
                           })) || []);
                           setIsQuotationModalOpen(true);
-                        }} 
+                        }}
+                        onClone={(q) => {
+                          setEditingItem(null);
+                          setQuotationFormData({
+                            ...initialQuotationData,
+                            ...q,
+                            id: undefined,
+                            quotationId: undefined,
+                            origin: 'ADMIN',
+                            status: 'PENDING',
+                            billingStatus: 'SIN FACTURAR',
+                            docType: 'COT',
+                            docSeries: '',
+                            docNumber: '',
+                            seriesId: '',
+                            warehouseId: (q as any).warehouseId?.toString() || (user?.warehouseId ? user.warehouseId.toString() : ''),
+                            ruc: q.customerDocNumber || (q as any).ruc || '',
+                            razonSocial: q.customerName || (q as any).razonSocial || '',
+                            address: q.customerAddress || (q as any).address || '',
+                            observation: (q as any).notes || (q as any).observation || '',
+                            flete: (q as any).shippingCost || (q as any).flete || 0,
+                            igvPercent: (q as any).igvPercent || 18,
+                            pickupPlace: q.pickupPlace?.toString() || '',
+                            currency: q.currency || '1',
+                            sellerId: q.sellerId?.toString() || '',
+                            customerId: q.customerId?.toString() || '',
+                            agencyId: (q as any).agencyId?.toString() || '',
+                            branchId: (q as any).branchId?.toString() || '',
+                            operationType: (q as any).operationType || '10',
+                            date: new Date().toISOString().split('T')[0],
+                            expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                          });
+                          setQuotationItems(mapQuotationItemsForForm(q.items));
+                          setIsQuotationModalOpen(true);
+                        }}
                         onReset={handleResetQuotation}
                         sunatCurrencies={sunatCurrencies}
+                        sellers={sellers}
                       />
                     )}
-                    {currentTab === 'orders' && <OrderModule orders={orders} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => handleOpenTab('referral-guides', 'Guías de Remisión')} onEdit={(o) => openForm('orders', o)} onOpenPayment={handleOpenPayment} onNewDirectOrder={() => { handleResetQuotationForm(); setQuotationFormData(prev => ({...prev, docType: 'PED'})); setIsOrderModalOpen(true); }} onCancelDispatch={(id) => { if (confirm('¿Anular despacho? Se revertirá el stock y el pedido volverá a "Preparado" en picking.')) { axios.put(`/api/orders/${id}/status`, {status: 'PREPARING'}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData).catch(err => alert(err.response?.data?.error || 'Error al anular despacho')); } }} onCancelPayment={(id) => { if (confirm('¿Anular cobro? Se eliminarán los pagos y se devolverá el stock a los almacenes originales.')) { axios.post(`/api/orders/${id}/cancel-payment`, {}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData).catch(err => alert(err.response?.data?.error || 'Error al anular cobro')); } }} onGenerateInvoice={(o) => openForm('invoices', {...o, docType: 'PED'})} onViewDetail={(o) => { setOrderDetail(o); setIsOrderDetailOpen(true); }} />}
+                    {currentTab === 'orders' && <OrderModule orders={orders} sellers={sellers} onUpdateStatus={(id, s) => axios.put(`/api/orders/${id}/status`, {status:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onDelete={(id) => handleDelete('orders', id)} onViewGuide={() => handleOpenTab('referral-guides', 'Guías de Remisión')} onEdit={(o) => openForm('orders', o)} onOpenPayment={handleOpenPayment} onNewDirectOrder={() => { handleResetQuotationForm(); setQuotationFormData(prev => ({...prev, docType: 'PED'})); setIsOrderModalOpen(true); }} onCancelDispatch={(id) => { if (confirm('¿Anular despacho? Se revertirá el stock y el pedido volverá a "Preparado" en picking.')) { axios.put(`/api/orders/${id}/status`, {status: 'PREPARING'}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData).catch(err => alert(err.response?.data?.error || 'Error al anular despacho')); } }} onGenerateInvoice={(o) => openForm('invoices', {...o, docType: 'PED'})} onViewDetail={(o) => { setOrderDetail(o); setIsOrderDetailOpen(true); }} />}
+                    {currentTab === 'payments' && (
+                      <PaymentModule
+                        payments={payments}
+                        onDeletePayment={handleDeletePayment}
+                        onUpdatePayment={handleUpdatePayment}
+                        exchangeRates={exchangeRates}
+                        onOpenOrderPayment={(orderId) => {
+                          const found = orders.find((o: any) => o.id === orderId);
+                          if (found) handleOpenPayment(found);
+                        }}
+                        onRefresh={fetchData}
+                      />
+                    )}
                     {currentTab === 'inventory' && <InventoryModule products={products} stockDetails={stockDetails} movements={movements} onUpdateStock={(pid, s) => axios.put(`/api/products/${pid}/stock`, {stock:s}, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} onEdit={(p) => openForm('products', p)} onOpenAssistant={() => setIsMovementAssistantOpen(true)} token={token} onRefresh={fetchData} />}
                     {currentTab === 'customers' && <CustomerModule customers={customers} onEdit={(c) => openForm('customers', c)} onNew={() => openForm('customers')} onDelete={(id) => handleDelete('customers', id)} departments={[]} />}
                     {currentTab === 'exchange-rates' && <ExchangeRateModule token={token} exchangeRates={exchangeRates} onDelete={(id) => handleDelete('exchange-rates', id)} onSave={(d) => axios.post('/api/exchange-rates', d, {headers:{Authorization:`Bearer ${token}`}}).then(fetchData)} loading={loading} isActive={activeTabId === tab.id} />}
@@ -1482,6 +1785,17 @@ export default function Admin() {
                     {currentTab === 'invoices' && <InvoiceModule invoices={invoices} documentTypes={seriesDocTypes} onEdit={(inv) => openForm('invoices', inv)} onNew={() => openForm('invoices')} onDelete={(id) => handleDelete('invoices', id)} token={token} onRefresh={fetchData} />}
                     {currentTab === 'purchases' && (
                       <PurchaseModule 
+                        mode="invoices"
+                        token={token || undefined} 
+                        onNew={(mode) => openForm('purchases', null, mode)} 
+                        onEdit={(p, mode) => openForm('purchases', p, mode)}
+                        onDelete={(id) => handleDelete('purchases', id)}
+                        purchases={purchases} 
+                      />
+                    )}
+                    {currentTab === 'purchase-guides' && (
+                      <PurchaseModule 
+                        mode="guides"
                         token={token || undefined} 
                         onNew={(mode) => openForm('purchases', null, mode)} 
                         onEdit={(p, mode) => openForm('purchases', p, mode)}
@@ -1490,7 +1804,11 @@ export default function Admin() {
                       />
                     )}
                     {currentTab === 'suppliers' && <SupplierModule token={token} onNew={() => openForm('suppliers')} onEdit={(s) => openForm('suppliers', s)} suppliers={suppliers} />}
+                    {currentTab === 'carriers' && <CarrierModule token={token} onRefresh={fetchData} />}
                     {currentTab === 'settings' && <SettingsModule token={token} />}
+                    {currentTab === 'payment-methods' && <PaymentMethodModule token={token} />}
+                    {currentTab === 'bank-accounts' && <BankAccountModule token={token} />}
+                    {currentTab === 'kardex' && <KardexModule token={token} products={products} warehouses={warehouses} />}
                     {currentTab === 'users' && <UserModule />}
                     {currentTab === 'roles' && <RoleModule />}
                     {currentTab === 'profile' && (
@@ -1552,7 +1870,7 @@ export default function Admin() {
           </div>
 
           <div style={{ display: ['products', 'categories', 'brands', 'units'].includes(activeTabId) ? 'block' : 'none' }}>
-            <ProductForm isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)} onSubmit={handleSubmitProduct} formData={productFormData} setFormData={setProductFormData} editingItem={editingItem} loading={loading} categories={categories} brands={brands} units={units} handleFileUpload={handleFileUpload} setLoading={setLoading} token={token || undefined} />
+            <ProductForm isOpen={isProductModalOpen} onClose={() => setIsProductModalOpen(false)} onSubmit={handleSubmitProduct} formData={productFormData} setFormData={setProductFormData} editingItem={editingItem} loading={loading} categories={categories} brands={brands} lines={lines} colors={colors} units={units} handleFileUpload={handleFileUpload} setLoading={setLoading} token={token || undefined} />
           </div>
 
           <div style={{ display: activeTabId === 'shipping' ? 'block' : 'none' }}>
@@ -1564,11 +1882,11 @@ export default function Admin() {
           </div>
 
           <div style={{ display: activeTabId === 'customers' || isCustomerModalOpen ? 'block' : 'none' }}>
-            <CustomerForm isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} onSubmit={handleSubmitCustomer} formData={customerFormData} setFormData={setCustomerFormData} editingItem={editingItem} loading={loading} documentTypes={documentTypes} handleConsultDocument={handleConsultDocument} />
+            <CustomerForm isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} onSubmit={handleSubmitCustomer} formData={customerFormData} setFormData={setCustomerFormData} editingItem={editingItem} loading={loading} documentTypes={documentTypes} handleConsultDocument={handleConsultDocument} customers={customers} token={token} onAssociationChange={fetchData} />
           </div>
 
           <div style={{ display: activeTabId === 'sellers' ? 'block' : 'none' }}>
-            <SellerForm isOpen={isSellerModalOpen} onClose={() => setIsSellerModalOpen(false)} onSubmit={handleSubmitSeller} formData={sellerFormData} setFormData={setSellerFormData} loading={loading} isEditing={!!editingItem} warehouses={warehouses} />
+            <SellerForm isOpen={isSellerModalOpen} onClose={() => setIsSellerModalOpen(false)} onSubmit={handleSubmitSeller} formData={sellerFormData} setFormData={setSellerFormData} loading={loading} isEditing={!!editingItem} warehouses={warehouses} series={series} token={token} />
           </div>
 
           <div style={{ display: ['products', 'categories', 'brands', 'units', 'warehouses'].includes(activeTabId) ? 'block' : 'none' }}>
@@ -1621,7 +1939,7 @@ export default function Admin() {
             />
           </div>
 
-          <div style={{ display: activeTabId === 'orders' ? 'block' : 'none' }}>
+          <div style={{ display: ['orders', 'payments'].includes(activeTabId) ? 'block' : 'none' }}>
             <OrderDetailModal
               isOpen={isOrderDetailOpen}
               onClose={() => setIsOrderDetailOpen(false)}
@@ -1630,27 +1948,27 @@ export default function Admin() {
           </div>
 
           <div style={{ display: activeTabId === 'purchases' ? 'block' : 'none' }}>
-            {purchaseMode === 'guides' ? (
-              <ReferralGuideForm 
-                isOpen={isPurchaseModalOpen}
-                onClose={() => setIsPurchaseModalOpen(false)}
-                onSuccess={() => { setIsPurchaseModalOpen(false); fetchData(); showSuccess('Guía de Ingreso registrada'); }}
-                token={token}
-                formData={purchaseFormData}
-                setFormData={setPurchaseFormData}
-              />
-            ) : (
-              <PurchaseEntryForm 
-                isOpen={isPurchaseModalOpen}
-                onClose={() => setIsPurchaseModalOpen(false)}
-                onSuccess={() => { setIsPurchaseModalOpen(false); fetchData(); showSuccess('Compra registrada correctamente'); }}
-                token={token}
-                formData={purchaseFormData}
-                setFormData={setPurchaseFormData}
-                mode={purchaseMode}
-                productsList={products}
-              />
-            )}
+            <PurchaseEntryForm 
+              isOpen={isPurchaseModalOpen}
+              onClose={() => setIsPurchaseModalOpen(false)}
+              onSuccess={() => { setIsPurchaseModalOpen(false); fetchData(); showSuccess('Compra registrada correctamente'); }}
+              token={token}
+              formData={purchaseFormData}
+              setFormData={setPurchaseFormData}
+              mode="invoices"
+              productsList={products}
+            />
+          </div>
+
+          <div style={{ display: activeTabId === 'purchase-guides' ? 'block' : 'none' }}>
+            <ReferralGuideForm 
+              isOpen={isPurchaseGuideModalOpen}
+              onClose={() => setIsPurchaseGuideModalOpen(false)}
+              onSuccess={() => { setIsPurchaseGuideModalOpen(false); fetchData(); showSuccess('Guía de Ingreso registrada'); }}
+              token={token}
+              formData={purchaseGuideFormData}
+              setFormData={setPurchaseGuideFormData}
+            />
           </div>
 
           <div style={{ display: activeTabId === 'suppliers' ? 'block' : 'none' }}>
@@ -1694,7 +2012,7 @@ export default function Admin() {
             />
           </div>
 
-          <div style={{ display: activeTabId === 'orders' ? 'block' : 'none' }}>
+          <div style={{ display: ['orders', 'payments'].includes(activeTabId) ? 'block' : 'none' }}>
             <OrderForm 
               isOpen={isOrderModalOpen}
               onClose={() => setIsOrderModalOpen(false)}
@@ -1735,7 +2053,7 @@ export default function Admin() {
             />
           </div>
 
-          <div style={{ display: activeTabId === 'orders' ? 'block' : 'none' }}>
+          <div style={{ display: ['orders', 'payments'].includes(activeTabId) ? 'block' : 'none' }}>
             <PaymentForm 
               isOpen={isPaymentModalOpen}
               onClose={() => setIsPaymentModalOpen(false)}
@@ -1743,10 +2061,11 @@ export default function Admin() {
               onSubmit={handleSubmitPayment}
               onDeletePayment={handleDeletePayment}
               loading={loading}
+              exchangeRates={exchangeRates}
             />
           </div>
 
-          <div style={{ display: activeTabId === 'referral-guides' || isReferralGuideModalOpen ? 'block' : 'none' }}>
+          <div style={{ display: activeTabId === 'referral-guides' ? 'block' : 'none' }}>
             <SalesReferralGuideForm
               isOpen={isReferralGuideModalOpen}
               onClose={() => setIsReferralGuideModalOpen(false)}

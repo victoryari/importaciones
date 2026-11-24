@@ -8,6 +8,9 @@ interface User {
   role?: string;
   warehouseId?: number | null;
   warehouse?: { id: number; name: string; sunatCode?: string } | null;
+  sellerId?: number | null;
+  quotationSeries?: string | null;
+  orderSeries?: string | null;
   permissions?: string[];
 }
 

@@ -20,6 +20,7 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
   const [activeSubTab, setActiveSubTab] = useState<'general' | 'products' | 'ads'>('general');
   
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const docLogoInputRef = useRef<HTMLInputElement>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -322,9 +323,9 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
               <h3 className="text-xs uppercase tracking-tight">Identidad Gráfica y Recursos Visuales</h3>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-600 uppercase">Logotipo Principal de la Empresa</label>
+                <label className="text-[10px] font-bold text-slate-600 uppercase">Logotipo Principal (Ecommerce)</label>
                 <div className="flex gap-2">
                   <input 
                     type="text" 
@@ -348,6 +349,36 @@ export const SettingsModule = ({ token }: SettingsModuleProps) => {
                   <div className="mt-2 p-2 border border-slate-200 rounded bg-slate-50 flex justify-center relative group">
                     <img src={settings.company_logo} alt="Logo Preview" className="h-12 object-contain" />
                     <button onClick={() => handleChange('company_logo', '')} className="absolute top-1 right-1 p-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"><Trash2 className="w-3 h-3" /></button>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-600 uppercase">Logotipo para Documentos PDF</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={settings.document_logo || ''} 
+                    onChange={(e) => handleChange('document_logo', e.target.value)}
+                    className="h-8 flex-1 px-2 rounded border border-slate-300 text-xs focus:border-blue-500 outline-none bg-white"
+                    placeholder="Opcional (usa el principal si está vacío)..."
+                  />
+                  <input type="file" ref={docLogoInputRef} className="hidden" accept="image/*" onChange={(e) => handleUpload(e, 'document_logo')} />
+                  <button 
+                    type="button"
+                    onClick={() => docLogoInputRef.current?.click()}
+                    disabled={uploading === 'document_logo'}
+                    className="h-8 px-3 bg-slate-100 border border-slate-300 hover:bg-slate-200 rounded text-xs font-bold uppercase flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    {uploading === 'document_logo' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 text-slate-700" />}
+                    Subir
+                  </button>
+                </div>
+                <p className="text-[9px] text-slate-400">Se muestra en Cotizaciones, Facturas y Guías. Si está vacío, usa el logo principal.</p>
+                {settings.document_logo && (
+                  <div className="mt-2 p-2 border border-slate-200 rounded bg-slate-50 flex justify-center relative group">
+                    <img src={settings.document_logo} alt="Logo PDF Preview" className="h-12 object-contain" />
+                    <button onClick={() => handleChange('document_logo', '')} className="absolute top-1 right-1 p-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors"><Trash2 className="w-3 h-3" /></button>
                   </div>
                 )}
               </div>

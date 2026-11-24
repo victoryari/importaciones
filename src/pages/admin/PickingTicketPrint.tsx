@@ -4,6 +4,8 @@ interface PickingItem {
   id: number;
   quantity: number;
   unitMeasure?: string;
+  lotNumber?: string;
+  warehouseName?: string;
   price: number;
   discount: number;
   product: {
@@ -22,11 +24,16 @@ interface PickingOrder {
   customerAddress?: string;
   docNumber?: string;
   docSeries?: string;
+  voucherNumber?: string;
+  referralGuide?: string;
+  carrierGuide?: string;
   createdAt: string;
   picker?: { name: string } | null;
   pickingStartedAt?: string;
   items: PickingItem[];
   notes?: string;
+  agency?: { id: number; name: string; address?: string | null; department?: string | null; province?: string | null; district?: string | null } | null;
+  branch?: { id: number; address?: string | null; department?: string | null; province?: string | null; district?: string | null } | null;
 }
 
 export default function PickingTicketPrint({ order }: { order: PickingOrder }) {
@@ -41,6 +48,22 @@ export default function PickingTicketPrint({ order }: { order: PickingOrder }) {
 
     const totalQty = order.items.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
 
+    const voucherLabel = order.voucherNumber
+      ? (String(order.voucherNumber).toUpperCase().startsWith('B')
+        ? 'BOLETA:'
+        : String(order.voucherNumber).toUpperCase().startsWith('F')
+          ? 'FACTURA:'
+          : 'COMPROBANTE:')
+      : '';
+
+    const agencyAddrParts = [
+      order.branch?.address || order.agency?.address,
+      order.branch?.district || order.agency?.district,
+      order.branch?.province || order.agency?.province,
+      order.branch?.department || order.agency?.department,
+    ].filter(Boolean);
+    const agencyAddressStr = agencyAddrParts.join(' - ');
+
     const itemRows = order.items.map((item, i) => {
       const unit = (item.unitMeasure || item.product?.package?.symbol || item.product?.subPackage?.symbol || item.product?.unit?.symbol || 'UND').toUpperCase();
       return `
@@ -48,10 +71,12 @@ export default function PickingTicketPrint({ order }: { order: PickingOrder }) {
           <td style="text-align:center;padding:4px 2px;border-bottom:1px dashed #555;font-size:11px;font-weight:bold;width:22px;vertical-align:top">${i + 1}</td>
           <td style="padding:4px 4px;border-bottom:1px dashed #555;font-size:11px;vertical-align:top">
             <div style="font-weight:bold;font-size:12px;color:#000;line-height:1.2">${item.product?.name || 'Producto'}</div>
-            <div style="font-size:10px;color:#444;margin-top:2px">
+            <div style="font-size:10px;color:#333;margin-top:2px">
               ${item.product?.code ? `<span style="font-family:monospace;font-weight:bold">[${item.product.code}]</span> ` : ''}
               <span>${unit}</span>
+              ${item.lotNumber ? `<span> · Lote: <strong>${item.lotNumber}</strong></span>` : ''}
             </div>
+            ${item.warehouseName ? `<div style="font-size:9.5px;color:#444;font-weight:bold;margin-top:1px">${item.warehouseName}</div>` : ''}
           </td>
           <td style="text-align:right;padding:4px 2px;border-bottom:1px dashed #555;font-size:12px;font-weight:bold;width:55px;vertical-align:top;white-space:nowrap">
             ${item.quantity} <span style="font-size:10px;color:#222">${unit}</span>
@@ -150,6 +175,31 @@ export default function PickingTicketPrint({ order }: { order: PickingOrder }) {
           <div class="info-row">
             <span class="info-label">DIRECCIÓN:</span>
             <span class="info-val" style="font-size:9.5px;text-align:right;max-width:52mm">${order.customerAddress}</span>
+          </div>` : ''}
+          ${order.agency ? `
+          <div class="info-row">
+            <span class="info-label">AGENCIA:</span>
+            <span class="info-val" style="font-size:9.5px;text-align:right;max-width:52mm">${order.agency.name}</span>
+          </div>` : ''}
+          ${agencyAddressStr ? `
+          <div class="info-row">
+            <span class="info-label">DIR. AGENCIA:</span>
+            <span class="info-val" style="font-size:9px;text-align:right;max-width:50mm">${agencyAddressStr}</span>
+          </div>` : ''}
+          ${order.voucherNumber ? `
+          <div class="info-row">
+            <span class="info-label">${voucherLabel}</span>
+            <span class="info-val">${order.voucherNumber}</span>
+          </div>` : ''}
+          ${order.referralGuide ? `
+          <div class="info-row">
+            <span class="info-label">GUÍA REMISIÓN:</span>
+            <span class="info-val">${order.referralGuide}</span>
+          </div>` : ''}
+          ${order.carrierGuide ? `
+          <div class="info-row">
+            <span class="info-label">GUÍA TRANSP.:</span>
+            <span class="info-val">${order.carrierGuide}</span>
           </div>` : ''}
           <div class="divider"></div>
           <div class="info-row">

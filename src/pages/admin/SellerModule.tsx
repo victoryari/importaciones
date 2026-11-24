@@ -10,6 +10,14 @@ interface Seller {
   email: string;
   isActive: boolean;
   warehouseId?: number | null;
+  userId?: number | null;
+  quotationSeries?: string | null;
+  orderSeries?: string | null;
+  user?: {
+    id: number;
+    name?: string | null;
+    email: string;
+  } | null;
   warehouse?: {
     id: number;
     name: string;
@@ -76,7 +84,7 @@ export const SellerModule: React.FC<SellerModuleProps> = ({ sellers, onEdit, onN
               <thead>
                 <tr className="bg-slate-50/50 border-b border-slate-100 text-[10px] uppercase tracking-wider font-black text-slate-400">
                   <th className="px-6 py-4">Vendedor / DNI</th>
-                  <th className="px-6 py-4">Sede / Almacén Asignado</th>
+                  <th className="px-6 py-4">Sede / Series</th>
                   <th className="px-6 py-4">Teléfono</th>
                   <th className="px-6 py-4">Correo</th>
                   <th className="px-6 py-4 text-center">Estado</th>
@@ -98,14 +106,26 @@ export const SellerModule: React.FC<SellerModuleProps> = ({ sellers, onEdit, onN
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      {seller.warehouse ? (
-                        <span className="inline-flex items-center gap-1.5 font-bold text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
-                          <Building2 className="w-3.5 h-3.5 text-emerald-600" />
-                          [{seller.warehouse.sunatCode || '0000'}] {seller.warehouse.name}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-400 italic">Multisede / General</span>
-                      )}
+                      <div className="flex flex-col gap-1">
+                        {seller.warehouse ? (
+                          <span className="inline-flex items-center gap-1.5 font-bold text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-lg w-fit">
+                            <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                            [{seller.warehouse.sunatCode || '0000'}] {seller.warehouse.name}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400 italic">Multisede / General</span>
+                        )}
+                        {(seller.quotationSeries || seller.orderSeries) && (
+                          <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold">
+                            {seller.quotationSeries && (
+                              <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">COT: {seller.quotationSeries}</span>
+                            )}
+                            {seller.orderSeries && (
+                              <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">PED: {seller.orderSeries}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       {seller.phone ? (

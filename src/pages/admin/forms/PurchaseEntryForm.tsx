@@ -25,7 +25,7 @@ interface PurchaseFormProps {
 const DEFAULT_PURCHASE_DOC_TYPES = [
   { code: '01', name: 'Factura' },
   { code: '03', name: 'Boleta de Venta' },
-  { code: '50', name: 'Declaración Única de Aduanas - Importación definitiva' },
+  { code: '50', name: 'DUA' },
   { code: '02', name: 'Recibo por Honorarios' },
   { code: '00', name: 'Otros' }
 ];
@@ -166,7 +166,10 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
       setDocTypes(filteredDocs.length > 0 ? filteredDocs : DEFAULT_PURCHASE_DOC_TYPES);
       setCurrencies(Array.isArray(cRes.data) ? cRes.data : []);
       
-      const defaultWh = whs.find((w: any) => w.name.toUpperCase().includes('COMPRAS IMP/NAC'))?.id?.toString();
+      const defaultWh = whs.find((w: any) => {
+        const name = (w.name || '').toUpperCase();
+        return name.includes('COMPRAS NAC') || name.includes('COMPRAS IMP') || (w.type === 'TRANSITORIO' && name.includes('COMPRAS'));
+      })?.id?.toString();
       
       setFormData((prev: any) => ({ 
         ...prev, 
@@ -177,7 +180,7 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
         warehouseId: prev.warehouseId || defaultWh || '',
         items: prev.items || [],
         afectoIgv: prev.afectoIgv ?? false,
-        preciosIncluyenIgv: prev.preciosIncluyenIgv ?? true,
+        preciosIncluyenIgv: prev.preciosIncluyenIgv ?? false,
         purchaseType: prev.purchaseType || 'MERCADERIA',
         paymentCondition: prev.paymentCondition || 'CONTADO',
         creditDays: prev.creditDays ?? 0,
@@ -201,27 +204,19 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
           supplierId: guideData.supplierId.toString(),
           referenceId: guideData.id.toString(),
           items: guideData.items.map((it: any) => {
-            const price = it.price || 0;
-            const valor = formData.afectoIgv 
-              ? (formData.preciosIncluyenIgv ? price / 1.18 : price)
-              : price;
-            const igv = formData.afectoIgv 
-              ? (formData.preciosIncluyenIgv ? price - valor : valor * 0.18)
-              : 0;
-
             return {
               productId: it.productId,
               name: it.product?.name || it.name || 'PRODUCTO SIN NOMBRE',
               code: it.product?.code || it.code || 'S/C',
               unitSymbol: it.unitSymbol || it.product?.package?.symbol || it.product?.subPackage?.symbol || it.product?.unit?.symbol || 'UND',
               quantity: it.quantity,
-              price: formData.afectoIgv ? (formData.preciosIncluyenIgv ? price : valor + igv) : valor,
-              valorCompra: valor,
-              referenceCost: valor,
-              referencePrice: formData.afectoIgv ? (formData.preciosIncluyenIgv ? price : valor + igv) : valor,
+              price: 0,
+              valorCompra: 0,
+              referenceCost: 0,
+              referencePrice: 0,
               isFree: Boolean(it.isFree),
               freeType: it.freeType || '14',
-              igv: igv,
+              igv: 0,
               lotNumber: it.lotNumber || '',
               expiryDate: it.expiryDate || '',
               entranceDate: it.expiryDate ? new Date(it.expiryDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
@@ -232,8 +227,8 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
       } else {
         alert('No se encontró la guía especificada');
       }
-    } catch (err) {
-      alert('Error al consultar la guía');
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Error al consultar la guía');
     } finally {
       setLoading(false);
     }
@@ -376,7 +371,11 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
         ...formData,
         supplierName: formData.supplierName || (supp ? supp.name : '')
       };
-      await axios.post('/api/purchases', payload, config);
+      if (formData.id) {
+        await axios.put(`/api/purchases/${formData.id}`, payload, config);
+      } else {
+        await axios.post('/api/purchases', payload, config);
+      }
       onSuccess();
     } catch (err: any) {
       console.error(err);
@@ -503,24 +502,28 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                     )}
                   </div>
 
-                  <div className="md:col-span-2 space-y-1">
+                  <div className="md:col-span-3 space-y-1">
                     <label className="text-[10px] font-bold text-slate-600 uppercase">Tipo Documento</label>
                     <select 
                       value={formData.docType || '01'} 
                       onChange={e => setFormData({...formData, docType: e.target.value})} 
                       className="w-full h-8 px-2 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800 focus:border-blue-500 outline-none"
                     >
-                      {docTypes.map(d => <option key={d.code} value={d.code}>{d.code} | {d.name}</option>)}
+                      {docTypes.map(d => (
+                        <option key={d.code} value={d.code}>
+                          {d.code} | {d.code === '50' ? (d.sigla || 'DUA') : d.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
-                  <div className="md:col-span-2 space-y-1">
+                  <div className="md:col-span-1 space-y-1">
                     <label className="text-[10px] font-bold text-slate-600 uppercase">Serie</label>
                     <input 
-                      placeholder="F001 / E001" 
+                      placeholder="F001" 
                       value={formData.docSeries || ''} 
                       onChange={e => setFormData({...formData, docSeries: e.target.value.toUpperCase()})} 
-                      className="w-full h-8 px-2 border border-slate-300 rounded text-xs font-bold font-mono text-center uppercase focus:border-blue-500 outline-none bg-white" 
+                      className="w-full h-8 px-1.5 border border-slate-300 rounded text-xs font-bold font-mono text-center uppercase focus:border-blue-500 outline-none bg-white" 
                       required
                     />
                   </div>
@@ -529,8 +532,14 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                     <label className="text-[10px] font-bold text-slate-600 uppercase">Número</label>
                     <input 
                       placeholder="00001234" 
+                      maxLength={8}
                       value={formData.docNumber || ''} 
-                      onChange={e => setFormData({...formData, docNumber: e.target.value})} 
+                      onChange={e => setFormData({...formData, docNumber: e.target.value.replace(/\D/g, '').slice(0, 8)})} 
+                      onBlur={() => {
+                        if (formData.docNumber && String(formData.docNumber).trim()) {
+                          setFormData({ ...formData, docNumber: String(formData.docNumber).replace(/\D/g, '').padStart(8, '0') });
+                        }
+                      }}
                       className="w-full h-8 px-2 border border-slate-300 rounded text-xs font-bold font-mono text-center focus:border-blue-500 outline-none bg-white" 
                       required
                     />
@@ -558,7 +567,11 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                         onChange={e => setFormData({...formData, currency: e.target.value})} 
                         className="w-full h-8 px-1.5 border border-slate-300 rounded text-xs font-bold text-blue-900 bg-white focus:border-blue-500 outline-none"
                       >
-                        {currencies.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+                        {currencies.map(c => (
+                          <option key={c.code} value={c.code}>
+                            {c.sigla || (c.code === 'PEN' ? 'SOLES' : c.code === 'USD' ? 'DÓLARES' : (c.name || c.code).toUpperCase())}
+                          </option>
+                        ))}
                       </select>
                       <input 
                         value={formData.exchangeRate || ''} 
@@ -686,8 +699,14 @@ export const PurchaseEntryForm: React.FC<PurchaseFormProps> = ({
                   />
                   <input 
                     placeholder="NÚMERO" 
+                    maxLength={8}
                     value={formData.guideNumber || ''} 
-                    onChange={e => setFormData({...formData, guideNumber: e.target.value})} 
+                    onChange={e => setFormData({...formData, guideNumber: e.target.value.replace(/\D/g, '').slice(0, 8)})} 
+                    onBlur={() => {
+                      if (formData.guideNumber && String(formData.guideNumber).trim()) {
+                        setFormData({ ...formData, guideNumber: String(formData.guideNumber).replace(/\D/g, '').padStart(8, '0') });
+                      }
+                    }}
                     className="w-24 h-7 border border-slate-300 rounded px-2 text-xs font-mono font-bold text-center bg-white focus:border-blue-500 outline-none" 
                   />
                   <button 

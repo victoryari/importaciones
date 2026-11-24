@@ -49,19 +49,20 @@ export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({
   const getWarehouseStock = (product: any, whId: number | string) => {
     if (!product.stockRecords || !whId) return 0;
     const targetId = parseInt(whId.toString());
-    const record = product.stockRecords.find((r: any) => r.warehouseId === targetId);
-    return record ? record.quantity : 0;
+    return product.stockRecords
+      .filter((r: any) => r.warehouseId === targetId)
+      .reduce((acc: number, r: any) => acc + (Number(r.quantity) || 0), 0);
   };
 
   const calculateTotalStock = (product: any) => {
-    if (!product.stockRecords) return product.stock || 0;
+    if (!product.stockRecords) return Number(product.stock) || 0;
     return product.stockRecords.reduce((acc: number, record: any) => {
       const whType = record.warehouse?.type?.toUpperCase() || '';
       const whName = record.warehouse?.name?.toUpperCase() || '';
       const isInternal = ['TRANSITORIO', 'DESPACHO', 'COMPROBANTES', 'SISTEMA', 'CONTROL', 'EXISTENCIAS'].includes(whType) || 
-                       whName.includes('DESPACHO') || whName.includes('COMPROBANTE') || whName.includes('TRANSITO') || whName.includes('EXISTENCIAS');
+                       whName.includes('DESPACHO') || whName.includes('COMPROBANTE') || whName.includes('TRANSITO') || whName.includes('COMPRAS') || whName.includes('EXISTENCIAS');
       if (isInternal) return acc;
-      return acc + record.quantity;
+      return acc + (Number(record.quantity) || 0);
     }, 0);
   };
 
@@ -124,8 +125,8 @@ export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({
                       <th className="px-2 py-1.5 font-bold text-slate-400 uppercase tracking-wider w-10">Foto</th>
                       <th className="px-2 py-1.5 font-bold text-slate-400 uppercase tracking-wider w-8">Cod.</th>
                       <th className="px-2 py-1.5 font-bold text-slate-400 uppercase tracking-wider">Producto</th>
-                      <th className="px-2 py-1.5 font-bold text-slate-400 uppercase tracking-wider text-center w-28">
-                        Stock {selectedWhName ? `(${selectedWhName})` : ''}
+                      <th className="px-2 py-1.5 font-bold text-slate-400 uppercase tracking-wider text-center w-44">
+                        Stock
                       </th>
                       <th className="px-2 py-1.5 font-bold text-slate-400 uppercase tracking-wider text-right w-24">Costo</th>
                       <th className="px-2 py-1.5 font-bold text-slate-400 uppercase tracking-wider text-center w-20"></th>
@@ -168,16 +169,56 @@ export const ProductSearchModal: React.FC<ProductSearchModalProps> = ({
                             <div className="text-[9px] text-slate-400">{product.category?.name} {product.brand?.name ? `• ${product.brand.name}` : ''}</div>
                           </td>
                           <td className="px-2 py-2 text-center">
-                            <div className="flex flex-col items-center gap-0.5">
-                              <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold ${whStock > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>
-                                {whStock} {product.unit?.symbol || 'un.'}
-                              </span>
-                              {selectedWarehouseId && otherStock > 0 && (
-                                <span className="text-[8px] font-medium text-slate-400 bg-slate-100 px-1 py-0.2 rounded" title={`Stock en otras sedes: ${otherStock}`}>
-                                  +{otherStock} en otras sedes
-                                </span>
-                              )}
-                            </div>
+                            {(() => {
+                              let majorSymbol = product.unit?.symbol || 'un.';
+                              if (product.package) {
+                                majorSymbol = product.package.symbol || product.package.abbreviation || majorSymbol;
+                              } else if (product.subPackage) {
+                                majorSymbol = product.subPackage.symbol || product.subPackage.abbreviation || majorSymbol;
+                              }
+
+                              const whMap = new Map<string, number>();
+                              for (const record of (product.stockRecords || [])) {
+                                const whType = record.warehouse?.type?.toUpperCase() || '';
+                                const whName = record.warehouse?.name || '';
+                                const whNameUpper = whName.toUpperCase();
+                                const isInternal = ['TRANSITORIO', 'DESPACHO', 'COMPROBANTES', 'SISTEMA', 'CONTROL', 'EXISTENCIAS'].includes(whType) ||
+                                  whNameUpper.includes('DESPACHO') ||
+                                  whNameUpper.includes('COMPROBANTE') ||
+                                  whNameUpper.includes('TRANSITO') ||
+                                  whNameUpper.includes('COMPRAS') ||
+                                  whNameUpper.includes('EXISTENCIAS');
+                                if (isInternal) continue;
+                                const qty = Number(record.quantity) || 0;
+                                if (qty <= 0) continue;
+                                const label = whName || `Almacén #${record.warehouseId}`;
+                                whMap.set(label, (whMap.get(label) || 0) + qty);
+                              }
+                              const warehouseBreakdown = Array.from(whMap.entries());
+
+                              return (
+                                <div className="flex flex-col items-center gap-1">
+                                  <span
+                                    className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold tabular-nums ${totalStock > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-600 border border-rose-200'}`}
+                                    title={`Stock total disponible: ${totalStock} ${majorSymbol}`}
+                                  >
+                                    {totalStock} {majorSymbol}
+                                  </span>
+                                  {warehouseBreakdown.length > 0 && (
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      {warehouseBreakdown.map(([name, qty]) => (
+                                        <span
+                                          key={name}
+                                          className="text-[9px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded tabular-nums whitespace-nowrap"
+                                        >
+                                          {name}: <strong className="text-slate-800">{qty}</strong> {majorSymbol}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="px-2 py-2 text-right font-bold text-slate-700 text-xs">
                             S/ {Number(product.costPrice || product.salePrice || 0).toFixed(2)}

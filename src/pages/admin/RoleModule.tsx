@@ -24,14 +24,20 @@ const AVAILABLE_PERMISSIONS = [
   { id: 'VIEW_DASHBOARD', label: 'Ver Panel Principal' },
   { id: 'VIEW_PRODUCTS', label: 'Ver Productos / Catálogo' },
   { id: 'WRITE_PRODUCTS', label: 'Gestionar Productos' },
-  { id: 'VIEW_INVENTORY', label: 'Ver Inventario / Stock' },
-  { id: 'WRITE_INVENTORY', label: 'Modificar Inventario' },
+  { id: 'VIEW_INVENTORY', label: 'Ver Inventario / Stock y Kardex' },
+  { id: 'WRITE_INVENTORY', label: 'Modificar Inventario (Total)' },
+  { id: 'WRITE_TRANSFERS', label: 'Realizar Transferencias y Movimientos' },
+  { id: 'WRITE_ENTRY_NOTES', label: 'Gestionar Notas de Ingreso' },
+  { id: 'WRITE_EXIT_NOTES', label: 'Gestionar Notas de Salida' },
   { id: 'VIEW_QUOTATIONS', label: 'Ver Cotizaciones' },
   { id: 'WRITE_QUOTATIONS', label: 'Crear/Editar Cotizaciones' },
-  { id: 'VIEW_ORDERS', label: 'Ver Pedidos' },
-  { id: 'WRITE_ORDERS', label: 'Crear/Editar Pedidos' },
-  { id: 'VIEW_PURCHASES', label: 'Ver Compras' },
-  { id: 'WRITE_PURCHASES', label: 'Crear/Editar Compras' },
+  { id: 'DELETE_QUOTATIONS', label: 'Eliminar Cotizaciones' },
+  { id: 'VIEW_ORDERS', label: 'Ver Pedidos, Cobros y Facturación' },
+  { id: 'WRITE_ORDERS', label: 'Crear/Editar Pedidos, Cobros y Facturación' },
+  { id: 'DELETE_ORDERS', label: 'Eliminar Pedidos y Comprobantes' },
+  { id: 'VIEW_PURCHASES', label: 'Ver Compras y Guías de Compra' },
+  { id: 'WRITE_PURCHASES', label: 'Crear/Editar Compras y Guías' },
+  { id: 'DELETE_PURCHASES', label: 'Eliminar Compras y Guías' },
   { id: 'VIEW_CUSTOMERS', label: 'Ver Clientes' },
   { id: 'WRITE_CUSTOMERS', label: 'Gestionar Clientes' },
   { id: 'VIEW_SUPPLIERS', label: 'Ver Proveedores' },
@@ -81,11 +87,28 @@ export const RoleModule = () => {
     fetchRoles();
   }, []);
 
+  const parsePermissions = (raw: any): string[] => {
+    if (Array.isArray(raw)) return raw.map(String);
+    if (typeof raw !== 'string' || !raw.trim()) return [];
+    let current: any = raw;
+    for (let i = 0; i < 3 && typeof current === 'string'; i++) {
+      try {
+        current = JSON.parse(current);
+      } catch {
+        break;
+      }
+    }
+    if (Array.isArray(current)) return current.map(String);
+    if (typeof current === 'string' && current.trim()) {
+      return current.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [];
+  };
+
   const handleOpenModal = (role?: Role) => {
     if (role) {
       setEditingRole(role);
-      let parsedPerms: string[] = [];
-      try { parsedPerms = JSON.parse(role.permissions); } catch (e) {}
+      const parsedPerms = parsePermissions(role.permissions);
       setFormData({
         name: role.name,
         isActive: role.isActive,
@@ -100,9 +123,10 @@ export const RoleModule = () => {
 
   const handleTogglePermission = (permId: string) => {
     setFormData(prev => {
-      const perms = prev.permissions.includes(permId)
-        ? prev.permissions.filter(p => p !== permId)
-        : [...prev.permissions, permId];
+      const current = Array.isArray(prev.permissions) ? prev.permissions : parsePermissions(prev.permissions);
+      const perms = current.includes(permId)
+        ? current.filter(p => p !== permId)
+        : [...current, permId];
       return { ...prev, permissions: perms };
     });
   };
@@ -215,7 +239,7 @@ export const RoleModule = () => {
       {/* Modal de Crear / Editar Rol */}
       <AnimatePresence>
         {isModalOpen && (
-          <div className="absolute inset-0 z-[110] flex items-center justify-center p-3 overflow-hidden">
+          <div className="fixed inset-0 z-[250] flex items-center justify-center p-3 overflow-hidden">
             <motion.div 
               initial={{ opacity: 0 }} 
               animate={{ opacity: 1 }} 

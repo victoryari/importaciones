@@ -415,7 +415,7 @@ export class SunatService {
       // Punto de Llegada
       llegada_ubigeo: guide.deliveryUbigeo || '150101',
       llegada_direccion: guide.deliveryAddress || 'LIMA',
-      llegada_codigo_establecimiento_sunat: '0000',
+      llegada_codigo_establecimiento_sunat: guide.deliverySunatCode || '0000',
 
       // Destinatario
       destinatario_tipo_de_documento: custDocType,
@@ -457,7 +457,29 @@ export class SunatService {
       if (guide.vehicleSecondaryPlate) {
         payload.vehiculo_placa_secundaria_numero = guide.vehicleSecondaryPlate;
       }
+      if (guide.vehicleBrand) {
+        payload.vehiculo_marca = guide.vehicleBrand;
+      }
+      if (guide.vehicleTuce) {
+        payload.vehiculo_tuce = guide.vehicleTuce;
+      }
+      if (guide.vehicleMtc) {
+        payload.vehiculo_registro_mtc = guide.vehicleMtc;
+      }
+      if (guide.carrierDocNumber) {
+        payload.transportista_documento_numero = guide.carrierDocNumber;
+      }
+      if (guide.carrierName) {
+        payload.transportista_denominacion = guide.carrierName;
+      }
     }
+
+    // Indicadores normativos SUNAT GRE
+    if (guide.returnEmptyContainers) payload.retorno_vehiculo_envases_vacios = true;
+    if (guide.transshipment) payload.realiza_transbordo = true;
+    if (guide.vehicleCategoryM1OrL) payload.traslado_vehiculo_m1_l = true;
+    if (guide.returnEmptyVehicle) payload.retorno_vehiculo_vacio = true;
+    if (guide.fullDamOrDsTransfer) payload.traslado_total_dam_ds = true;
 
     // Documento relacionado si aplica
     if (guide.orderId || guide.invoiceId || guide.relatedDocNumber) {

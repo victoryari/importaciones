@@ -147,6 +147,7 @@ export interface EntryNoteHeaderData {
 }
 
 export const ENTRY_NOTE_STATUSES = {
+  ACTIVE: { label: 'Activado', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
   DRAFT: { label: 'Borrador', color: 'bg-slate-100 text-slate-600 border-slate-200' },
   PENDING: { label: 'Pendiente', color: 'bg-amber-100 text-amber-700 border-amber-200' },
   APPROVED: { label: 'Aprobado', color: 'bg-blue-100 text-blue-700 border-blue-200' },
@@ -154,8 +155,14 @@ export const ENTRY_NOTE_STATUSES = {
   ANNULLED: { label: 'Anulado', color: 'bg-red-100 text-red-700 border-red-200' },
 };
 
+export const NOTE_STATUS_OPTIONS = [
+  { value: 'ACTIVE', label: 'Activado' },
+  { value: 'ANNULLED', label: 'Anulado' },
+];
+
 export const VALID_TRANSITIONS: Record<string, string[]> = {
-  DRAFT: ['PENDING', 'APPROVED', 'COMPLETED', 'ANNULLED'],
+  ACTIVE: ['ANNULLED'],
+  DRAFT: ['ACTIVE', 'PENDING', 'APPROVED', 'COMPLETED', 'ANNULLED'],
   PENDING: ['APPROVED', 'DRAFT', 'ANNULLED'],
   APPROVED: ['COMPLETED', 'ANNULLED'],
   COMPLETED: ['ANNULLED'],

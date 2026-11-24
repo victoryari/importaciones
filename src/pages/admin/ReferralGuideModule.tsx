@@ -294,8 +294,16 @@ export const ReferralGuideModule: React.FC<ReferralGuideModuleProps> = ({
                   </td>
                 </tr>
               ) : (
-                guides.map((g, idx) => (
-                  <tr key={g.id} className="hover:bg-blue-50/30 transition-colors">
+                guides.map((g, idx) => {
+                  const isAnnulled = g.status === 'ANNULLED' || g.sunatStatus === 'VOIDED' || g.sunatStatus === 'ANULADO';
+                  const isAccepted = !isAnnulled && g.sunatStatus === 'ACCEPTED';
+                  const rowClass = isAnnulled
+                    ? 'bg-red-50/75 hover:bg-red-100/70 transition-colors'
+                    : isAccepted
+                      ? 'bg-emerald-50/75 hover:bg-emerald-100/70 transition-colors'
+                      : 'hover:bg-blue-50/30 transition-colors';
+                  return (
+                  <tr key={g.id} className={rowClass}>
                     <td className="py-2 px-3 text-center font-bold text-slate-400 text-[10px]">{idx + 1}</td>
                     
                     <td className="py-2 px-3 text-center">
@@ -358,16 +366,18 @@ export const ReferralGuideModule: React.FC<ReferralGuideModuleProps> = ({
                         <span 
                           onClick={() => setSelectedGuideForDetail(g)}
                           className={`px-2 py-0.5 rounded text-[9px] font-black uppercase inline-flex items-center gap-1 cursor-pointer transition-colors shadow-2xs ${
+                            isAnnulled ? 'bg-red-100 text-red-700 border border-red-300 hover:bg-red-200' :
                             g.sunatStatus === 'ACCEPTED' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200' :
                             g.sunatStatus === 'REJECTED' ? 'bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200' :
                             'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
                           }`} 
                           title="Clic para ver constancia de recepción (CDR) y detalles SUNAT"
                         >
-                          {g.sunatStatus === 'ACCEPTED' && <Check className="w-2.5 h-2.5 text-emerald-700" />}
-                          {g.sunatStatus === 'REJECTED' && <AlertCircle className="w-2.5 h-2.5 text-rose-700" />}
-                          {g.sunatStatus === 'PENDING' && <Clock className="w-2.5 h-2.5 text-amber-700" />}
-                          {g.sunatStatus === 'ACCEPTED' ? 'Aceptado SUNAT' : (g.sunatStatus === 'REJECTED' ? 'Rechazado' : 'Pendiente')}
+                          {isAnnulled && <AlertCircle className="w-2.5 h-2.5 text-red-700" />}
+                          {!isAnnulled && g.sunatStatus === 'ACCEPTED' && <Check className="w-2.5 h-2.5 text-emerald-700" />}
+                          {!isAnnulled && g.sunatStatus === 'REJECTED' && <AlertCircle className="w-2.5 h-2.5 text-rose-700" />}
+                          {!isAnnulled && g.sunatStatus === 'PENDING' && <Clock className="w-2.5 h-2.5 text-amber-700" />}
+                          {isAnnulled ? 'Anulada' : g.sunatStatus === 'ACCEPTED' ? 'Aceptado SUNAT' : (g.sunatStatus === 'REJECTED' ? 'Rechazado' : 'Pendiente')}
                         </span>
                         {g.sunatStatus !== 'ACCEPTED' && g.status !== 'VOIDED' && (
                           <button 
@@ -412,7 +422,7 @@ export const ReferralGuideModule: React.FC<ReferralGuideModuleProps> = ({
                         >
                           <FileText className="w-3.5 h-3.5" />
                         </button>
-                        {g.status !== 'VOIDED' && (
+                        {g.status !== 'VOIDED' && !isAnnulled && (
                           <button 
                             type="button" 
                             onClick={() => handleVoidGuide(g.id)} 
@@ -425,7 +435,8 @@ export const ReferralGuideModule: React.FC<ReferralGuideModuleProps> = ({
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

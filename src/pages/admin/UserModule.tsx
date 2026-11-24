@@ -68,7 +68,7 @@ export const UserModule = () => {
       if (resUsers.ok) setUsers(await resUsers.json());
       if (resRoles.ok) {
         const allRoles = await resRoles.json();
-        setRoles(allRoles.filter((r: any) => r.isActive));
+        setRoles(allRoles.filter((r: any) => r.isActive !== false));
       }
       if (resWarehouses.ok) {
         const allWarehouses = await resWarehouses.json();
@@ -84,6 +84,7 @@ export const UserModule = () => {
   }, []);
 
   const handleOpenModal = (user?: UserData) => {
+    fetchData();
     if (user) {
       setEditingUser(user);
       setFormData({
@@ -232,7 +233,7 @@ export const UserModule = () => {
       {/* Modal de Crear / Editar Usuario Contenido */}
       <AnimatePresence>
         {isModalOpen && (
-          <div className="absolute inset-0 z-[110] flex items-center justify-center p-3 overflow-hidden">
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-3 overflow-hidden">
             <motion.div 
               initial={{ opacity: 0 }} 
               animate={{ opacity: 1 }} 

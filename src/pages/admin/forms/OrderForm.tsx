@@ -8,6 +8,7 @@ import {
   ShoppingBag, Gift, Plus
 } from 'lucide-react';
 import { ProductSearchModal } from './ProductSearchModal';
+import { AssociatedCustomersModal } from './AssociatedCustomersModal';
 import axios from 'axios';
 import { useAuth } from '../../../context/AuthContext';
 import { generateQuotationPDF } from '../../../lib/pdfGenerator';
@@ -59,6 +60,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
   const [customerSearchResults, setCustomerSearchResults] = useState<any[]>([]);
   const [rucSearchResults, setRucSearchResults] = useState<any[]>([]);
   const [isProductSearchModalOpen, setIsProductSearchModalOpen] = useState(false);
+  const [assocModalCustomer, setAssocModalCustomer] = useState<any | null>(null);
 
   const handleRefreshTC = async () => {
     if (!formData.date) return;
@@ -97,7 +99,13 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     if (isOpen && (!formData.sellerId || formData.sellerId === '') && sellers.length > 0) {
       let matchedSeller = null;
       if (user) {
-        if (user.email) {
+        if (user.sellerId) {
+          matchedSeller = sellers.find(s => s.id === user.sellerId && s.isActive !== false);
+        }
+        if (!matchedSeller) {
+          matchedSeller = sellers.find(s => s.userId === user.id && s.isActive !== false);
+        }
+        if (!matchedSeller && user.email) {
           matchedSeller = sellers.find(s => s.email && s.email.toLowerCase() === user.email.toLowerCase() && s.isActive !== false);
         }
         if (!matchedSeller && user.name) {
@@ -129,7 +137,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     if (selected) {
       const warehouse = warehouses.find(w => w.id === selected.warehouseId);
       
-      axios.get(`/api/series/next/${selected.warehouseId}/PED`, {
+      axios.get(`/api/series/next/${selected.warehouseId}/PED?series=${encodeURIComponent(selected.series)}`, {
         headers: { Authorization: `Bearer ${token}` }
       }).then(res => {
         setFormData((prev: any) => ({
@@ -165,9 +173,23 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     }
   };
 
-  // Auto-seleccionar serie y almacén asignado al abrir
+  // Auto-seleccionar serie y almacén asignado al abrir (priorizando la serie del vendedor)
   useEffect(() => {
-    if (isOpen && (!formData.docSeries || !formData.warehouseId) && series.length > 0) {
+    if (!isOpen || editingItem || series.length === 0) return;
+
+    const selectedSeller = sellers.find(s => String(s.id) === String(formData.sellerId));
+    const sellerOrderSeries = selectedSeller?.orderSeries;
+    if (sellerOrderSeries) {
+      const sellerSeriesRec = series.find(
+        s => s.series === sellerOrderSeries && s.documentType === 'PED' && s.isActive !== false
+      );
+      if (sellerSeriesRec && formData.docSeries !== sellerSeriesRec.series) {
+        handleSeriesChange(sellerSeriesRec.id.toString());
+        return;
+      }
+    }
+
+    if (!formData.docSeries || !formData.warehouseId) {
       let targetSeries: any = null;
       if (formData.warehouseId) {
         targetSeries = series.find(s => s.warehouseId === parseInt(formData.warehouseId) && s.documentType === 'PED' && s.isActive !== false);
@@ -179,7 +201,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         handleSeriesChange(targetSeries.id.toString());
       }
     }
-  }, [isOpen, series, formData.warehouseId]);
+  }, [isOpen, editingItem, series, sellers, formData.sellerId, formData.warehouseId]);
 
   const handleDocumentSearch = async () => {
     if (!formData.ruc) return;
@@ -252,7 +274,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     }
   };
 
-  const selectCustomer = (c: any) => {
+  const selectCustomer = (c: any, skipAssociationPrompt = false) => {
     const formattedAddress = formatFullCustomerAddress(
       c.address || '',
       c.district,
@@ -272,6 +294,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     setCustomerSearchResults([]);
     setRucSearchResults([]);
     setConsultedData(null);
+    if (!skipAssociationPrompt && c?.associatedCustomers?.length > 0) {
+      setAssocModalCustomer(c);
+    }
   };
 
   // Cálculos de Totales considerando Ítems Gratuitos / Bonificación
@@ -941,6 +966,15 @@ export const OrderForm: React.FC<OrderFormProps> = ({
         token={token} 
         selectedWarehouseId={formData.warehouseId}
         warehouses={warehouses}
+      />
+      <AssociatedCustomersModal
+        isOpen={Boolean(assocModalCustomer)}
+        primaryCustomer={assocModalCustomer}
+        onSelectCustomer={(chosen) => {
+          selectCustomer(chosen, true);
+          setAssocModalCustomer(null);
+        }}
+        onClose={() => setAssocModalCustomer(null)}
       />
     </AnimatePresence>
   );

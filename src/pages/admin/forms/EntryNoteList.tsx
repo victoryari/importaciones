@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import {
   Search, Plus, Edit2, Trash2, CheckCircle, X, Eye,
   FileInput, Filter, Download, Lock, ChevronRight,
-  Calendar, MapPin, User, Hash, DollarSign
+  Calendar, MapPin, User, Hash, DollarSign, FileSpreadsheet
 } from 'lucide-react';
-import { formatNumber, formatCurrency, ENTRY_NOTE_STATUSES } from '../../../lib/utils';
+import { formatNumber, formatCurrency, ENTRY_NOTE_STATUSES, NOTE_STATUS_OPTIONS } from '../../../lib/utils';
+import { PaginationBar } from '../../../components/PaginationBar';
+import { EntryNoteImportModal } from './EntryNoteImportModal';
 
 interface EntryNoteListProps {
   notes: any[];
@@ -24,6 +26,13 @@ export const EntryNoteList: React.FC<EntryNoteListProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, pageSize]);
 
   const filteredNotes = notes.filter(note => {
     const matchesSearch = !searchTerm ||
@@ -36,6 +45,10 @@ export const EntryNoteList: React.FC<EntryNoteListProps> = ({
     const matchesStatus = !statusFilter || note.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredNotes.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedNotes = filteredNotes.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const getStatusBadge = (status: string) => {
     const config = ENTRY_NOTE_STATUSES[status as keyof typeof ENTRY_NOTE_STATUSES];
@@ -75,12 +88,22 @@ export const EntryNoteList: React.FC<EntryNoteListProps> = ({
               className="h-12 px-4 rounded-2xl border border-slate-200 bg-white text-sm font-bold text-slate-600 focus:border-emerald-500 outline-none"
             >
               <option value="">Todos los estados</option>
-              {Object.entries(ENTRY_NOTE_STATUSES).map(([key, val]) => (
-                <option key={key} value={key}>{val.label}</option>
+              {NOTE_STATUS_OPTIONS.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-3 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            {canWrite && (
+              <button
+                type="button"
+                onClick={() => setIsImportModalOpen(true)}
+                className="bg-[#004A99] hover:bg-blue-800 text-white text-xs font-black uppercase flex items-center gap-2 px-4 py-3 rounded-2xl shadow-sm transition-all hover:-translate-y-0.5 cursor-pointer"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Importar Saldos
+              </button>
+            )}
             {canWrite ? (
               <button
                 onClick={onNew}
@@ -123,7 +146,7 @@ export const EntryNoteList: React.FC<EntryNoteListProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {filteredNotes.map((note) => (
+                {paginatedNotes.map((note) => (
                   <tr key={note.id} className={`hover:bg-slate-50/80 transition-colors group ${note.status === 'ANNULLED' ? 'opacity-60 bg-red-50/20' : ''}`}>
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
@@ -242,6 +265,15 @@ export const EntryNoteList: React.FC<EntryNoteListProps> = ({
             </table>
           </div>
         )}
+        {!loading && (
+          <PaginationBar
+            totalItems={filteredNotes.length}
+            currentPage={currentPage}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
+        )}
       </div>
 
       {/* Leyenda / Resumen */}
@@ -263,6 +295,12 @@ export const EntryNoteList: React.FC<EntryNoteListProps> = ({
           <span className="text-[11px] font-bold text-red-600 uppercase tracking-widest">Anuladas: {notes.filter(n => n.status === 'ANNULLED').length}</span>
         </div>
       </div>
+
+      <EntryNoteImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={onRefresh}
+      />
     </div>
   );
 };

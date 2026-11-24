@@ -163,14 +163,14 @@ export const ExtractionModal: React.FC<ExtractionModalProps> = ({ isOpen, onClos
                           <tr key={item.id} className="hover:bg-blue-50/40 transition-colors group">
                             <td className="px-3 py-2 text-center">
                               <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-mono font-black">
-                                {item.docType || '50'}
+                                {item.docSigla || (item.docType === '50' ? 'DUA' : item.docType === '09' ? 'GRM' : (item.docType || '50'))}
                               </span>
                             </td>
                             <td className="px-3 py-2 font-mono font-bold text-xs text-slate-800">
                               {item.docSeries ? `${item.docSeries}-${item.docNumber}` : item.docNumber}
                             </td>
                             <td className="px-3 py-2 text-[10px] font-medium text-slate-500 text-center font-mono">
-                              {new Date(item.date).toLocaleDateString()}
+                              {new Date(item.date).toLocaleDateString('es-PE', { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' })}
                             </td>
                             <td className="px-3 py-2">
                               <div className="text-[11px] font-bold text-slate-800 uppercase leading-snug line-clamp-2">

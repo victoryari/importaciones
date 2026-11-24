@@ -49,7 +49,7 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
   const [isExtractModalOpen, setIsExtractModalOpen] = useState(false);
   
   // Filtros del modal de extracción
-  const [extractDocTypeFilter, setExtractDocTypeFilter] = useState<'ALL' | '01' | '03' | 'PED' | 'COT'>('ALL');
+  const [extractDocTypeFilter, setExtractDocTypeFilter] = useState<'INVOICES' | 'ALL' | '01' | '03' | 'PED' | 'COT'>('INVOICES');
   const [extractStartDate, setExtractStartDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -68,70 +68,92 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
   const [allOrders, setAllOrders] = useState<any[]>(orders);
   const [allVehicles, setAllVehicles] = useState<any[]>([]);
   const [allDrivers, setAllDrivers] = useState<any[]>([]);
+  const [allCarriers, setAllCarriers] = useState<any[]>([]);
+  const [showCarrierLookup, setShowCarrierLookup] = useState(false);
+  const [isCarrierConsulting, setIsCarrierConsulting] = useState(false);
   const [isDriverConsulting, setIsDriverConsulting] = useState(false);
 
+  const getInitialFormData = () => {
+    const today = new Date().toISOString().split('T')[0];
+    return {
+      documentType: '09',
+      series: 'T001',
+      number: '',
+      issueDate: today,
+      transferDate: today,
+      transferReason: '01',
+      transferReasonDescription: 'VENTA',
+      transportMode: '02', // 01: Público, 02: Privado
+
+      // Destinatario
+      customerId: '',
+      customerDocType: 'RUC',
+      customerDocNumber: '',
+      customerName: '',
+      customerAddress: '',
+
+      // Partida
+      originWarehouseId: '',
+      originAddress: '',
+      originUbigeo: '150101',
+      originSunatCode: '0000',
+
+      // Llegada
+      deliveryWarehouseId: '',
+      deliveryAddress: '',
+      deliveryUbigeo: '150101',
+      deliverySunatCode: '0000',
+      deliveryDepartment: 'LIMA',
+      deliveryProvince: 'LIMA',
+      deliveryDistrict: 'LIMA',
+
+      // Transporte Público
+      carrierDocType: '6',
+      carrierDocNumber: '',
+      carrierName: '',
+      carrierMtcNumber: '',
+      shippingAgencyId: '',
+      shippingBranchId: '',
+      agencyRuc: '',
+      agencyAddress: '',
+
+      // Transporte Privado
+      driverDocType: '1',
+      driverDocNumber: '',
+      driverName: '',
+      driverLicenseNumber: '',
+      vehiclePlate: '',
+      vehicleSecondaryPlate: '',
+      vehicleBrand: '',
+      vehicleTuce: '',
+      vehicleMtc: '',
+
+      // Indicadores Normativos SUNAT
+      returnEmptyContainers: false,
+      transshipment: false,
+      vehicleCategoryM1OrL: false,
+      returnEmptyVehicle: false,
+      fullDamOrDsTransfer: false,
+
+      // Carga
+      totalWeight: 0,
+      weightUnit: 'KGM',
+      totalPackages: 0,
+
+      // Docs relacionados
+      orderId: '',
+      orderNumber: '',
+      invoiceId: '',
+      invoiceNumber: '',
+      relatedDocType: '',
+      relatedDocNumber: '',
+
+      notes: 'BIENES TRASLADADOS PARA SU ENTREGA EN EL DESTINO INDICADO.'
+    };
+  };
+
   // Estado del Formulario
-  const [formData, setFormData] = useState<any>({
-    documentType: '09',
-    series: 'T001',
-    number: '',
-    issueDate: new Date().toISOString().split('T')[0],
-    transferDate: new Date().toISOString().split('T')[0],
-    transferReason: '01',
-    transferReasonDescription: 'VENTA',
-    transportMode: '02', // 01: Público, 02: Privado
-
-    // Destinatario
-    customerId: '',
-    customerDocType: 'RUC',
-    customerDocNumber: '',
-    customerName: '',
-    customerAddress: '',
-
-    // Partida
-    originWarehouseId: '',
-    originAddress: '',
-    originUbigeo: '150101',
-    originSunatCode: '0000',
-
-    // Llegada
-    deliveryAddress: '',
-    deliveryUbigeo: '150101',
-    deliveryDepartment: 'LIMA',
-    deliveryProvince: 'LIMA',
-    deliveryDistrict: 'LIMA',
-
-    // Transporte Público
-    carrierDocType: '6',
-    carrierDocNumber: '',
-    carrierName: '',
-    carrierMtcNumber: '',
-    shippingAgencyId: '',
-    shippingBranchId: '',
-
-    // Transporte Privado
-    driverDocType: '1',
-    driverDocNumber: '',
-    driverName: '',
-    driverLicenseNumber: '',
-    vehiclePlate: '',
-    vehicleSecondaryPlate: '',
-
-    // Carga
-    totalWeight: 1.0,
-    weightUnit: 'KGM',
-    totalPackages: 1,
-
-    // Docs relacionados
-    orderId: '',
-    orderNumber: '',
-    invoiceId: '',
-    invoiceNumber: '',
-    relatedDocType: '',
-    relatedDocNumber: '',
-
-    notes: 'BIENES TRASLADADOS PARA SU ENTREGA EN EL DESTINO INDICADO.'
-  });
+  const [formData, setFormData] = useState<any>(getInitialFormData);
 
   const [items, setItems] = useState<any[]>([]);
 
@@ -140,10 +162,22 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
     return seriesList.filter(s => ['09', 'GRM', 'GRE', 'GUIA', 'T'].includes(s.documentType) || s.series?.startsWith('T') || s.series?.startsWith('EG'));
   }, [seriesList]);
 
-  // Carga inicial
+  // Carga inicial y limpieza al abrir/cerrar
   useEffect(() => {
     if (isOpen) {
+      setFormData(getInitialFormData());
+      setItems([]);
+      setErrorMsg('');
+      setProductSearchTerm('');
+      setProductPredictiveResults([]);
+      setCustomerSearchResults([]);
+      setIsExtractModalOpen(false);
+      setIsProductModalOpen(false);
       fetchInitialData();
+    } else {
+      setFormData(getInitialFormData());
+      setItems([]);
+      setErrorMsg('');
     }
   }, [isOpen]);
 
@@ -168,19 +202,97 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
     }
   }, [isOpen, initialOrderId, orders]);
 
+  const getCarrierUpdatesForMode = (
+    mode: string,
+    carriersList: any[],
+    vehiclesList: any[],
+    driversList: any[],
+    currentAgencyRuc?: string
+  ) => {
+    const activeCarriers = carriersList.filter((c: any) => c.isActive !== false);
+    let matchedCarrier: any = null;
+    if (mode === '02') {
+      matchedCarrier = activeCarriers.find((c: any) => Boolean(c.isOwnFleet));
+    } else {
+      const publicCarriers = activeCarriers.filter((c: any) => !c.isOwnFleet);
+      matchedCarrier =
+        (currentAgencyRuc ? publicCarriers.find((c: any) => c.ruc === currentAgencyRuc) : null) ||
+        publicCarriers[0] ||
+        null;
+    }
+
+    if (!matchedCarrier) return null;
+
+    if (mode === '02') {
+      const carrierVehicles = (matchedCarrier.vehicles && matchedCarrier.vehicles.length > 0)
+        ? matchedCarrier.vehicles
+        : vehiclesList.filter((v: any) => v.carrierId === matchedCarrier.id && v.status !== 'INACTIVE');
+      const carrierDrivers = (matchedCarrier.drivers && matchedCarrier.drivers.length > 0)
+        ? matchedCarrier.drivers
+        : driversList.filter((d: any) => d.carrierId === matchedCarrier.id && d.status !== 'INACTIVE');
+
+      const firstVeh = carrierVehicles[0] || vehiclesList[0];
+      const firstDrv = carrierDrivers[0] || driversList[0];
+
+      return {
+        carrierDocType: '6',
+        carrierDocNumber: matchedCarrier.ruc || '',
+        carrierName: matchedCarrier.name || '',
+        carrierMtcNumber: matchedCarrier.mtcNumber || '',
+        vehicleMtc: firstVeh?.mtcNumber || matchedCarrier.mtcNumber || '',
+        vehiclePlate: firstVeh?.plate || '',
+        vehicleBrand: firstVeh?.brand || '',
+        vehicleTuce: firstVeh?.tuce || '',
+        driverDocNumber: firstDrv?.docNumber || '',
+        driverName: firstDrv?.name || '',
+        driverLicenseNumber: firstDrv?.licenseNumber || '',
+        authorizationEntity: matchedCarrier.authorizationEntity || '',
+        authorizationNumber: matchedCarrier.authorizationNumber || '',
+      };
+    }
+
+    return {
+      carrierDocType: '6',
+      carrierDocNumber: matchedCarrier.ruc || '',
+      carrierName: matchedCarrier.name || '',
+      carrierMtcNumber: matchedCarrier.mtcNumber || '',
+      authorizationEntity: matchedCarrier.authorizationEntity || '',
+      authorizationNumber: matchedCarrier.authorizationNumber || '',
+    };
+  };
+
   const fetchInitialData = async () => {
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
-      const [pRes, cRes, vRes, dRes] = await Promise.all([
+      const [pRes, cRes, vRes, dRes, carRes] = await Promise.all([
         axios.get('/api/products', config).catch(() => ({ data: [] })),
         axios.get('/api/customers', config).catch(() => ({ data: [] })),
         axios.get('/api/vehicles', config).catch(() => ({ data: [] })),
-        axios.get('/api/drivers', config).catch(() => ({ data: [] }))
+        axios.get('/api/drivers', config).catch(() => ({ data: [] })),
+        axios.get('/api/carriers', config).catch(() => ({ data: [] }))
       ]);
+      const loadedVehicles = Array.isArray(vRes.data) ? vRes.data : [];
+      const loadedDrivers = Array.isArray(dRes.data) ? dRes.data : [];
+      const loadedCarriers = Array.isArray(carRes.data) ? carRes.data : [];
       setAllProducts(Array.isArray(pRes.data) ? pRes.data : []);
       setAllCustomers(Array.isArray(cRes.data) ? cRes.data : []);
-      setAllVehicles(Array.isArray(vRes.data) ? vRes.data : []);
-      setAllDrivers(Array.isArray(dRes.data) ? dRes.data : []);
+      setAllVehicles(loadedVehicles);
+      setAllDrivers(loadedDrivers);
+      setAllCarriers(loadedCarriers);
+
+      const defaultCarrierUpdates = getCarrierUpdatesForMode(
+        formData.transportMode || '02',
+        loadedCarriers,
+        loadedVehicles,
+        loadedDrivers,
+        formData.agencyRuc
+      );
+      if (defaultCarrierUpdates) {
+        setFormData((prev: any) => ({
+          ...prev,
+          ...(prev.carrierDocNumber ? {} : defaultCarrierUpdates),
+        }));
+      }
 
       // Auto-seleccionar almacén principal configurado al vendedor o usuario logueado
       let principalWarehouseId: string | null = null;
@@ -274,6 +386,60 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
       }));
       fetchNextNumber(formData.series, whId);
     }
+  };
+
+  const handleDeliveryWarehouseChange = (whId: string) => {
+    const wh = warehouses.find(w => w.id.toString() === whId);
+    if (!wh) {
+      setFormData((prev: any) => ({ ...prev, deliveryWarehouseId: '' }));
+      return;
+    }
+    const ubigeo = wh.ubigeo || '150101';
+    const dId = ubigeo.substring(0, 2);
+    const pId = ubigeo.substring(2, 4);
+    const distId = ubigeo.substring(4, 6);
+    const dept = DEPARTMENTS.find((d: any) => d.id === dId);
+    const prov = ((PROVINCES as any)[dId] || []).find((p: any) => p.id === pId);
+    const dist = ((DISTRICTS as any)[ubigeo.substring(0, 4)] || []).find((d: any) => d.id === distId);
+    setFormData((prev: any) => ({
+      ...prev,
+      deliveryWarehouseId: whId,
+      deliveryAddress: wh.address || prev.deliveryAddress,
+      deliveryUbigeo: ubigeo,
+      deliverySunatCode: wh.sunatCode || '0000',
+      deliveryDepartment: dept ? dept.name.toUpperCase() : prev.deliveryDepartment,
+      deliveryProvince: prov ? prov.name.toUpperCase() : prev.deliveryProvince,
+      deliveryDistrict: dist ? dist.name.toUpperCase() : prev.deliveryDistrict
+    }));
+  };
+
+  // Helpers para Ubigeo de Punto de Partida (Origen) derivados de originUbigeo
+  const originUbi = (formData.originUbigeo || '150101').padEnd(6, '0');
+  const originDeptId = originUbi.substring(0, 2);
+  const originProvId = originUbi.substring(2, 4);
+  const originDistId = originUbi.substring(4, 6);
+  const originAvailableProvinces = useMemo(() => (PROVINCES as any)[originDeptId] || [], [originDeptId]);
+  const originAvailableDistricts = useMemo(() => (DISTRICTS as any)[`${originDeptId}${originProvId}`] || [], [originDeptId, originProvId]);
+
+  const handleOriginDeptChange = (deptId: string) => {
+    const provs = (PROVINCES as any)[deptId] || [];
+    const firstProv = provs[0];
+    const pId = firstProv ? firstProv.id : '01';
+    const dists = (DISTRICTS as any)[`${deptId}${pId}`] || [];
+    const firstDist = dists[0];
+    const dId = firstDist ? firstDist.id : '01';
+    setFormData((prev: any) => ({ ...prev, originUbigeo: `${deptId}${pId}${dId}` }));
+  };
+
+  const handleOriginProvChange = (provId: string) => {
+    const dists = (DISTRICTS as any)[`${originDeptId}${provId}`] || [];
+    const firstDist = dists[0];
+    const dId = firstDist ? firstDist.id : '01';
+    setFormData((prev: any) => ({ ...prev, originUbigeo: `${originDeptId}${provId}${dId}` }));
+  };
+
+  const handleOriginDistChange = (distId: string) => {
+    setFormData((prev: any) => ({ ...prev, originUbigeo: `${originDeptId}${originProvId}${distId}` }));
   };
 
   // Helpers para Ubigeo de Punto de Llegada (Destino)
@@ -401,24 +567,32 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
     }
   };
 
-  const handleAgencyChange = (agencyId: string) => {
+  const handleAgencyChange = (agencyId: string, branchIdOverride?: string) => {
     const agency = shippingAgencies.find(a => a.id.toString() === agencyId);
     if (agency) {
-      const mainBranch = agency.branches?.find((b: any) => b.isMain) || agency.branches?.[0];
+      const chosenBranch = branchIdOverride
+        ? agency.branches?.find((b: any) => b.id.toString() === branchIdOverride)
+        : (agency.branches?.find((b: any) => b.isMain) || agency.branches?.[0]);
       setFormData((prev: any) => ({
         ...prev,
         shippingAgencyId: agencyId,
-        shippingBranchId: mainBranch?.id?.toString() || '',
-        carrierDocType: '6',
-        carrierDocNumber: agency.ruc || prev.carrierDocNumber,
-        carrierName: agency.name || prev.carrierName,
-        carrierMtcNumber: agency.mtcNumber || prev.carrierMtcNumber
+        shippingBranchId: chosenBranch?.id?.toString() || '',
+        agencyRuc: agency.ruc || '',
+        agencyAddress: chosenBranch?.address || agency.address || agency.legalAddress || '',
+        ...(prev.transportMode === '01' ? {
+          carrierDocType: '6',
+          carrierDocNumber: agency.ruc || prev.carrierDocNumber,
+          carrierName: agency.name || prev.carrierName,
+          carrierMtcNumber: agency.mtcNumber || prev.carrierMtcNumber
+        } : {})
       }));
     } else {
       setFormData((prev: any) => ({
         ...prev,
         shippingAgencyId: '',
-        shippingBranchId: ''
+        shippingBranchId: '',
+        agencyRuc: '',
+        agencyAddress: ''
       }));
     }
   };
@@ -545,7 +719,9 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
   // Documentos filtrados según selección y búsqueda
   const filteredExtractDocuments = useMemo(() => {
     return candidateDocuments.filter(doc => {
-      if (extractDocTypeFilter !== 'ALL' && doc.type !== extractDocTypeFilter) {
+      if (extractDocTypeFilter === 'INVOICES') {
+        if (doc.type !== '01' && doc.type !== '03') return false;
+      } else if (extractDocTypeFilter !== 'ALL' && doc.type !== extractDocTypeFilter) {
         return false;
       }
       if (extractStartDate && doc.date && doc.date < extractStartDate) return false;
@@ -607,24 +783,61 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
       relDocNum = doc.docSeries && doc.docNumber ? `${doc.docSeries}-${doc.docNumber}` : `COT-${doc.id}`;
     }
 
-      // Determinar ubigeo y localización de destino
-      const rawDept = doc.department || doc.customerCity || 'LIMA';
-      const rawProv = doc.province || 'LIMA';
-      const rawDist = doc.district || 'LIMA';
-      let derivedUbigeo = doc.ubigeo || doc.deliveryUbigeo || '';
-      if (!derivedUbigeo && rawDept) {
-        const dept = DEPARTMENTS.find(d => d.name.toUpperCase() === rawDept.toUpperCase());
-        if (dept) {
-          const provs = PROVINCES[dept.id] || [];
-          const prov = provs.find((p: any) => p.name.toUpperCase() === rawProv.toUpperCase()) || provs[0];
-          const fullProvId = prov ? dept.id + prov.id : '';
-          const dists = fullProvId && DISTRICTS[fullProvId] ? DISTRICTS[fullProvId] : [];
-          const dist = dists.find((d: any) => d.name.toUpperCase() === rawDist.toUpperCase()) || dists[0];
-          if (dept && prov && dist) {
-            derivedUbigeo = dept.id + prov.id + dist.id;
+      // Determinar ubigeo y localización de destino (desde doc, cliente registrado o dirección destino)
+      const matchedCustomer = allCustomers.find(
+        (c: any) =>
+          (doc.customerId && String(c.id) === String(doc.customerId)) ||
+          (docItem.customerDoc && c.docNumber === docItem.customerDoc)
+      );
+
+      let parsedDept = doc.department || matchedCustomer?.department || doc.customerCity || '';
+      let parsedProv = doc.province || matchedCustomer?.province || '';
+      let parsedDist = doc.district || matchedCustomer?.district || '';
+      const rawUbiCode = doc.ubigeo || doc.deliveryUbigeo || matchedCustomer?.ubigeo || '';
+
+      if ((!parsedDept || !parsedProv || !parsedDist) && docItem.destination) {
+        const parts = String(docItem.destination).split(' - ').map((s: string) => s.trim()).filter(Boolean);
+        if (parts.length >= 4) {
+          parsedDept = parsedDept || parts[parts.length - 3];
+          parsedProv = parsedProv || parts[parts.length - 2];
+          parsedDist = parsedDist || parts[parts.length - 1];
+        }
+      }
+
+      const normStr = (v: string) =>
+        String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+
+      let ubi = resolveUbigeoInfo({
+        ubigeo: rawUbiCode || undefined,
+        department: parsedDept || undefined,
+        province: parsedProv || undefined,
+        district: parsedDist || undefined,
+      });
+
+      // Fallback si el distrito en dirección omite artículo (ej. "BANDA DE SHILCAYO" vs "LA BANDA DE SHILCAYO")
+      if (ubi.deptId && ubi.provId && parsedDist) {
+        const dists = DISTRICTS[ubi.deptId + ubi.provId] || [];
+        const targetNorm = normStr(parsedDist);
+        const exactDist = dists.find((d: any) => normStr(d.name) === targetNorm);
+        if (!exactDist) {
+          const partialDist = dists.find((d: any) =>
+            normStr(d.name).includes(targetNorm) || targetNorm.includes(normStr(d.name))
+          );
+          if (partialDist) {
+            ubi = {
+              ...ubi,
+              distId: partialDist.id,
+              district: partialDist.name.toUpperCase(),
+              ubigeo: ubi.deptId + ubi.provId + partialDist.id,
+            };
           }
         }
       }
+
+      const rawDept = ubi.department || 'LIMA';
+      const rawProv = ubi.province || 'LIMA';
+      const rawDist = ubi.district || 'LIMA';
+      const derivedUbigeo = ubi.ubigeo || '150101';
 
       // Actualizar formulario
       setFormData((prev: any) => ({
@@ -651,6 +864,7 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
         invoiceNumber: docItem.sourceCategory === 'INVOICE' ? docItem.docNumber : prev.invoiceNumber,
         relatedDocType: relDocType,
         relatedDocNumber: relDocNum,
+        relatedDocDate: doc.issueDate || doc.date || doc.createdAt || prev.relatedDocDate || '',
 
         // Carga
         totalWeight: calculatedWeight > 0 ? parseFloat(calculatedWeight.toFixed(2)) : 1.0,
@@ -663,9 +877,13 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
         handleWarehouseChange(doc.warehouseId.toString());
       }
 
-      // Sincronizar agencia si aplica
-      if (doc.agencyId || doc.shippingAgencyId) {
-        handleAgencyChange((doc.agencyId || doc.shippingAgencyId).toString());
+      // Sincronizar agencia si aplica (directa del doc, o desde el pedido/cotización asociado a la factura)
+      const linkedOrder = doc.order || (doc.orderId ? (allOrders.find((o: any) => o.id === doc.orderId) || orders.find((o: any) => o.id === doc.orderId)) : null);
+      const linkedQuotation = linkedOrder?.quotationId ? quotations.find((q: any) => q.id === linkedOrder.quotationId) : null;
+      const sourceAgencyId = doc.agencyId || doc.shippingAgencyId || linkedOrder?.agencyId || linkedQuotation?.agencyId;
+      const sourceBranchId = doc.branchId || doc.shippingBranchId || linkedOrder?.branchId || linkedQuotation?.branchId;
+      if (sourceAgencyId) {
+        handleAgencyChange(sourceAgencyId.toString(), sourceBranchId ? sourceBranchId.toString() : undefined);
       }
 
       if (newItems.length > 0) {
@@ -781,9 +999,31 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
     setProductPredictiveResults(res);
   };
 
+  const getOriginStockInfo = (p: any) => {
+    const records = Array.isArray(p?.stockRecords) ? p.stockRecords : [];
+    const whId = formData.originWarehouseId ? String(formData.originWarehouseId) : '';
+    const excludedTypes = ['TRANSITORIO', 'DESPACHO', 'COMPROBANTES', 'SISTEMA'];
+    const matching = records.filter((s: any) => {
+      if (Number(s.quantity) <= 0) return false;
+      if (whId) return String(s.warehouseId) === whId;
+      return !excludedTypes.includes((s.warehouse?.type || '').toUpperCase());
+    });
+    const totalStock = matching.reduce((sum: number, s: any) => sum + (Number(s.quantity) || 0), 0);
+    const lots = matching.map((s: any) => ({
+      lotNumber: s.lotNumber || '',
+      expiryDate: s.expiryDate || null,
+      quantity: Number(s.quantity) || 0,
+      zoneName: s.zone?.name || ''
+    }));
+    const unitLabel = p?.package?.symbol || p?.subPackage?.symbol || p?.unit?.symbol || 'UND';
+    return { totalStock, lots, unitLabel };
+  };
+
   const addProductToItems = (p: any) => {
     const uWeight = p.weight ? parseFloat(p.weight) : 0.5;
-    const existingIdx = items.findIndex(it => it.productId === p.id);
+    const { lots, unitLabel } = getOriginStockInfo(p);
+    const firstLot = lots.find((l: any) => l.lotNumber) || lots[0];
+    const existingIdx = items.findIndex(it => it.productId === p.id && (it.lotNumber || '') === (firstLot?.lotNumber || ''));
     if (existingIdx >= 0) {
       const updated = [...items];
       updated[existingIdx].quantity += 1;
@@ -797,11 +1037,11 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
           code: p.code || '',
           description: p.name || 'Producto',
           quantity: 1,
-          unitMeasure: p.unit?.symbol || 'NIU',
+          unitMeasure: unitLabel || p.unit?.symbol || 'NIU',
           unitWeight: uWeight,
           totalWeight: uWeight,
-          lotNumber: null,
-          expiryDate: null
+          lotNumber: firstLot?.lotNumber || null,
+          expiryDate: firstLot?.expiryDate || null
         }
       ]);
     }
@@ -854,13 +1094,59 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
       setErrorMsg('Debe agregar al menos un ítem o producto para el traslado');
       return;
     }
-    if (formData.transportMode === '02' && !formData.vehiclePlate) {
-      setErrorMsg('Para Transporte Privado debe indicar la Placa del Vehículo');
-      return;
+    if (formData.transferReason === '04') {
+      if (!formData.originWarehouseId || !formData.deliveryWarehouseId) {
+        setErrorMsg('Normativa SUNAT: En traslados entre establecimientos (Motivo 04), debe seleccionar Almacén de Partida y Almacén de Llegada.');
+        return;
+      }
+      if (String(formData.originWarehouseId) === String(formData.deliveryWarehouseId)) {
+        setErrorMsg('Normativa SUNAT: El Almacén de Llegada debe ser distinto al Almacén de Partida.');
+        return;
+      }
+      const oCode = String(formData.originSunatCode || '').trim();
+      const dCode = String(formData.deliverySunatCode || '').trim();
+      if (!/^\d{4}$/.test(oCode) || !/^\d{4}$/.test(dCode)) {
+        setErrorMsg('Normativa SUNAT: En traslados entre establecimientos (Motivo 04), ambos puntos deben tener Código de Establecimiento SUNAT de 4 dígitos.');
+        return;
+      }
+      if (oCode === dCode && formData.originAddress.trim().toUpperCase() === formData.deliveryAddress.trim().toUpperCase()) {
+        setErrorMsg('Normativa SUNAT: En traslados entre establecimientos (Motivo 04), el Punto de Llegada debe ser distinto al Punto de Partida.');
+        return;
+      }
     }
-    if (formData.transportMode === '01' && !formData.carrierDocNumber) {
-      setErrorMsg('Para Transporte Público debe indicar el RUC de la Empresa de Transporte');
-      return;
+    if (formData.originWarehouseId) {
+      for (const it of items) {
+        const prod = allProducts.find(p => p.id === it.productId);
+        if (prod) {
+          const { lots, totalStock } = getOriginStockInfo(prod);
+          const matchingLot = it.lotNumber ? lots.find((l: any) => l.lotNumber === it.lotNumber) : null;
+          const avail = matchingLot ? matchingLot.quantity : totalStock;
+          if ((parseFloat(it.quantity) || 0) > avail) {
+            setErrorMsg(`Stock insuficiente en almacén de partida para "${it.description}"${it.lotNumber ? ` (Lote: ${it.lotNumber})` : ''}. Disponible: ${avail}, Solicitado: ${it.quantity}.`);
+            return;
+          }
+        }
+      }
+    }
+    if (formData.transportMode === '02' && !formData.vehicleCategoryM1OrL) {
+      if (!formData.vehiclePlate?.trim()) {
+        setErrorMsg('Para Transporte Privado debe indicar la Placa del Vehículo');
+        return;
+      }
+      if (!formData.driverDocNumber?.trim() || !formData.driverName?.trim()) {
+        setErrorMsg('Para Transporte Privado debe indicar el DNI y Nombre del Conductor');
+        return;
+      }
+    }
+    if (formData.transportMode === '01') {
+      if (!/^\d{11}$/.test(String(formData.carrierDocNumber || '').trim())) {
+        setErrorMsg('Normativa SUNAT (Transporte Público): Debe ingresar un RUC válido de 11 dígitos numéricos para la empresa transportista');
+        return;
+      }
+      if (!formData.carrierName?.trim()) {
+        setErrorMsg('Normativa SUNAT (Transporte Público): Debe ingresar la Razón Social de la empresa transportista');
+        return;
+      }
     }
 
     setLoading(true);
@@ -954,7 +1240,7 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-bold text-slate-600 uppercase shrink-0">Doc:</span>
                 <div className="h-7 border border-blue-300 bg-blue-50 text-blue-800 rounded px-2 text-[10px] font-black flex items-center uppercase">
-                  GUÍA 09
+                  GRM
                 </div>
                 
                 <span className="text-[10px] font-bold text-slate-600 uppercase shrink-0 ml-1">Serie:</span>
@@ -1013,13 +1299,20 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
                 <select 
                   value={formData.transferReason} 
                   onChange={e => {
-                    const descMap: any = {
+                    const descMap: Record<string, string> = {
                       '01': 'VENTA',
                       '02': 'COMPRA',
+                      '03': 'VENTA CON ENTREGA A TERCEROS',
                       '04': 'TRASLADO ENTRE ESTABLECIMIENTOS DE LA MISMA EMPRESA',
+                      '05': 'CONSIGNACION',
+                      '06': 'DEVOLUCION',
+                      '07': 'RECOJO DE BIENES TRANSFORMADOS',
+                      '08': 'IMPORTACION',
+                      '09': 'EXPORTACION',
                       '13': 'OTROS',
                       '14': 'VENTA SUJETA A CONFIRMACION DEL COMPRADOR',
-                      '18': 'TRASLADO EMISOR ITINERANTE DE COMPROBANTES'
+                      '17': 'TRASLADO DE BIENES PARA TRANSFORMACION',
+                      '18': 'TRASLADO EMISOR ITINERANTE CP'
                     };
                     setFormData({
                       ...formData, 
@@ -1027,13 +1320,20 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
                       transferReasonDescription: descMap[e.target.value] || 'VENTA'
                     });
                   }} 
-                  className="h-7 border border-slate-300 rounded px-1.5 text-xs font-bold bg-white text-slate-800 truncate focus:border-blue-500 outline-none w-44"
+                  className="h-7 border border-slate-300 rounded px-1.5 text-xs font-bold bg-white text-slate-800 truncate focus:border-blue-500 outline-none w-52"
                 >
                   <option value="01">01 | VENTA</option>
-                  <option value="04">04 | TRASLADO ENTRE LOCALES</option>
                   <option value="02">02 | COMPRA</option>
+                  <option value="03">03 | VENTA CON ENTREGA A TERCEROS</option>
+                  <option value="04">04 | TRASLADO ENTRE ESTABLECIMIENTOS</option>
+                  <option value="05">05 | CONSIGNACIÓN</option>
+                  <option value="06">06 | DEVOLUCIÓN</option>
+                  <option value="07">07 | RECOJO DE BIENES TRANSFORMADOS</option>
+                  <option value="08">08 | IMPORTACIÓN</option>
+                  <option value="09">09 | EXPORTACIÓN</option>
                   <option value="14">14 | VENTA SUJETA A CONFIRMACIÓN</option>
-                  <option value="18">18 | EMISOR ITINERANTE</option>
+                  <option value="17">17 | TRASLADO PARA TRANSFORMACIÓN</option>
+                  <option value="18">18 | EMISOR ITINERANTE CP</option>
                   <option value="13">13 | OTROS</option>
                 </select>
               </div>
@@ -1042,7 +1342,21 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
                 <span className="text-[10px] font-bold text-slate-600 uppercase shrink-0">Modalidad:</span>
                 <select 
                   value={formData.transportMode} 
-                  onChange={e => setFormData({...formData, transportMode: e.target.value})} 
+                  onChange={e => {
+                    const newMode = e.target.value;
+                    const carrierUpdates = getCarrierUpdatesForMode(
+                      newMode,
+                      allCarriers,
+                      allVehicles,
+                      allDrivers,
+                      formData.agencyRuc
+                    );
+                    setFormData((prev: any) => ({
+                      ...prev,
+                      transportMode: newMode,
+                      ...(carrierUpdates || { carrierDocNumber: '', carrierName: '', carrierMtcNumber: '' })
+                    }));
+                  }} 
                   className="h-7 border border-blue-300 rounded px-1.5 text-xs font-bold bg-blue-50 text-blue-900 focus:border-blue-500 outline-none w-36 uppercase"
                 >
                   <option value="02">02 | PRIVADO</option>
@@ -1114,12 +1428,12 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
               )}
             </div>
 
-            {/* FILA 3: Puntos de Partida y Llegada */}
+            {/* FILA 3: Puntos de Partida y Llegada (Uniformes) */}
             <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs grid grid-cols-1 lg:grid-cols-2 gap-3 text-xs">
               
               {/* Punto de Partida (Origen) */}
-              <div className="space-y-1.5 bg-slate-50/70 p-1.5 rounded border border-slate-200/80">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-1 flex-wrap gap-1">
+              <div className="space-y-1.5 bg-slate-50/70 p-2 rounded border border-slate-200/80">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-1 flex-wrap gap-1.5">
                   <span className="text-[10px] font-bold text-blue-900 uppercase flex items-center gap-1">
                     <MapPin className="w-3 h-3 text-blue-700" /> Punto de Partida (Origen)
                   </span>
@@ -1128,21 +1442,22 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
                     <select 
                       value={formData.originWarehouseId} 
                       onChange={e => handleWarehouseChange(e.target.value)}
-                      className="h-6 border border-blue-300 rounded px-1 text-[10px] font-bold bg-white text-blue-950 outline-none uppercase max-w-[190px]"
+                      className="h-6 border border-blue-300 rounded px-1.5 text-[10px] font-bold bg-white text-blue-950 outline-none uppercase max-w-[165px]"
                     >
-                      <option value="">-- SELECCIONAR ALMACÉN --</option>
+                      <option value="">-- SELECCIONAR --</option>
                       {warehouses.map(w => (
                         <option key={w.id} value={w.id}>
                           {w.name.toUpperCase()} {w.isMain || w.isDefault ? '(PRINCIPAL)' : ''}
                         </option>
                       ))}
                     </select>
-                    <span className="text-[9px] font-bold text-slate-500 uppercase ml-1">Cód. SUNAT:</span>
+                    <span className="text-[9px] font-bold text-blue-900 uppercase">Cód. SUNAT:</span>
                     <input 
                       type="text" 
+                      maxLength={4}
                       value={formData.originSunatCode || '0000'} 
-                      onChange={e => setFormData({...formData, originSunatCode: e.target.value})} 
-                      className="h-6 w-12 border border-slate-300 rounded px-1 text-[10px] text-center font-mono font-bold bg-white outline-none" 
+                      onChange={e => setFormData({...formData, originSunatCode: e.target.value.replace(/\D/g, '').slice(0, 4)})} 
+                      className="h-6 w-12 border border-blue-300 rounded px-1 text-xs text-center font-mono font-bold bg-blue-50 text-blue-950 outline-none focus:border-blue-500" 
                       placeholder="0000"
                       title="Código de establecimiento SUNAT del punto de partida"
                     />
@@ -1158,71 +1473,92 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
                     className="h-6 flex-1 border border-slate-300 rounded px-1.5 text-xs bg-white uppercase outline-none focus:border-blue-500" 
                     placeholder="Dirección fiscal del almacén emisor"
                   />
-                  <span className="text-[9px] font-bold text-slate-500 uppercase shrink-0 ml-1">Ubigeo:</span>
-                  <input 
-                    type="text" 
-                    value={formData.originUbigeo || ''} 
-                    onChange={e => setFormData({...formData, originUbigeo: e.target.value})} 
-                    className="h-6 w-16 border border-slate-300 rounded px-1 text-xs text-center font-mono font-bold bg-white outline-none focus:border-blue-500" 
-                    placeholder="150101"
-                    title="Código Ubigeo SUNAT de partida (6 dígitos)"
-                  />
+                </div>
+
+                {/* Distribución de Ubigeo (Partida) */}
+                <div className="flex items-center gap-1 flex-wrap">
+                  <select 
+                    value={originDeptId} 
+                    onChange={e => handleOriginDeptChange(e.target.value)}
+                    className="h-6 border border-slate-300 rounded px-1 text-[9px] font-bold bg-white text-slate-800 outline-none uppercase flex-1 min-w-[90px]"
+                    title="Departamento de partida"
+                  >
+                    <option value="">DEPARTAMENTO</option>
+                    {DEPARTMENTS.map(d => <option key={d.id} value={d.id}>{d.name.toUpperCase()}</option>)}
+                  </select>
+
+                  <select 
+                    value={originProvId} 
+                    onChange={e => handleOriginProvChange(e.target.value)}
+                    disabled={!originDeptId}
+                    className="h-6 border border-slate-300 rounded px-1 text-[9px] font-bold bg-white text-slate-800 outline-none uppercase flex-1 min-w-[90px] disabled:bg-slate-100"
+                    title="Provincia de partida"
+                  >
+                    <option value="">PROVINCIA</option>
+                    {originAvailableProvinces.map((p: any) => <option key={p.id} value={p.id}>{p.name.toUpperCase()}</option>)}
+                  </select>
+
+                  <select 
+                    value={originDistId} 
+                    onChange={e => handleOriginDistChange(e.target.value)}
+                    disabled={!originProvId}
+                    className="h-6 border border-slate-300 rounded px-1 text-[9px] font-bold bg-white text-slate-800 outline-none uppercase flex-1 min-w-[100px] disabled:bg-slate-100"
+                    title="Distrito de partida"
+                  >
+                    <option value="">DISTRITO</option>
+                    {originAvailableDistricts.map((d: any) => <option key={d.id} value={d.id}>{d.name.toUpperCase()}</option>)}
+                  </select>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[8px] font-black text-blue-900 uppercase">UBIGEO:</span>
+                    <input 
+                      type="text" 
+                      maxLength={6}
+                      value={formData.originUbigeo || ''} 
+                      onChange={e => setFormData({...formData, originUbigeo: e.target.value.replace(/\D/g, '').slice(0, 6)})} 
+                      className="h-6 w-16 border border-blue-300 rounded px-1 text-xs text-center font-mono font-bold bg-blue-50 text-blue-950 outline-none focus:border-blue-500" 
+                      placeholder="150101"
+                      title="Código Ubigeo SUNAT de partida (6 dígitos)"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Punto de Llegada (Destino) */}
-              <div className="space-y-1.5 bg-slate-50/70 p-1.5 rounded border border-slate-200/80">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-1 flex-wrap gap-1">
+              <div className="space-y-1.5 bg-slate-50/70 p-2 rounded border border-slate-200/80">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-1 flex-wrap gap-1.5">
                   <span className="text-[10px] font-bold text-emerald-900 uppercase flex items-center gap-1">
                     <Compass className="w-3 h-3 text-emerald-700" /> Punto de Llegada (Destino)
                   </span>
-                  
-                  {/* Selectores de Ubigeo Cascading */}
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <select 
-                      value={currentDeptId} 
-                      onChange={e => handleDepartmentChange(e.target.value)}
-                      className="h-6 border border-slate-300 rounded px-1 text-[9px] font-bold bg-white text-slate-800 outline-none uppercase max-w-[95px]"
-                      title="Departamento de llegada"
-                    >
-                      <option value="">DEPARTAMENTO</option>
-                      {DEPARTMENTS.map(d => <option key={d.id} value={d.id}>{d.name.toUpperCase()}</option>)}
-                    </select>
 
-                    <select 
-                      value={currentProvId} 
-                      onChange={e => handleProvinceChange(e.target.value)}
-                      disabled={!currentDeptId}
-                      className="h-6 border border-slate-300 rounded px-1 text-[9px] font-bold bg-white text-slate-800 outline-none uppercase max-w-[95px] disabled:bg-slate-100"
-                      title="Provincia de llegada"
-                    >
-                      <option value="">PROVINCIA</option>
-                      {availableProvinces.map((p: any) => <option key={p.id} value={p.id}>{p.name.toUpperCase()}</option>)}
-                    </select>
-
-                    <select 
-                      value={currentDistId} 
-                      onChange={e => handleDistrictChange(e.target.value)}
-                      disabled={!currentProvId}
-                      className="h-6 border border-slate-300 rounded px-1 text-[9px] font-bold bg-white text-slate-800 outline-none uppercase max-w-[105px] disabled:bg-slate-100"
-                      title="Distrito de llegada"
-                    >
-                      <option value="">DISTRITO</option>
-                      {availableDistricts.map((d: any) => <option key={d.id} value={d.id}>{d.name.toUpperCase()}</option>)}
-                    </select>
-
-                    <div className="flex items-center gap-0.5">
-                      <span className="text-[8px] font-black text-emerald-800 uppercase">UBIGEO:</span>
-                      <input 
-                        type="text" 
-                        value={formData.deliveryUbigeo || ''} 
-                        onChange={e => handleManualUbigeoChange(e.target.value)} 
-                        maxLength={6}
-                        className="h-6 w-16 border border-emerald-300 rounded px-1 text-xs text-center font-mono font-bold bg-emerald-50 text-emerald-950 outline-none focus:border-emerald-500" 
-                        placeholder="150101"
-                        title="Código Ubigeo SUNAT de llegada (6 dígitos)"
-                      />
-                    </div>
+                  <div className="flex items-center gap-1.5">
+                    {formData.transferReason === '04' && (
+                      <>
+                        <span className="text-[9px] font-bold text-slate-500 uppercase">Almacén:</span>
+                        <select
+                          value={formData.deliveryWarehouseId || ''}
+                          onChange={e => handleDeliveryWarehouseChange(e.target.value)}
+                          className="h-6 border border-emerald-300 rounded px-1.5 text-[10px] font-bold bg-white text-emerald-950 outline-none uppercase max-w-[165px]"
+                        >
+                          <option value="">-- SELECCIONAR --</option>
+                          {warehouses
+                            .filter(w => w.id.toString() !== formData.originWarehouseId && !['TRANSITORIO', 'DESPACHO', 'COMPROBANTES', 'SISTEMA'].includes((w.type || '').toUpperCase()))
+                            .map(w => (
+                              <option key={w.id} value={w.id}>{w.name.toUpperCase()}</option>
+                            ))}
+                        </select>
+                      </>
+                    )}
+                    <span className="text-[9px] font-bold text-emerald-900 uppercase">Cód. SUNAT:</span>
+                    <input 
+                      type="text" 
+                      value={formData.deliverySunatCode || '0000'} 
+                      onChange={e => setFormData({...formData, deliverySunatCode: e.target.value.replace(/\D/g, '').slice(0, 4)})} 
+                      maxLength={4}
+                      className="h-6 w-12 border border-emerald-300 rounded px-1 text-xs text-center font-mono font-bold bg-emerald-50 text-emerald-950 outline-none focus:border-emerald-500" 
+                      placeholder="0000"
+                      title="Código de Establecimiento Anexo SUNAT de llegada (4 dígitos)"
+                    />
                   </div>
                 </div>
 
@@ -1236,211 +1572,520 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
                     placeholder="Dirección fiscal o local de entrega del destinatario"
                   />
                 </div>
+
+                {/* Distribución de Ubigeo (Llegada) */}
+                <div className="flex items-center gap-1 flex-wrap">
+                  <select 
+                    value={currentDeptId} 
+                    onChange={e => handleDepartmentChange(e.target.value)}
+                    className="h-6 border border-slate-300 rounded px-1 text-[9px] font-bold bg-white text-slate-800 outline-none uppercase flex-1 min-w-[90px]"
+                    title="Departamento de llegada"
+                  >
+                    <option value="">DEPARTAMENTO</option>
+                    {DEPARTMENTS.map(d => <option key={d.id} value={d.id}>{d.name.toUpperCase()}</option>)}
+                  </select>
+
+                  <select 
+                    value={currentProvId} 
+                    onChange={e => handleProvinceChange(e.target.value)}
+                    disabled={!currentDeptId}
+                    className="h-6 border border-slate-300 rounded px-1 text-[9px] font-bold bg-white text-slate-800 outline-none uppercase flex-1 min-w-[90px] disabled:bg-slate-100"
+                    title="Provincia de llegada"
+                  >
+                    <option value="">PROVINCIA</option>
+                    {availableProvinces.map((p: any) => <option key={p.id} value={p.id}>{p.name.toUpperCase()}</option>)}
+                  </select>
+
+                  <select 
+                    value={currentDistId} 
+                    onChange={e => handleDistrictChange(e.target.value)}
+                    disabled={!currentProvId}
+                    className="h-6 border border-slate-300 rounded px-1 text-[9px] font-bold bg-white text-slate-800 outline-none uppercase flex-1 min-w-[100px] disabled:bg-slate-100"
+                    title="Distrito de llegada"
+                  >
+                    <option value="">DISTRITO</option>
+                    {availableDistricts.map((d: any) => <option key={d.id} value={d.id}>{d.name.toUpperCase()}</option>)}
+                  </select>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[8px] font-black text-emerald-800 uppercase">UBIGEO:</span>
+                    <input 
+                      type="text" 
+                      value={formData.deliveryUbigeo || ''} 
+                      onChange={e => handleManualUbigeoChange(e.target.value)} 
+                      maxLength={6}
+                      className="h-6 w-16 border border-emerald-300 rounded px-1 text-xs text-center font-mono font-bold bg-emerald-50 text-emerald-950 outline-none focus:border-emerald-500" 
+                      placeholder="150101"
+                      title="Código Ubigeo SUNAT de llegada (6 dígitos)"
+                    />
+                  </div>
+                </div>
               </div>
 
             </div>
 
-            {/* FILA 4: Transporte, Conductor / Vehículo y Carga */}
-            <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs flex flex-wrap items-center gap-3 text-xs">
-              {formData.transportMode === '01' ? (
-                /* Transporte Público */
-                <>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold text-slate-600 uppercase shrink-0">Agencia:</span>
-                    <select 
-                      value={formData.shippingAgencyId || ''} 
-                      onChange={e => handleAgencyChange(e.target.value)} 
-                      className="h-7 border border-slate-300 rounded px-1.5 text-xs font-bold bg-white truncate focus:border-blue-500 outline-none uppercase w-48"
-                    >
-                      <option value="">-- SELECCIONAR AGENCIA --</option>
-                      {shippingAgencies.map(a => <option key={a.id} value={a.id}>{a.name.toUpperCase()}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold text-slate-600 uppercase shrink-0">RUC Transp:</span>
-                    <input 
-                      type="text" 
-                      value={formData.carrierDocNumber || ''} 
-                      onChange={e => setFormData({...formData, carrierDocNumber: e.target.value})} 
-                      className="h-7 w-28 border border-slate-300 rounded px-2 text-xs font-mono font-bold uppercase bg-white outline-none" 
-                      placeholder="20000000000" 
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-1 max-w-xs">
-                    <span className="text-[10px] font-bold text-slate-600 uppercase shrink-0">Razón Social:</span>
-                    <input 
-                      type="text" 
-                      value={formData.carrierName || ''} 
-                      onChange={e => setFormData({...formData, carrierName: e.target.value.toUpperCase()})} 
-                      className="h-7 w-full border border-slate-300 rounded px-2 text-xs font-bold uppercase bg-white outline-none" 
-                      placeholder="EMPRESA DE TRANSPORTE S.A.C." 
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold text-slate-600 uppercase shrink-0">N° MTC:</span>
-                    <input 
-                      type="text" 
-                      value={formData.carrierMtcNumber || ''} 
-                      onChange={e => setFormData({...formData, carrierMtcNumber: e.target.value})} 
-                      className="h-7 w-24 border border-slate-300 rounded px-2 text-xs font-mono uppercase bg-white outline-none" 
-                      placeholder="MTC-12345" 
-                    />
-                  </div>
-                </>
-              ) : (
-                /* Transporte Privado */
-                <>
-                  {/* Selector de Vehículo de Flota (Config. Logística) */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold text-slate-600 uppercase shrink-0 flex items-center gap-1">
-                      <Truck className="w-3 h-3 text-blue-700" /> Vehículo:
+            {/* FILA 4: Datos del Transporte (Transportista + Datos Agencia Transporte + Indicadores SUNAT) */}
+            <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs space-y-2 text-xs">
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-2.5">
+                {/* Bloque Izquierdo: Transportista / Vehículo / Conductor */}
+                <div className="xl:col-span-8 bg-slate-50/70 p-2 rounded border border-slate-200/80 space-y-1.5">
+                  <div className="text-[10px] font-bold text-blue-900 uppercase border-b border-slate-200 pb-0.5 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Truck className="w-3 h-3 text-blue-700" />
+                      {formData.transportMode === '01' ? 'Transportista (Transporte Público)' : 'Transportista (Transporte Privado)'}
                     </span>
-                    {allVehicles.length > 0 && (
-                      <select 
-                        value={allVehicles.some(v => v.plate === formData.vehiclePlate) ? formData.vehiclePlate : ''}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setFormData((prev: any) => ({ ...prev, vehiclePlate: val }));
-                        }}
-                        className="h-7 border border-blue-300 rounded px-1.5 text-xs font-bold bg-blue-50/80 text-blue-950 outline-none uppercase max-w-[170px]"
-                        title="Seleccionar vehículo registrado de la flota"
-                      >
-                        <option value="">-- FLOTA EMPRESA --</option>
-                        {allVehicles.map(v => (
-                          <option key={v.id} value={v.plate}>
-                            {v.plate} {v.brand ? `- ${v.brand}` : ''} {v.model || ''}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <input 
-                      type="text" 
-                      value={formData.vehiclePlate || ''} 
-                      onChange={e => setFormData({...formData, vehiclePlate: e.target.value.toUpperCase()})} 
-                      className="h-7 w-20 border border-blue-300 rounded px-1.5 text-xs font-mono font-bold uppercase bg-white text-blue-950 text-center outline-none focus:border-blue-500" 
-                      placeholder="PLACA" 
-                      title="Placa principal del vehículo"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <span className="text-[9px] font-bold text-slate-500 uppercase shrink-0">Acoplado:</span>
-                    <input 
-                      type="text" 
-                      value={formData.vehicleSecondaryPlate || ''} 
-                      onChange={e => setFormData({...formData, vehicleSecondaryPlate: e.target.value.toUpperCase()})} 
-                      className="h-7 w-18 border border-slate-300 rounded px-1.5 text-xs font-mono uppercase bg-white text-center outline-none focus:border-blue-500" 
-                      placeholder="ACOPLADO" 
-                      title="Placa del remolque / semirremolque / acoplado (opcional)"
-                    />
-                  </div>
-
-                  {/* Selector de Conductor (Config. Logística / Usuarios) */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold text-slate-600 uppercase shrink-0 flex items-center gap-1">
-                      <User className="w-3 h-3 text-emerald-700" /> Chofer:
-                    </span>
-                    {allDrivers.length > 0 && (
-                      <select 
-                        value={allDrivers.some(d => d.name?.toUpperCase() === formData.driverName?.toUpperCase()) ? formData.driverName : ''}
-                        onChange={e => {
-                          const selectedDriver = allDrivers.find(d => d.name === e.target.value);
-                          if (selectedDriver) {
-                            setFormData((prev: any) => ({
-                              ...prev,
-                              driverName: selectedDriver.name.toUpperCase(),
-                              driverDocNumber: selectedDriver.docNumber || prev.driverDocNumber,
-                              driverLicenseNumber: selectedDriver.licenseNumber || prev.driverLicenseNumber
-                            }));
-                          }
-                        }}
-                        className="h-7 border border-emerald-300 rounded px-1.5 text-xs font-bold bg-emerald-50/80 text-emerald-950 outline-none uppercase max-w-[150px]"
-                        title="Seleccionar conductor registrado en la empresa"
-                      >
-                        <option value="">-- CHOFER EMPRESA --</option>
-                        {allDrivers.map(d => (
-                          <option key={d.id} value={d.name}>
-                            {d.name.toUpperCase()}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <span className="text-[9px] font-bold text-slate-500 uppercase shrink-0">DNI:</span>
-                    <div className="relative flex items-center">
-                      <input 
-                        type="text" 
-                        value={formData.driverDocNumber || ''} 
-                        onChange={e => setFormData({...formData, driverDocNumber: e.target.value})} 
-                        maxLength={11}
-                        className="h-7 w-24 border border-slate-300 rounded px-1.5 pr-6 text-xs font-mono font-bold bg-white text-center outline-none focus:border-emerald-500" 
-                        placeholder="DNI CHOFER" 
-                        title="DNI o Cédula del conductor"
-                      />
-                      <button 
-                        type="button" 
-                        onClick={consultDriverSunat} 
-                        disabled={isDriverConsulting}
-                        className="absolute right-1 text-slate-400 hover:text-emerald-700 disabled:opacity-50 transition-colors"
-                        title="Consultar RENIEC / SUNAT"
-                      >
-                        {isDriverConsulting ? <RefreshCw className="w-3 h-3 animate-spin text-emerald-600" /> : <Search className="w-3 h-3" />}
-                      </button>
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600">
+                      <label className="flex items-center gap-1">
+                        <span>Peso (Kg):</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formData.totalWeight ?? 0}
+                          onChange={e => setFormData({ ...formData, totalWeight: e.target.value })}
+                          className="h-5 w-16 border border-slate-300 rounded px-1 text-[11px] font-mono font-bold text-right bg-yellow-50 text-slate-800 outline-none"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1">
+                        <span>Bultos:</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formData.totalPackages ?? 0}
+                          onChange={e => setFormData({ ...formData, totalPackages: e.target.value })}
+                          className="h-5 w-12 border border-slate-300 rounded px-1 text-[11px] font-bold text-center bg-white text-slate-800 outline-none"
+                        />
+                      </label>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 flex-1 min-w-[140px] max-w-xs">
-                    <input 
-                      type="text" 
-                      value={formData.driverName || ''} 
-                      onChange={e => setFormData({...formData, driverName: e.target.value.toUpperCase()})} 
-                      className="h-7 w-full border border-slate-300 rounded px-2 text-xs font-bold uppercase bg-white outline-none focus:border-emerald-500" 
-                      placeholder="APELLIDOS Y NOMBRES DEL CHOFER" 
-                    />
+                  {/* Fila 1: RUC (+ Lupita) | Razón Social | Registro MTC */}
+                  <div className="grid grid-cols-12 gap-1.5 items-center">
+                    <div className="col-span-12 sm:col-span-4 flex items-center gap-1 relative">
+                      <span className="text-[9px] font-bold text-slate-600 uppercase w-16 shrink-0">RUC:</span>
+                      <div className="relative flex-1 flex items-center">
+                        <input
+                          type="text"
+                          maxLength={11}
+                          value={formData.carrierDocNumber || ''}
+                          onChange={e => {
+                            const val = e.target.value.replace(/\D/g, '').slice(0, 11);
+                            const matched = val.length === 11 ? allCarriers.find(c => c.ruc === val) : null;
+                            if (matched) {
+                              const firstVeh = matched.vehicles?.[0];
+                              const firstDrv = matched.drivers?.[0];
+                              setFormData((prev: any) => ({
+                                ...prev,
+                                carrierDocNumber: matched.ruc,
+                                carrierName: matched.name,
+                                carrierMtcNumber: matched.mtcNumber || prev.carrierMtcNumber,
+                                vehicleMtc: firstVeh?.mtcNumber || matched.mtcNumber || prev.vehicleMtc,
+                                vehiclePlate: firstVeh?.plate || prev.vehiclePlate,
+                                vehicleBrand: firstVeh?.brand || prev.vehicleBrand,
+                                vehicleTuce: firstVeh?.tuce || prev.vehicleTuce,
+                                driverDocNumber: firstDrv?.docNumber || prev.driverDocNumber,
+                                driverName: firstDrv?.name || prev.driverName,
+                                driverLicenseNumber: firstDrv?.licenseNumber || prev.driverLicenseNumber
+                              }));
+                            } else {
+                              setFormData({ ...formData, carrierDocNumber: val });
+                            }
+                          }}
+                          className="h-6.5 w-full border border-slate-300 rounded px-1.5 pr-6 text-xs font-mono font-bold bg-white outline-none focus:border-blue-500"
+                          placeholder="20126500603"
+                        />
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const ruc = String(formData.carrierDocNumber || '').trim();
+                            const matched = ruc.length === 11 ? allCarriers.find(c => c.ruc === ruc) : null;
+                            if (matched) {
+                              const firstVeh = matched.vehicles?.[0];
+                              const firstDrv = matched.drivers?.[0];
+                              setFormData((prev: any) => ({
+                                ...prev,
+                                carrierDocNumber: matched.ruc,
+                                carrierName: matched.name,
+                                carrierMtcNumber: matched.mtcNumber || prev.carrierMtcNumber,
+                                vehicleMtc: firstVeh?.mtcNumber || matched.mtcNumber || prev.vehicleMtc,
+                                vehiclePlate: firstVeh?.plate || prev.vehiclePlate,
+                                vehicleBrand: firstVeh?.brand || prev.vehicleBrand,
+                                vehicleTuce: firstVeh?.tuce || prev.vehicleTuce,
+                                driverDocNumber: firstDrv?.docNumber || prev.driverDocNumber,
+                                driverName: firstDrv?.name || prev.driverName,
+                                driverLicenseNumber: firstDrv?.licenseNumber || prev.driverLicenseNumber
+                              }));
+                              setShowCarrierLookup(false);
+                              return;
+                            }
+                            if (ruc.length === 11) {
+                              setIsCarrierConsulting(true);
+                              try {
+                                const res = await axios.get(`/api/consult/ruc/${ruc}`, { headers: { Authorization: `Bearer ${token}` } });
+                                if (res.data) {
+                                  setFormData((prev: any) => ({
+                                    ...prev,
+                                    carrierName: (res.data.razonSocial || res.data.nombre || prev.carrierName || '').toUpperCase()
+                                  }));
+                                }
+                              } catch {
+                                setShowCarrierLookup(prev => !prev);
+                              } finally {
+                                setIsCarrierConsulting(false);
+                              }
+                            } else {
+                              setShowCarrierLookup(prev => !prev);
+                            }
+                          }}
+                          className="absolute right-1 text-slate-400 hover:text-blue-700 cursor-pointer"
+                          title="Buscar transportista o consultar SUNAT"
+                        >
+                          {isCarrierConsulting ? <RefreshCw className="w-3 h-3 animate-spin text-blue-600" /> : <Search className="w-3 h-3" />}
+                        </button>
+                      </div>
+
+                      {showCarrierLookup && (
+                        <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-slate-200 rounded-lg shadow-2xl z-70 max-h-52 overflow-y-auto">
+                          <div className="px-2.5 py-1.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-600 uppercase">
+                            <span>Transportistas Registrados</span>
+                            <button type="button" onClick={() => setShowCarrierLookup(false)} className="text-slate-400 hover:text-red-500 cursor-pointer">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                          {allCarriers.length > 0 ? allCarriers.map(c => (
+                            <div
+                              key={c.id}
+                              onClick={() => {
+                                const firstVeh = c.vehicles?.[0];
+                                const firstDrv = c.drivers?.[0];
+                                setFormData((prev: any) => ({
+                                  ...prev,
+                                  carrierDocNumber: c.ruc,
+                                  carrierName: c.name,
+                                  carrierMtcNumber: c.mtcNumber || prev.carrierMtcNumber,
+                                  vehicleMtc: firstVeh?.mtcNumber || c.mtcNumber || prev.vehicleMtc,
+                                  vehiclePlate: firstVeh?.plate || prev.vehiclePlate,
+                                  vehicleBrand: firstVeh?.brand || prev.vehicleBrand,
+                                  vehicleTuce: firstVeh?.tuce || prev.vehicleTuce,
+                                  driverDocNumber: firstDrv?.docNumber || prev.driverDocNumber,
+                                  driverName: firstDrv?.name || prev.driverName,
+                                  driverLicenseNumber: firstDrv?.licenseNumber || prev.driverLicenseNumber
+                                }));
+                                setShowCarrierLookup(false);
+                              }}
+                              className="px-2.5 py-1.5 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0"
+                            >
+                              <div className="text-[11px] font-bold text-slate-800 truncate">{c.name}</div>
+                              <div className="text-[10px] font-mono text-slate-500">RUC: {c.ruc}</div>
+                            </div>
+                          )) : (
+                            <div className="p-3 text-center text-[11px] text-slate-400">No hay transportistas registrados.</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="col-span-12 sm:col-span-5 flex items-center gap-1">
+                      <span className="text-[9px] font-bold text-slate-600 uppercase shrink-0">Razón Social:</span>
+                      <input
+                        type="text"
+                        value={formData.carrierName || ''}
+                        onChange={e => setFormData({ ...formData, carrierName: e.target.value.toUpperCase() })}
+                        className="h-6.5 w-full border border-slate-300 rounded px-1.5 text-xs font-bold uppercase bg-white outline-none focus:border-blue-500"
+                        placeholder="RAZÓN SOCIAL DEL TRANSPORTISTA"
+                      />
+                    </div>
+
+                    <div className="col-span-12 sm:col-span-3 flex items-center gap-1">
+                      <span className="text-[9px] font-bold text-slate-600 uppercase shrink-0">Reg. MTC:</span>
+                      <input
+                        type="text"
+                        value={(formData.transportMode === '01' ? formData.carrierMtcNumber : formData.vehicleMtc) || ''}
+                        onChange={e => {
+                          const val = e.target.value.toUpperCase();
+                          setFormData({
+                            ...formData,
+                            ...(formData.transportMode === '01' ? { carrierMtcNumber: val } : { vehicleMtc: val })
+                          });
+                        }}
+                        className="h-6.5 w-full border border-slate-300 rounded px-1.5 text-xs font-mono uppercase bg-white outline-none focus:border-blue-500"
+                        placeholder="MTC"
+                      />
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    <span className="text-[9px] font-bold text-slate-500 uppercase shrink-0">Licencia:</span>
-                    <input 
-                      type="text" 
-                      value={formData.driverLicenseNumber || ''} 
-                      onChange={e => setFormData({...formData, driverLicenseNumber: e.target.value.toUpperCase()})} 
-                      className="h-7 w-24 border border-slate-300 rounded px-1.5 text-xs font-mono font-bold uppercase bg-white text-center outline-none focus:border-emerald-500" 
-                      placeholder="BREVETE" 
-                      title="Número de licencia de conducir / brevete"
-                    />
-                  </div>
-                </>
-              )}
+                  {/* Fila 2 y 3 (Solo Transporte Privado 02) */}
+                  {formData.transportMode !== '01' && (
+                    <>
+                      {/* Fila 2: Vehículos | Marca | Nro. de TUCE */}
+                      <div className="grid grid-cols-12 gap-1.5 items-center">
+                        <div className="col-span-12 sm:col-span-4 flex items-center gap-1">
+                          <span className="text-[9px] font-bold text-slate-600 uppercase w-16 shrink-0">Vehículos:</span>
+                          {allVehicles.length > 0 && (
+                            <select
+                              value={allVehicles.some(v => v.plate === formData.vehiclePlate) ? formData.vehiclePlate : ''}
+                              onChange={e => {
+                                const val = e.target.value;
+                                if (!val) {
+                                  setFormData((prev: any) => ({ ...prev, vehiclePlate: '' }));
+                                  return;
+                                }
+                                const veh = allVehicles.find(v => v.plate === val);
+                                setFormData((prev: any) => ({
+                                  ...prev,
+                                  vehiclePlate: val,
+                                  vehicleBrand: veh?.brand ? String(veh.brand).toUpperCase() : prev.vehicleBrand,
+                                  vehicleMtc: veh?.mtcNumber || prev.vehicleMtc,
+                                  vehicleTuce: veh?.tuce || prev.vehicleTuce
+                                }));
+                              }}
+                              className="h-6.5 flex-1 min-w-0 border border-blue-300 rounded px-1 text-xs font-bold bg-blue-50/80 text-blue-950 outline-none uppercase"
+                              title="Seleccionar vehículo registrado"
+                            >
+                              <option value="">-- OTRO / MANUAL --</option>
+                              {allVehicles.map(v => (
+                                <option key={v.id} value={v.plate}>{v.plate}</option>
+                              ))}
+                            </select>
+                          )}
+                          {(!allVehicles.some(v => v.plate === formData.vehiclePlate) || allVehicles.length === 0) && (
+                            <input
+                              type="text"
+                              value={formData.vehiclePlate || ''}
+                              onChange={e => setFormData({ ...formData, vehiclePlate: e.target.value.toUpperCase() })}
+                              className="h-6.5 w-20 border border-blue-300 rounded px-1 text-xs font-mono font-bold uppercase bg-white text-blue-950 text-center outline-none"
+                              placeholder="PLACA"
+                            />
+                          )}
+                        </div>
 
-              {/* Peso y Bultos */}
-              <div className="flex items-center gap-1.5 border-l border-slate-200 pl-3">
-                <span className="text-[10px] font-bold text-slate-600 uppercase shrink-0">Peso Total (Kg):</span>
-                <input 
-                  type="number" 
-                  step="0.01" 
-                  value={formData.totalWeight || ''} 
-                  onChange={e => setFormData({...formData, totalWeight: e.target.value})} 
-                  className="h-7 w-20 border border-slate-300 rounded px-2 text-xs font-mono font-bold text-right bg-yellow-50 text-slate-800 outline-none" 
-                  placeholder="0.00" 
-                />
+                        <div className="col-span-6 sm:col-span-5 flex items-center gap-1">
+                          <span className="text-[9px] font-bold text-slate-600 uppercase shrink-0">Marca:</span>
+                          <input
+                            type="text"
+                            value={formData.vehicleBrand || ''}
+                            onChange={e => setFormData({ ...formData, vehicleBrand: e.target.value.toUpperCase() })}
+                            className="h-6.5 flex-1 border border-slate-300 rounded px-1.5 text-xs font-bold uppercase bg-white outline-none focus:border-blue-500"
+                            placeholder="HYUNDAI"
+                          />
+                          <input
+                            type="text"
+                            value={formData.vehicleSecondaryPlate || ''}
+                            onChange={e => setFormData({ ...formData, vehicleSecondaryPlate: e.target.value.toUpperCase() })}
+                            className="h-6.5 w-20 border border-slate-300 rounded px-1 text-[10px] font-mono uppercase bg-white text-center outline-none"
+                            placeholder="ACOPLADO"
+                            title="Placa de acoplado (opcional)"
+                          />
+                        </div>
+
+                        <div className="col-span-6 sm:col-span-3 flex items-center gap-1">
+                          <span className="text-[9px] font-bold text-slate-600 uppercase shrink-0">Nro. TUCE:</span>
+                          <input
+                            type="text"
+                            value={formData.vehicleTuce || ''}
+                            onChange={e => setFormData({ ...formData, vehicleTuce: e.target.value.toUpperCase() })}
+                            className="h-6.5 w-full border border-slate-300 rounded px-1.5 text-xs font-mono uppercase bg-white outline-none focus:border-blue-500"
+                            placeholder="TUCE"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Fila 3: Conductor Principal | DNI/Nombre (solo si es manual) | Brevete */}
+                      <div className="grid grid-cols-12 gap-1.5 items-center">
+                        <div className={`${allDrivers.some(d => d.name?.toUpperCase() === formData.driverName?.toUpperCase()) ? 'col-span-12 sm:col-span-9' : 'col-span-12 sm:col-span-4'} flex items-center gap-1`}>
+                          <span className="text-[9px] font-bold text-slate-600 uppercase w-16 shrink-0">Conductor:</span>
+                          {allDrivers.length > 0 ? (
+                            <select
+                              value={allDrivers.some(d => d.name?.toUpperCase() === formData.driverName?.toUpperCase()) ? formData.driverName : ''}
+                              onChange={e => {
+                                if (!e.target.value) {
+                                  setFormData((prev: any) => ({
+                                    ...prev,
+                                    driverName: '',
+                                    driverDocNumber: '',
+                                    driverLicenseNumber: ''
+                                  }));
+                                  return;
+                                }
+                                const selectedDriver = allDrivers.find(d => d.name === e.target.value);
+                                if (selectedDriver) {
+                                  setFormData((prev: any) => ({
+                                    ...prev,
+                                    driverName: selectedDriver.name.toUpperCase(),
+                                    driverDocNumber: selectedDriver.docNumber || prev.driverDocNumber,
+                                    driverLicenseNumber: selectedDriver.licenseNumber || prev.driverLicenseNumber
+                                  }));
+                                }
+                              }}
+                              className="h-6.5 flex-1 min-w-0 border border-emerald-300 rounded px-1 text-xs font-bold bg-emerald-50/80 text-emerald-950 outline-none uppercase"
+                              title="Seleccionar conductor registrado"
+                            >
+                              <option value="">-- OTRO / MANUAL --</option>
+                              {allDrivers.map(d => (
+                                <option key={d.id} value={d.name}>{d.name.toUpperCase()}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={formData.driverName || ''}
+                              onChange={e => setFormData({ ...formData, driverName: e.target.value.toUpperCase() })}
+                              className="h-6.5 flex-1 border border-slate-300 rounded px-1.5 text-xs font-bold uppercase bg-white outline-none"
+                              placeholder="APELLIDOS Y NOMBRES"
+                            />
+                          )}
+                        </div>
+
+                        {!allDrivers.some(d => d.name?.toUpperCase() === formData.driverName?.toUpperCase()) && (
+                          <div className="col-span-7 sm:col-span-5 flex items-center gap-1">
+                            <span className="text-[9px] font-bold text-slate-600 uppercase shrink-0">DNI:</span>
+                            <div className="relative flex items-center w-24 shrink-0">
+                              <input
+                                type="text"
+                                value={formData.driverDocNumber || ''}
+                                onChange={e => setFormData({ ...formData, driverDocNumber: e.target.value })}
+                                maxLength={11}
+                                className="h-6.5 w-full border border-slate-300 rounded px-1.5 pr-5 text-xs font-mono font-bold bg-white text-center outline-none focus:border-emerald-500"
+                                placeholder="DNI"
+                              />
+                              <button
+                                type="button"
+                                onClick={consultDriverSunat}
+                                disabled={isDriverConsulting}
+                                className="absolute right-1 text-slate-400 hover:text-emerald-700 cursor-pointer"
+                                title="Consultar RENIEC"
+                              >
+                                {isDriverConsulting ? <RefreshCw className="w-3 h-3 animate-spin text-emerald-600" /> : <Search className="w-3 h-3" />}
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              value={formData.driverName || ''}
+                              onChange={e => setFormData({ ...formData, driverName: e.target.value.toUpperCase() })}
+                              className="h-6.5 flex-1 min-w-0 border border-slate-300 rounded px-1.5 text-xs font-bold uppercase bg-white outline-none focus:border-emerald-500"
+                              placeholder="APELLIDOS Y NOMBRES DEL CHOFER"
+                            />
+                          </div>
+                        )}
+
+                        <div className="col-span-5 sm:col-span-3 flex items-center gap-1">
+                          <span className="text-[9px] font-bold text-slate-600 uppercase shrink-0">Brevete:</span>
+                          <input
+                            type="text"
+                            value={formData.driverLicenseNumber || ''}
+                            onChange={e => setFormData({ ...formData, driverLicenseNumber: e.target.value.toUpperCase() })}
+                            className="h-6.5 w-full border border-slate-300 rounded px-1.5 text-xs font-mono font-bold uppercase bg-white text-center outline-none focus:border-emerald-500"
+                            placeholder="BREVETE"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Bloque Derecho: Datos Agencia Transporte (siempre visible y editable) */}
+                <div className="xl:col-span-4 bg-slate-50/70 p-2 rounded border border-slate-200/80 space-y-1.5 flex flex-col justify-between">
+                  <div className="text-[10px] font-bold text-slate-700 uppercase border-b border-slate-200 pb-0.5 flex items-center justify-between">
+                    <span>Datos Agencia Transporte</span>
+                    {formData.shippingAgencyId && (
+                      <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 rounded border border-emerald-200">
+                        Vinculada
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 flex-1 flex flex-col justify-center">
+                    <div className="grid grid-cols-12 gap-1.5 items-center">
+                      <div className="col-span-7 flex items-center gap-1 min-w-0">
+                        <span className="text-[9px] font-bold text-slate-600 uppercase shrink-0">Agencia:</span>
+                        <select
+                          value={formData.shippingAgencyId || ''}
+                          onChange={e => handleAgencyChange(e.target.value)}
+                          className="h-6.5 flex-1 min-w-0 border border-slate-300 rounded px-1.5 text-xs font-bold bg-white truncate focus:border-blue-500 outline-none uppercase"
+                        >
+                          <option value="">-- SELECCIONAR --</option>
+                          {shippingAgencies.map(a => (
+                            <option key={a.id} value={a.id}>{a.name.toUpperCase()}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-5 flex items-center gap-1 min-w-0">
+                        <span className="text-[9px] font-bold text-slate-600 uppercase shrink-0">RUC:</span>
+                        <input
+                          type="text"
+                          value={formData.agencyRuc || ''}
+                          onChange={e => setFormData({ ...formData, agencyRuc: e.target.value.replace(/\D/g, '').slice(0, 11) })}
+                          className="h-6.5 w-full border border-slate-300 rounded px-1.5 text-xs font-mono font-bold bg-white outline-none focus:border-blue-500"
+                          placeholder="RUC Agencia"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] font-bold text-slate-600 uppercase shrink-0">Dirección:</span>
+                      <input
+                        type="text"
+                        value={formData.agencyAddress || ''}
+                        onChange={e => setFormData({ ...formData, agencyAddress: e.target.value.toUpperCase() })}
+                        className="h-6.5 flex-1 border border-slate-300 rounded px-1.5 text-xs bg-white uppercase outline-none focus:border-blue-500"
+                        placeholder="Dirección de la agencia de transporte"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-bold text-slate-600 uppercase shrink-0">Bultos:</span>
-                <input 
-                  type="number" 
-                  min="1" 
-                  value={formData.totalPackages || ''} 
-                  onChange={e => setFormData({...formData, totalPackages: e.target.value})} 
-                  className="h-7 w-16 border border-slate-300 rounded px-2 text-xs font-bold text-center bg-white outline-none" 
-                  placeholder="1" 
-                />
+              {/* Indicadores Normativos SUNAT GRE */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1.5 border-t border-slate-100 text-[10px] font-semibold text-slate-700">
+                <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formData.returnEmptyContainers)}
+                    onChange={e => setFormData({ ...formData, returnEmptyContainers: e.target.checked })}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-[#004A99] focus:ring-0"
+                  />
+                  <span>Retorno de vehículo con env./embalajes vacíos</span>
+                </label>
+
+                <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formData.transshipment)}
+                    onChange={e => setFormData({ ...formData, transshipment: e.target.checked })}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-[#004A99] focus:ring-0"
+                  />
+                  <span>Realiza Transbordo</span>
+                </label>
+
+                <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formData.vehicleCategoryM1OrL)}
+                    onChange={e => setFormData({ ...formData, vehicleCategoryM1OrL: e.target.checked })}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-[#004A99] focus:ring-0"
+                  />
+                  <span>Traslado de vehículo en categoría M1 o L</span>
+                </label>
+
+                <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formData.returnEmptyVehicle)}
+                    onChange={e => setFormData({ ...formData, returnEmptyVehicle: e.target.checked })}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-[#004A99] focus:ring-0"
+                  />
+                  <span>Retorno de Vehículo Vacío</span>
+                </label>
+
+                <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formData.fullDamOrDsTransfer)}
+                    onChange={e => setFormData({ ...formData, fullDamOrDsTransfer: e.target.checked })}
+                    className="w-3.5 h-3.5 rounded border-slate-300 text-[#004A99] focus:ring-0"
+                  />
+                  <span>Indicador Traslado Total DAM o DS</span>
+                </label>
               </div>
             </div>
 
@@ -1464,21 +2109,34 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
 
                   {productPredictiveResults.length > 0 && (
                     <div className="absolute top-full left-0 right-0 z-70 mt-1 bg-white shadow-2xl border border-slate-200 rounded-lg max-h-56 overflow-y-auto">
-                      {productPredictiveResults.map(p => (
-                        <div 
-                          key={p.id} 
-                          onClick={() => addProductToItems(p)} 
-                          className="p-2 hover:bg-blue-50 cursor-pointer text-xs flex items-center justify-between border-b border-slate-100"
-                        >
-                          <div className="flex flex-col">
-                            <span className="font-bold text-slate-800">{p.name}</span>
-                            <span className="text-[10px] text-slate-500 font-mono">Cód: {p.code || '-'} | Stock: {p.stock || 0}</span>
+                      {productPredictiveResults.map(p => {
+                        const { totalStock, lots, unitLabel } = getOriginStockInfo(p);
+                        const lotSummary = lots
+                          .filter((l: any) => l.lotNumber)
+                          .map((l: any) => `${l.lotNumber} (${l.quantity})`)
+                          .join(', ');
+                        return (
+                          <div 
+                            key={p.id} 
+                            onClick={() => addProductToItems(p)} 
+                            className="p-2 hover:bg-blue-50 cursor-pointer text-xs flex items-center justify-between border-b border-slate-100"
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-bold text-slate-800">{p.name}</span>
+                              <span className="text-[10px] font-mono text-slate-500">
+                                Cód: {p.code || '-'} |{' '}
+                                <strong className={totalStock > 0 ? 'text-emerald-700' : 'text-red-600'}>
+                                  Stock Origen: {totalStock} {unitLabel}
+                                </strong>
+                                {lotSummary ? ` · Lotes: ${lotSummary}` : ''}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded shrink-0 ml-2">
+                              {p.weight ? `${p.weight} Kg` : '0.5 Kg'}
+                            </span>
                           </div>
-                          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
-                            {p.weight ? `${p.weight} Kg` : '0.5 Kg'}
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1557,7 +2215,31 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
                           {(parseFloat(it.totalWeight) || 0).toFixed(2)}
                         </td>
                         <td className="py-1 px-3 text-center text-[10px] font-mono text-slate-500">
-                          {it.lotNumber || '-'}
+                          {(() => {
+                            const prod = allProducts.find(p => p.id === it.productId);
+                            const { lots } = prod ? getOriginStockInfo(prod) : { lots: [] };
+                            const namedLots = lots.filter((l: any) => l.lotNumber);
+                            if (namedLots.length > 0) {
+                              return (
+                                <select
+                                  value={it.lotNumber || ''}
+                                  onChange={e => {
+                                    const chosen = namedLots.find((l: any) => l.lotNumber === e.target.value);
+                                    updateItem(idx, 'lotNumber', e.target.value || null);
+                                    if (chosen?.expiryDate) updateItem(idx, 'expiryDate', chosen.expiryDate);
+                                  }}
+                                  className="h-7 border border-blue-200 rounded px-1.5 text-[10px] font-mono font-bold bg-blue-50/50 text-blue-900 outline-none"
+                                >
+                                  {namedLots.map((l: any, lIdx: number) => (
+                                    <option key={lIdx} value={l.lotNumber}>
+                                      {l.lotNumber} ({l.quantity})
+                                    </option>
+                                  ))}
+                                </select>
+                              );
+                            }
+                            return it.lotNumber || '-';
+                          })()}
                         </td>
                         <td className="py-1 px-3 text-center">
                           <button 
@@ -1678,11 +2360,12 @@ export const SalesReferralGuideForm: React.FC<SalesReferralGuideFormProps> = ({
                     onChange={e => setExtractDocTypeFilter(e.target.value as any)} 
                     className="h-8 border border-slate-300 rounded-lg px-2 text-xs font-bold bg-white outline-none uppercase"
                   >
-                    <option value="ALL">TODOS LOS TIPOS</option>
+                    <option value="INVOICES">FACTURA / BOLETA</option>
                     <option value="01">FACTURA (01)</option>
                     <option value="03">BOLETA (03)</option>
                     <option value="PED">PEDIDO (PED)</option>
                     <option value="COT">COTIZACIÓN (COT)</option>
+                    <option value="ALL">TODOS LOS TIPOS</option>
                   </select>
                 </div>
 

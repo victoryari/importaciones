@@ -13,188 +13,402 @@ const currencyNames: Record<string, string> = {
 
 const getCurrencyName = (code: string) => currencyNames[code] || code;
 
+const loadLogoDataUrl = (url: string): Promise<{ dataUrl: string; width: number; height: number } | null> => {
+  return new Promise((resolve) => {
+    if (!url) return resolve(null);
+    if (url.startsWith('data:image/')) {
+      const img = new Image();
+      img.onload = () => resolve({ dataUrl: url, width: img.naturalWidth || 200, height: img.naturalHeight || 80 });
+      img.onerror = () => resolve(null);
+      img.src = url;
+      return;
+    }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || 200;
+        canvas.height = img.naturalHeight || 80;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(null);
+        ctx.drawImage(img, 0, 0);
+        resolve({
+          dataUrl: canvas.toDataURL('image/png'),
+          width: canvas.width,
+          height: canvas.height,
+        });
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+};
+
+const drawFittedLogo = (
+  doc: jsPDF,
+  logo: { dataUrl: string; width: number; height: number } | null,
+  x: number,
+  y: number,
+  maxW: number,
+  maxH: number
+) => {
+  if (!logo) return false;
+  const ratio = Math.min(maxW / logo.width, maxH / logo.height);
+  const drawW = logo.width * ratio;
+  const drawH = logo.height * ratio;
+  const offsetX = x + (maxW - drawW) / 2;
+  const offsetY = y + (maxH - drawH) / 2;
+  doc.addImage(logo.dataUrl, 'PNG', offsetX, offsetY, drawW, drawH, undefined, 'FAST');
+  return true;
+};
+
+const formatDatePE = (value: any): string => {
+  if (!value) return new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const str = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const [y, m, d] = str.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  const parsed = new Date(value);
+  if (isNaN(parsed.getTime())) return str;
+  return parsed.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
 export const generateQuotationPDF = async (quotation: any, items: any[], action: 'save' | 'print' = 'save') => {
-  console.log(`Iniciando generación de PDF Profesional (${action})...`);
   try {
-    const settingsRes = await axios.get('/api/settings');
-    const settings = settingsRes.data;
+    const [settingsRes, warehousesRes] = await Promise.all([
+      axios.get('/api/settings'),
+      (!quotation.pickupPlaceName && quotation.pickupPlace && /^\d+$/.test(String(quotation.pickupPlace).trim()))
+        ? axios.get('/api/warehouses').catch(() => ({ data: [] }))
+        : Promise.resolve({ data: [] })
+    ]);
+    const settings = settingsRes.data || {};
+    const warehousesList: any[] = Array.isArray(warehousesRes.data) ? warehousesRes.data : [];
+    const matchedWarehouse = !quotation.pickupPlaceName && quotation.pickupPlace
+      ? warehousesList.find((w: any) => String(w.id) === String(quotation.pickupPlace).trim())
+      : null;
+    const resolvedPickupPlace = quotation.pickupPlaceName
+      || (matchedWarehouse ? `${matchedWarehouse.name}${matchedWarehouse.address ? ` (${matchedWarehouse.address})` : ''}` : '')
+      || quotation.pickupPlace
+      || '-';
+    const logoUrl = settings.document_logo || settings.company_logo || '';
+    const loadedLogo = await loadLogoDataUrl(logoUrl);
 
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.width;
-    const margin = 14;
+    const pageHeight = doc.internal.pageSize.height;
+    const margin = 12;
 
     // --- CABECERA ---
-    // Logo con manejo de proporción
-    if (settings.company_logo) {
-      try {
-        // Se asume 35x35 de espacio máximo para el logo
-        doc.addImage(settings.company_logo, 'PNG', margin, 12, 35, 35, undefined, 'FAST');
-      } catch (e) {
-        console.warn("Error al cargar logo", e);
-      }
+    const hasLogo = drawFittedLogo(doc, loadedLogo, margin + 8, 10, 74, 28);
+    if (!hasLogo) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(20, 30, 50);
+      doc.text(settings.company_name || "IMPORTACIONES CARMELITA DEL NORTE", margin, 25);
     }
 
-    // Información de la Empresa (Desplazada si hay logo)
-    const companyX = settings.company_logo ? 52 : margin;
+    // Recuadro derecho RUC / COTIZACIÓN / SERIE-NÚMERO
+    const boxW = 66;
+    const boxH = 26;
+    const boxX = pageWidth - margin - boxW;
+    const boxY = 10;
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.45);
+    doc.rect(boxX, boxY, boxW, boxH);
+
+    const docTitle = quotation.docType === 'PED' ? 'PEDIDO' : 'COTIZACIÓN';
+    const docNumStr = `${quotation.docSeries || '0005'} - ${quotation.docNumber || '00000001'}`;
+
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.setTextColor(33, 37, 41);
-    doc.text(settings.company_name || "IMPORTACIONES CARMELITA DEL NORTE", companyX, 22);
-    
+    doc.setFontSize(11);
+    doc.setTextColor(0);
+    doc.text(`R.U.C.: ${settings.company_ruc || "20126500603"}`, boxX + boxW / 2, boxY + 7, { align: 'center' });
+    doc.text(docTitle, boxX + boxW / 2, boxY + 14.5, { align: 'center' });
+    doc.text(docNumStr, boxX + boxW / 2, boxY + 22, { align: 'center' });
+
+    // --- DATOS DEL CLIENTE Y DOCUMENTO (2 COLUMNAS) ---
+    let leftY = 43;
+    let rightY = 43;
+    const dividerX = 112;
+    const leftLabelX = margin;
+    const leftValX = margin + 22;
+    const leftMaxW = dividerX - leftValX - 3;
+
+    const rightLabelX = dividerX + 3;
+    const rightValX = dividerX + 28;
+    const rightMaxW = pageWidth - margin - rightValX;
+
+    const rawDoc = String(quotation.customerDocNumber || quotation.ruc || "").trim();
+    const isRuc = rawDoc.length === 11;
+    const rucText = isRuc ? rawDoc : "";
+    const dniText = !isRuc && rawDoc && rawDoc !== "-" ? rawDoc : "";
+    const customerName = String(quotation.customerName || quotation.razonSocial || "PÚBLICO GENERAL").toUpperCase();
+    const customerAddress = String(quotation.customerAddress || quotation.address || "-").toUpperCase();
+    const paymentCond = String(quotation.paymentCondition || "CONTADO").toUpperCase();
+
+    const drawLeftField = (label: string, value: string, boldValue = true) => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(30);
+      doc.text(label, leftLabelX, leftY);
+
+      doc.setFont("helvetica", boldValue ? "bold" : "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(0);
+      const lines = doc.splitTextToSize(value || "-", leftMaxW);
+      doc.text(lines, leftValX, leftY);
+      leftY += Math.max(1, lines.length) * 4.2 + 0.6;
+    };
+
+    drawLeftField("Fecha :        :", formatDatePE(quotation.date || quotation.createdAt));
+    drawLeftField("Señor(es) :", customerName);
+    drawLeftField("Dirección :", customerAddress, false);
+
+    // Fila R.U.C. + DNI
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(100);
-    doc.text(`RUC: ${settings.company_ruc || "-"}`, companyX, 28);
-    doc.text(settings.company_address || "-", companyX, 33);
-    doc.text(`Telf: ${settings.company_phone || "-"} | Email: ${settings.company_email || "-"}`, companyX, 38);
-
-    // Cuadro de Documento (Lado Derecho) - Diseño Moderno
-    doc.setDrawColor(220, 220, 220);
-    doc.setFillColor(250, 250, 250);
-    doc.roundedRect(pageWidth - 75, 12, 61, 35, 3, 3, 'FD');
-    
+    doc.setFontSize(8);
+    doc.setTextColor(30);
+    doc.text("R.U.C. :", leftLabelX, leftY);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(50);
-    doc.text("COTIZACIÓN", pageWidth - 44.5, 22, { align: 'center' });
-    
-    doc.setFontSize(14);
-    doc.setTextColor(220, 38, 38); // Rojo acento
-    doc.text(`${quotation.docSeries || '001'}-${quotation.docNumber || '00000001'}`, pageWidth - 44.5, 33, { align: 'center' });
-
-    // Línea divisora
-    doc.setDrawColor(240);
-    doc.line(margin, 55, pageWidth - margin, 55);
-
-    // --- INFORMACIÓN DEL CLIENTE ---
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(80);
-    doc.text("DATOS DEL CLIENTE", margin, 63);
-
+    doc.setFontSize(7.5);
+    doc.setTextColor(0);
+    doc.text(rucText, leftValX, leftY);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(33, 37, 41);
-    
-    // Grid de cliente
+    doc.setFontSize(8);
+    doc.text("DNI", leftValX + 28, leftY);
     doc.setFont("helvetica", "bold");
-    doc.text("Señor(es):", margin, 72);
-    doc.setFont("helvetica", "normal");
-    doc.text(String(quotation.customerName || "PÚBLICO GENERAL"), 40, 72);
+    doc.setFontSize(7.5);
+    doc.text(dniText, leftValX + 38, leftY);
+    leftY += 4.8;
 
-    doc.setFont("helvetica", "bold");
-    doc.text("RUC / DNI:", margin, 79);
+    // Fila Condición de Pago + Forma de Pago
     doc.setFont("helvetica", "normal");
-    doc.text(String(quotation.customerDocNumber || "-"), 40, 79);
+    doc.setFontSize(8);
+    doc.setTextColor(30);
+    doc.text("Condición de Pago:", leftLabelX, leftY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(0);
+    doc.text(paymentCond, leftLabelX + 27, leftY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text("Forma de Pago:", leftLabelX + 44, leftY);
+    leftY += 4.8;
 
-    doc.setFont("helvetica", "bold");
-    doc.text("Dirección:", margin, 86);
-    doc.setFont("helvetica", "normal");
-    doc.text(String(quotation.customerAddress || "-"), 40, 86);
+    // Columna Derecha
+    const sellerName = String(quotation.sellerName || quotation.seller?.name || "-").toUpperCase();
+    const deliveryDateStr = quotation.deliveryDate
+      ? formatDatePE(quotation.deliveryDate)
+      : `${formatDatePE(quotation.date || quotation.createdAt)} ${new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}`;
+    const pickupPlace = String(resolvedPickupPlace || "-").toUpperCase();
+    const agencyName = String(quotation.agencyName || quotation.shippingAgency?.name || "-").toUpperCase();
+    const observation = String(quotation.observation || quotation.observations || "-").toUpperCase();
 
-    // Columna derecha del cliente
-    doc.setFont("helvetica", "bold");
-    doc.text("Fecha Emisión:", pageWidth - 80, 72);
-    doc.setFont("helvetica", "normal");
-    doc.text(new Date(quotation.createdAt || quotation.date || Date.now()).toLocaleDateString(), pageWidth - 45, 72);
+    const drawRightField = (label: string, value: string) => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(30);
+      doc.text(label, rightLabelX, rightY);
 
-    doc.setFont("helvetica", "bold");
-    doc.text("Moneda:", pageWidth - 80, 79);
-    doc.setFont("helvetica", "normal");
-    doc.text(getCurrencyName(quotation.currency), pageWidth - 45, 79);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(0);
+      const lines = doc.splitTextToSize(value || "-", rightMaxW);
+      doc.text(lines, rightValX, rightY);
+      rightY += Math.max(1, lines.length) * 4.2 + 0.6;
+    };
+
+    drawRightField("Vendedor :", sellerName);
+    drawRightField("Fecha de Entrega :", deliveryDateStr);
+    drawRightField("Lugar de Entrega :", pickupPlace);
+    drawRightField("Agencia :", agencyName);
+    drawRightField("Observaciones: :", observation);
+
+    // Línea divisoria vertical entre ambas columnas
+    const infoBottomY = Math.max(leftY, rightY) - 1;
+    doc.setDrawColor(60);
+    doc.setLineWidth(0.35);
+    doc.line(dividerX, 39.5, dividerX, infoBottomY);
 
     // --- TABLA DE PRODUCTOS ---
     const hasFreeItems = (items || []).some(item => Boolean(item.isFree));
-    const tableData = (items || []).map((item, index) => {
+    const tableData = (items || []).map((item) => {
       const isFree = Boolean(item.isFree);
+      const qty = Number(item.quantity || 0);
       const effectivePrice = isFree ? 0 : Number(item.price || 0);
+      const discountPct = Number(item.discount || 0);
+      const rawLine = qty * effectivePrice;
+      const lineTotal = isFree ? 0 : (rawLine - (rawLine * discountPct) / 100);
       const desc = (item.product?.name || item.name || '-') + (isFree ? ' [TRANSFERENCIA GRATUITA]' : '');
-      const unitPriceStr = isFree 
+      const unitPriceStr = isFree
         ? `0.00 (Ref: ${formatNumber(item.referencePrice || item.originalPrice || item.price || 0)})`
         : formatNumber(effectivePrice);
+      const unitStr = item.unitMeasure || item.product?.package?.symbol || item.product?.subPackage?.symbol || item.product?.unit?.symbol || item.unit?.symbol || 'UND';
 
       return [
-        index + 1,
+        qty.toFixed(2),
+        unitStr,
         item.product?.code || item.code || '-',
         desc,
-        item.quantity || 0,
-        item.product?.unit?.symbol || item.unit?.symbol || 'UND',
         unitPriceStr,
-        formatNumber(Number(item.quantity || 0) * effectivePrice)
+        formatNumber(lineTotal)
       ];
     });
 
     autoTable(doc, {
-      startY: 95,
-      head: [['ITEM', 'CÓDIGO', 'DESCRIPCIÓN', 'CANT.', 'U.M.', 'P. UNIT', 'TOTAL']],
+      startY: infoBottomY + 2,
+      head: [['CANT.', 'UNID.\nMEDIDA', 'CÓDIGO', 'DESCRIPCIÓN', 'PRECIO\nUNITARIO', 'TOTAL']],
       body: tableData,
-      theme: 'grid',
-      headStyles: { 
-        fillColor: [50, 50, 50], // Gris muy oscuro, casi negro
-        textColor: [255, 255, 255], 
-        fontSize: 9,
-        fontStyle: 'bold',
-        halign: 'center'
-      },
-      styles: { 
+      theme: 'plain',
+      headStyles: {
+        fillColor: [118, 118, 118],
+        textColor: [255, 255, 255],
         fontSize: 8,
-        cellPadding: 3
+        fontStyle: 'bold',
+        halign: 'center',
+        valign: 'middle',
+        cellPadding: { top: 2, bottom: 2, left: 2, right: 2 }
+      },
+      styles: {
+        fontSize: 7.5,
+        textColor: [20, 20, 20],
+        cellPadding: { top: 1.8, bottom: 1.8, left: 2, right: 2 },
+        overflow: 'linebreak'
       },
       columnStyles: {
-        0: { halign: 'center', cellWidth: 10 },
-        3: { halign: 'center', cellWidth: 15 },
-        4: { halign: 'center', cellWidth: 15 },
-        5: { halign: 'right', cellWidth: 28 },
-        6: { halign: 'right', cellWidth: 22 },
+        0: { halign: 'right', cellWidth: 16 },
+        1: { halign: 'center', cellWidth: 20 },
+        2: { halign: 'center', cellWidth: 26 },
+        3: { halign: 'left' },
+        4: { halign: 'right', cellWidth: 24 },
+        5: { halign: 'right', cellWidth: 24 },
       },
       margin: { left: margin, right: margin }
     });
 
-    let finalY = (doc as any).lastAutoTable?.finalY || 150;
+    let finalY = (doc as any).lastAutoTable?.finalY || (infoBottomY + 20);
 
-    // --- TOTALES ---
-    const total = Number(quotation.totalAmount || 0);
-    const subtotal = total / 1.18;
-    const igv = total - subtotal;
+    // --- TOTALES AL FINAL DEL DETALLE ---
+    if (finalY + 42 > pageHeight - 12) {
+      doc.addPage();
+      finalY = 15;
+    }
 
-    const totalsX = pageWidth - 65;
-    
-    doc.setFontSize(9);
+    const computedTotal = (items || []).reduce((acc, item) => {
+      if (item.isFree) return acc;
+      const line = Number(item.quantity || 0) * Number(item.price || 0);
+      return acc + (line - (line * (Number(item.discount) || 0)) / 100);
+    }, 0) + Number(quotation.flete || 0);
+
+    const total = Number(quotation.totalAmount ?? computedTotal);
+    const subtotal = quotation.subtotalAmount !== undefined ? Number(quotation.subtotalAmount) : (total / 1.18);
+    const igv = quotation.igvAmount !== undefined ? Number(quotation.igvAmount) : (total - subtotal);
+
+    const isUsd = quotation.currency === 'USD' || quotation.currency === '2';
+    const currSymbol = isUsd ? '$' : 'S/';
+    const currText = isUsd ? 'DÓLARES AMERICANOS' : 'SOLES';
+
+    const totalsStartY = finalY + 4;
+
+    // Izquierda: Total de Prod + SON
     doc.setFont("helvetica", "normal");
-    doc.text("SUBTOTAL:", totalsX, finalY + 10);
-    doc.text(formatNumber(subtotal), pageWidth - margin, finalY + 10, { align: 'right' });
+    doc.setFontSize(8.5);
+    doc.setTextColor(20);
+    doc.text("Total de Prod:", margin, totalsStartY + 5);
 
-    doc.text("I.G.V. (18%):", totalsX, finalY + 17);
-    doc.text(formatNumber(igv), pageWidth - margin, finalY + 17, { align: 'right' });
-
-    doc.setDrawColor(200);
-    doc.line(totalsX, finalY + 20, pageWidth - margin, finalY + 20);
-
-    doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
-    doc.text("TOTAL:", totalsX, finalY + 27);
-    doc.text(`${quotation.currency === 'USD' ? '$' : 'S/'} ${formatNumber(total)}`, pageWidth - margin, finalY + 27, { align: 'right' });
+    doc.setFontSize(11);
+    doc.setTextColor(0);
+    doc.text(String((items || []).length), margin + 24, totalsStartY + 5);
 
-    // --- FOOTER & LEYENDA GRATUITA ---
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "italic");
-    doc.setTextColor(120);
+    const amountInWords = `SON : ${numeroALetras(total)} ${currText}  S.E.U.O.`;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    const wordsLines = doc.splitTextToSize(amountInWords, 118);
+    doc.text(wordsLines, margin, totalsStartY + 11.5);
 
     if (hasFreeItems) {
       doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
       doc.setTextColor(180, 80, 0);
-      doc.text("LEYENDA: TRANSFERENCIA GRATUITA DE UN BIEN Y/O SERVICIO PRESTADO GRATUITAMENTE", margin, finalY + 38);
-      doc.setFont("helvetica", "italic");
-      doc.setTextColor(120);
+      doc.text("LEYENDA: TRANSFERENCIA GRATUITA DE UN BIEN Y/O SERVICIO PRESTADO GRATUITAMENTE", margin, totalsStartY + 18);
+      doc.setTextColor(0);
     }
 
-    doc.text(settings.footer_message || "Esta cotización tiene una validez de 7 días.", margin, finalY + 45);
+    // Derecha: Línea + SUB TOTAL / IGV / TOTAL / TOTAL PEDIDO
+    const lineStartX = pageWidth - margin - 62;
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.45);
+    doc.line(lineStartX, totalsStartY, pageWidth - margin, totalsStartY);
+
+    const labelRightX = pageWidth - margin - 32;
+    const symX = pageWidth - margin - 29;
+    const valRightX = pageWidth - margin;
+
+    const drawTotalRow = (label: string, amount: number, yPos: number) => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(0);
+      doc.text(label, labelRightX, yPos, { align: 'right' });
+      doc.setFont("helvetica", "normal");
+      doc.text(currSymbol, symX, yPos);
+      doc.text(formatNumber(amount), valRightX, yPos, { align: 'right' });
+    };
+
+    drawTotalRow("SUB TOTAL:", subtotal, totalsStartY + 5.5);
+    drawTotalRow("IGV:", igv, totalsStartY + 11);
+    drawTotalRow("TOTAL:", total, totalsStartY + 16.5);
+    drawTotalRow("TOTAL PEDIDO:", total, totalsStartY + 25.5);
+
+    // --- BLOQUE DE CUENTAS BANCARIAS Y AVISO AL PIE ---
+    let accountsY = totalsStartY + 38;
+    if (accountsY + 46 > pageHeight - 10) {
+      doc.addPage();
+      accountsY = 18;
+    }
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(25);
+    doc.text("CUENTAS BANCARIAS PARA DEPÓSITO:", margin, accountsY);
+
+    const bankLines = settings.bank_accounts_text
+      ? String(settings.bank_accounts_text).split('\n')
+      : [
+          "BCP S/. 191-1482686-0-24",
+          "BCP CCI S/. 002-191-001482686024-50 => IMPORTACIONES CARMELITA DEL NORTE",
+          "",
+          "BBVA S/. 0011-0349-01-00043082-85",
+          "CODIGO DE RECAUDO: 18467",
+          "BBVA CCI S/. 011-349-000100043082-85",
+        ];
+
+    let curY = accountsY + 8;
+    bankLines.forEach((line: string) => {
+      if (!line.trim()) {
+        curY += 3.5;
+        return;
+      }
+      doc.text(line, margin, curY);
+      curY += 4.3;
+    });
+
+    curY += 5;
+    doc.text("ESTIMADO CLIENTE,", margin, curY);
+    curY += 4.5;
+    const footerNote = settings.quotation_footer_note || "SOLO SE ATENDERA EL DESPACHO CON LA NOTA DE PEDIDO, UNA VEZ ENTREGADA LA MERCADERIA NO HAY LUGAR A RECLAMO.";
+    const footerLines = doc.splitTextToSize(footerNote, pageWidth - margin * 2);
+    doc.text(footerLines, margin, curY);
 
     if (action === 'print') {
       doc.autoPrint();
       window.open(doc.output('bloburl'), '_blank');
     } else {
-      doc.save(`Cotizacion_${quotation.docSeries || '001'}_${quotation.docNumber || '001'}.pdf`);
+      doc.save(`Cotizacion_${quotation.docSeries || '0005'}_${quotation.docNumber || '001'}.pdf`);
     }
   } catch (error: any) {
     console.error("Error al generar PDF:", error);
@@ -385,16 +599,11 @@ export const generateInvoicePDF = async (invoice: any, items: any[], action: 'sa
     };
 
     // --- CABECERA ---
-    if (settings.company_logo) {
-      try {
-        doc.addImage(settings.company_logo, 'PNG', margin, 12, 38, 16, undefined, 'FAST');
-      } catch (e) {
-        console.warn("Error al cargar logo", e);
-      }
-    }
+    const invoiceLogo = await loadLogoDataUrl(settings.document_logo || settings.company_logo || '');
+    const hasInvoiceLogo = drawFittedLogo(doc, invoiceLogo, margin, 11, 40, 20);
 
     // Información de la Empresa (Centro)
-    const companyX = settings.company_logo ? 56 : margin;
+    const companyX = hasInvoiceLogo ? 56 : margin;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10.5);
     doc.setTextColor(27, 54, 93); // Azul Carmelita
@@ -769,209 +978,224 @@ export const generateReferralGuidePDF = async (guide: any, items: any[], action:
     };
 
     // --- CABECERA ---
-    if (settings.company_logo) {
-      try {
-        doc.addImage(settings.company_logo, 'PNG', margin, 12, 35, 35, undefined, 'FAST');
-      } catch (e) {
-        console.warn("Error al cargar logo", e);
-      }
-    }
+    const guideLogo = await loadLogoDataUrl(settings.document_logo || settings.company_logo || '');
+    drawFittedLogo(doc, guideLogo, margin, 10, 48, 22);
 
-    const companyX = settings.company_logo ? 52 : margin;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.setTextColor(27, 54, 93); // Azul Corporativo Carmelita
-    doc.text(settings.company_name || "IMPORTACIONES CARMELITA DEL NORTE SAC", companyX, 18);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.8);
-    doc.setTextColor(80, 80, 80);
-    doc.text(`RUC: ${settings.company_ruc || "20126500603"}`, companyX, 24);
-    doc.text(settings.company_address || "JR. CUZCO 809 A - LIMA", companyX, 29);
-    doc.text(`Telf: ${settings.company_phone || "972248827"} | Email: ${settings.company_email || "ventas@grupocarmelita.com"}`, companyX, 34);
-
-    // Cuadro de Comprobante (Derecha)
-    const rightBoxW = 60;
-    const rightBoxH = 34;
-    const rightBoxX = pageWidth - margin - rightBoxW;
-    const rightBoxY = 12;
-
-    doc.setDrawColor(27, 54, 93);
-    doc.setLineWidth(0.4);
-    doc.setFillColor(255, 255, 255);
-    doc.rect(rightBoxX, rightBoxY, rightBoxW, rightBoxH, 'FD');
-    
+    const centerX = pageWidth / 2 - 4;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9.5);
-    doc.setTextColor(27, 54, 93);
-    doc.text(`R.U.C. ${settings.company_ruc || "20126500603"}`, rightBoxX + rightBoxW / 2, rightBoxY + 6.5, { align: 'center' });
-    
-    doc.setFillColor(0, 74, 153); // Corporate Blue Banner
-    doc.rect(rightBoxX, rightBoxY + 10, rightBoxW, 12, 'F');
+    doc.setTextColor(0);
+    doc.text((settings.company_name || "IMPORTACIONES CARMELITA DEL NORTE SAC").toUpperCase(), centerX, 13.5, { align: 'center' });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(30);
+    doc.text(`RUC: ${settings.company_ruc || "20126500603"}`, centerX, 18.5, { align: 'center' });
+    doc.text(settings.company_address || "JR. CUZCO 809 A - LIMA", centerX, 22.5, { align: 'center' });
+    doc.text(`TELF. ${settings.company_phone || "4262860 / RPC. 989567587"}`, centerX, 26.5, { align: 'center' });
+    doc.text(`E-mail: ${settings.company_email || "ventas@grupocarmelita.com"}`, centerX, 30.5, { align: 'center' });
+
+    // Cuadro de Comprobante (Derecha)
+    const rightBoxW = 54;
+    const rightBoxH = 25;
+    const rightBoxX = pageWidth - margin - rightBoxW;
+    const rightBoxY = 10;
+
+    doc.setDrawColor(200);
+    doc.setLineWidth(0.35);
+    doc.setFillColor(250, 250, 250);
+    doc.rect(rightBoxX, rightBoxY, rightBoxW, rightBoxH, 'FD');
+
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
-    doc.setTextColor(255, 255, 255);
-    doc.text("GUÍA DE REMISIÓN ELECTRÓNICA", rightBoxX + rightBoxW / 2, rightBoxY + 14.5, { align: 'center' });
-    doc.setFontSize(7.5);
-    doc.text("REMITENTE", rightBoxX + rightBoxW / 2, rightBoxY + 19, { align: 'center' });
-    
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10.5);
-    doc.setTextColor(0, 74, 153);
-    doc.text(`N° ${guide.numberFormatted || 'T001-00000001'}`, rightBoxX + rightBoxW / 2, rightBoxY + 29, { align: 'center' });
+    doc.setTextColor(0);
+    doc.text(`RUC: ${settings.company_ruc || "20126500603"}`, rightBoxX + rightBoxW / 2, rightBoxY + 6, { align: 'center' });
 
-    // --- SECCIÓN 1: DATOS GENERALES Y TRASLADO ---
-    let startY = 50;
-
-    doc.setDrawColor(180, 180, 180);
-    doc.setLineWidth(0.2);
-    doc.setFillColor(255, 255, 255);
-    doc.rect(margin, startY, boxW, 24, 'FD');
-
-    drawFieldPill("FECHA EMISIÓN", margin + 25, startY);
-    drawFieldPill("FECHA TRASLADO", margin + 65, startY);
-    drawFieldPill("MOTIVO TRASLADO", margin + 115, startY);
-    drawFieldPill("MODALIDAD TRANSPORTE", margin + 162, startY);
-
-    doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.setTextColor(20, 20, 20);
-    const emDate = guide.issueDate ? new Date(guide.issueDate).toISOString().split('T')[0] : '-';
-    const trDate = guide.transferDate ? new Date(guide.transferDate).toISOString().split('T')[0] : emDate;
-    doc.text(emDate, margin + 25, startY + 5.5, { align: 'center' });
-    doc.text(trDate, margin + 65, startY + 5.5, { align: 'center' });
-    
-    const reasonText = guide.transferReasonDescription || (guide.transferReason === '01' ? 'VENTA' : 'TRASLADO ENTRE LOCALES');
-    doc.text(reasonText.toUpperCase(), margin + 115, startY + 5.5, { align: 'center' });
-    const modeText = guide.transportMode === '01' ? 'TRANSPORTE PÚBLICO' : 'TRANSPORTE PRIVADO';
-    doc.text(modeText, margin + 162, startY + 5.5, { align: 'center' });
+    doc.text("GUIA DE REMISION", rightBoxX + rightBoxW / 2, rightBoxY + 11.5, { align: 'center' });
+    doc.text("ELECTRONICA REMITENTE", rightBoxX + rightBoxW / 2, rightBoxY + 15.5, { align: 'center' });
 
-    // Fila 2 de Datos Generales: Destinatario
-    doc.setDrawColor(210, 210, 210);
-    doc.line(margin, startY + 10, margin + boxW, startY + 10);
-    drawFieldPill("DATOS DEL DESTINATARIO (CLIENTE)", margin + 40, startY + 10);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(90, 90, 90);
-    doc.text(`RUC / DNI: `, margin + 4, startY + 16);
+    doc.setFontSize(9.5);
+    doc.setTextColor(210, 35, 35);
+    doc.text(`${guide.numberFormatted || 'T001-00000001'}`, rightBoxX + rightBoxW / 2, rightBoxY + 21.5, { align: 'center' });
+
+    // Línea divisora debajo de cabecera
+    doc.setDrawColor(160);
+    doc.setLineWidth(0.3);
+    doc.line(margin, 37.5, pageWidth - margin, 37.5);
+
+    // --- DATOS GENERALES (2 COLUMNAS) ---
+    let y = 42;
+    const col1L = margin;
+    const col1V = margin + 32;
+    const col2L = margin + 68;
+    const col2V = margin + 96;
+    const col3L = margin + 124;
+    const col3V = margin + 154;
+
+    const emDate = formatDatePE(guide.issueDate);
+    const trDate = formatDatePE(guide.transferDate || guide.issueDate);
+    const refDate = guide.relatedDocDate
+      ? formatDatePE(guide.relatedDocDate)
+      : (guide.invoice?.issueDate ? formatDatePE(guide.invoice.issueDate) : (guide.order?.createdAt ? formatDatePE(guide.order.createdAt) : ''));
+
+    const reasonText = (guide.transferReasonDescription || (guide.transferReason === '01' ? 'VENTA' : 'TRASLADO ENTRE LOCALES')).toUpperCase();
+    const modeText = guide.transportMode === '01' ? 'Público' : 'Privado';
+    const refDocPrefix = guide.relatedDocType === '03' ? 'BOL' : guide.relatedDocType === '01' ? 'FAC' : (guide.relatedDocType || '');
+    const rawRefNum = guide.invoiceNumber || guide.relatedDocNumber || (guide.orderNumber ? `PED-${guide.orderNumber}` : '');
+    const refDocText = rawRefNum ? `${refDocPrefix ? refDocPrefix + ' ' : ''}${rawRefNum}`.trim() : '-';
+
+    const drawPair = (lx: number, vx: number, label: string, val: string, yy: number, boldVal = false) => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7);
+      doc.setTextColor(30);
+      doc.text(label, lx, yy);
+      doc.setFont("helvetica", boldVal ? "bold" : "normal");
+      doc.setTextColor(0);
+      doc.text(String(val || ''), vx, yy);
+    };
+
+    drawPair(col1L, col1V, "Fecha Emisión:", emDate, y);
+    drawPair(col2L, col2V, "Doc. Refer", refDocText, y);
+    drawPair(col3L, col3V, "Nro. Orden Compra:", guide.purchaseOrderNumber || "", y);
+    y += 4.2;
+
+    drawPair(col1L, col1V, "Motivo del Traslado:", reasonText, y);
+    drawPair(col2L, col2V, "Fec. Referencia:", refDate, y);
+    y += 4.2;
+
+    drawPair(col1L, col1V, "Modalidad de Transporte:", modeText, y);
+    drawPair(col2L, col2V + 4, "Fec. Inicio de traslado :", trDate, y);
+    y += 4.2;
+
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(20, 20, 20);
-    doc.text(`${guide.customerDocNumber || '-'}`, margin + 20, startY + 16);
-
+    doc.setFontSize(7);
+    doc.setTextColor(30);
+    doc.text("Observación:", col1L, y);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(90, 90, 90);
-    doc.text(`Razón Social: `, margin + 50, startY + 16);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(20, 20, 20);
-    doc.text(`${(guide.customerName || '').substring(0, 60)}`, margin + 70, startY + 16);
+    doc.setTextColor(0);
+    const obsLines = doc.splitTextToSize(String(guide.notes || '-'), pageWidth - margin - col1V);
+    doc.text(obsLines, col1V, y);
+    y += Math.max(1, obsLines.length) * 3.8 + 1.5;
 
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(90, 90, 90);
-    doc.text(`Dirección: `, margin + 4, startY + 21);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(30, 30, 30);
-    doc.text(`${(guide.customerAddress || guide.deliveryAddress || '-').substring(0, 95)}`, margin + 18, startY + 21);
+    // --- DESTINATARIO ---
+    const drawSectionHeader = (title: string) => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(0);
+      doc.text(title, margin, y);
+      y += 4;
+    };
 
-    // --- SECCIÓN 2: PUNTOS DE PARTIDA Y LLEGADA ---
-    startY += 28;
-    const halfW = (boxW - 4) / 2;
+    drawSectionHeader("DESTINATARIO");
+    drawPair(col1L, col1V, "Rz. Social:", (guide.customerName || '-').toUpperCase(), y);
+    y += 4;
+    const custDocLabel = (guide.customerDocType === '6' || String(guide.customerDocNumber || '').length === 11) ? "RUC:" : "DNI:";
+    drawPair(col1L, col1V, custDocLabel, guide.customerDocNumber || '-', y);
+    y += 5;
 
-    // Partida
-    doc.setDrawColor(180, 180, 180);
-    doc.setLineWidth(0.2);
-    doc.setFillColor(255, 255, 255);
-    doc.rect(margin, startY, halfW, 20, 'FD');
-    drawFieldPill("PUNTO DE PARTIDA (ORIGEN)", margin + 35, startY);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(80, 80, 80);
-    doc.text("Almacén:", margin + 4, startY + 6);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(20, 20, 20);
-    const originWhName = guide.originWarehouse?.name || 'ALMACÉN PRINCIPAL';
-    doc.text(originWhName.toUpperCase(), margin + 18, startY + 6);
+    // --- DATOS DEL TRASLADO ---
+    drawSectionHeader("DATOS DEL TRASLADO");
+    drawPair(margin, margin + 67, "Indicador de Traslado en Vehículos de Categoría M1 o L :", guide.vehicleCategoryM1OrL ? "SI" : "NO", y);
+    drawPair(margin + 86, margin + 174, "Indicador para registrar vehículos y conductores del transportista :", guide.registerTransportData ? "SI" : "NO", y);
+    y += 4;
+    drawPair(margin, margin + 78, "Indicador de retorno de vehículo con envases o embalajes vacíos :", guide.returnEmptyContainers ? "SI" : "NO", y);
+    drawPair(margin + 98, margin + 148, "Indicador de Trasbordo programado :", guide.transshipment ? "SI" : "NO", y);
+    y += 5;
 
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(80, 80, 80);
-    doc.text("Dirección:", margin + 4, startY + 11);
-    doc.setTextColor(30, 30, 30);
-    doc.text(`${(guide.originAddress || '-').substring(0, 48)}`, margin + 18, startY + 11);
+    // --- TRANSPORTISTA ---
+    drawSectionHeader("TRANSPORTISTA");
+    const carrierNameStr = (guide.carrierName || settings.company_name || '-').toUpperCase();
+    const carrierRucStr = guide.carrierDocNumber || settings.company_ruc || '-';
+    const carrierMtcStr = guide.transportMode === '01' ? (guide.carrierMtcNumber || '') : (guide.vehicleMtc || guide.carrierMtcNumber || '');
+    drawPair(margin, margin + 27, "Nombre, Rz. Social:", carrierNameStr, y);
+    drawPair(margin + 142, margin + 162, "Num. MTC :", carrierMtcStr, y);
+    y += 4;
+    drawPair(margin, margin + 27, "Número de RUC:", carrierRucStr, y);
+    drawPair(margin + 52, margin + 84, "Entidad Emis. de Aut. :", guide.authorizationEntity || "", y);
+    drawPair(margin + 142, margin + 166, "Número Autoriz. :", guide.authorizationNumber || "", y);
+    y += 5;
 
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(80, 80, 80);
-    doc.text(`Ubigeo: ${guide.originUbigeo || '150101'}   |   Cód. SUNAT: ${guide.originSunatCode || '0000'}`, margin + 4, startY + 16);
+    // --- DATOS DE CONDUCTORES ---
+    drawSectionHeader("DATOS DE CONDUCTORES");
+    drawPair(margin, margin + 27, "Chofer:", (guide.driverName || '-').toUpperCase(), y);
+    drawPair(margin + 114, margin + 144, "Nro. Licencia Chofer :", guide.driverLicenseNumber || '-', y);
+    y += 5;
 
-    // Llegada
-    const llegadaX = margin + halfW + 4;
-    doc.setDrawColor(180, 180, 180);
-    doc.setLineWidth(0.2);
-    doc.setFillColor(255, 255, 255);
-    doc.rect(llegadaX, startY, halfW, 20, 'FD');
-    drawFieldPill("PUNTO DE LLEGADA (DESTINO)", llegadaX + 35, startY);
+    // --- DATOS DE VEHÍCULOS ---
+    drawSectionHeader("DATOS DE VEHÍCULOS");
+    drawPair(margin, margin + 27, "Vehículo - Placa :", (guide.vehiclePlate || '-').toUpperCase(), y);
+    drawPair(margin + 68, margin + 94, "Vehículo - Marca :", (guide.vehicleBrand || '-').toUpperCase(), y);
+    drawPair(margin + 132, margin + 150, "Certificado:", guide.vehicleTuce || "", y);
+    y += 5;
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(80, 80, 80);
-    doc.text("Dirección:", llegadaX + 4, startY + 6);
-    doc.setTextColor(30, 30, 30);
-    doc.text(`${(guide.deliveryAddress || '-').substring(0, 48)}`, llegadaX + 18, startY + 6);
+    // --- PUNTOS DE PARTIDA Y LLEGADA ---
+    const originParts = [guide.originAddress || '-', guide.originWarehouse?.district, guide.originWarehouse?.province].filter(Boolean);
+    const deliveryParts = [guide.deliveryAddress || '-'];
+    if (guide.deliveryDistrict && !String(guide.deliveryAddress || '').toUpperCase().includes(guide.deliveryDistrict.toUpperCase())) {
+      deliveryParts.push(guide.deliveryDistrict);
+    }
+    if (guide.deliveryProvince && !String(guide.deliveryAddress || '').toUpperCase().includes(guide.deliveryProvince.toUpperCase())) {
+      deliveryParts.push(guide.deliveryProvince);
+    }
+    if (guide.deliveryDepartment && !String(guide.deliveryAddress || '').toUpperCase().includes(guide.deliveryDepartment.toUpperCase())) {
+      deliveryParts.push(guide.deliveryDepartment);
+    }
+    drawPair(margin, margin + 27, "Punto de Partida:", originParts.join(' - ').toUpperCase(), y);
+    y += 4;
+    drawPair(margin, margin + 27, "Punto de Llegada:", deliveryParts.join(' - ').toUpperCase(), y);
+    y += 5;
 
-    const distText = [guide.deliveryDistrict, guide.deliveryProvince, guide.deliveryDepartment].filter(Boolean).join(' - ') || 'LIMA';
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(80, 80, 80);
-    doc.text("Distrito/Prov:", llegadaX + 4, startY + 11);
-    doc.setTextColor(30, 30, 30);
-    doc.text(distText.substring(0, 45), llegadaX + 22, startY + 11);
+    // --- AGENCIA TRANSPORTE ---
+    const agencyObj = guide.shippingAgency;
+    if (agencyObj) {
+      drawSectionHeader("AGENCIA TRANSPORTE");
+      const matchedBranch = guide.shippingBranchId && Array.isArray(agencyObj.branches)
+        ? agencyObj.branches.find((b: any) => Number(b.id) === Number(guide.shippingBranchId))
+        : null;
+      const agencyAddrParts = [
+        matchedBranch?.address || agencyObj.address || guide.agencyAddress,
+        matchedBranch?.district || agencyObj.district,
+        matchedBranch?.province || agencyObj.province,
+        matchedBranch?.department || agencyObj.department,
+      ].filter(Boolean);
+      const agencyAddrStr = agencyAddrParts.join(' - ').toUpperCase();
 
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(80, 80, 80);
-    doc.text(`Ubigeo SUNAT: ${guide.deliveryUbigeo || '150101'}`, llegadaX + 4, startY + 16);
-
-    // --- SECCIÓN 3: TRANSPORTE Y CARGA ---
-    startY += 24;
-    doc.setDrawColor(180, 180, 180);
-    doc.setLineWidth(0.2);
-    doc.setFillColor(255, 255, 255);
-    doc.rect(margin, startY, boxW, 20, 'FD');
-    drawFieldPill("DATOS DEL TRANSPORTE Y CARGA", margin + 40, startY);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(40, 40, 40);
-
-    if (guide.transportMode === '01') {
-      // Público
-      const carrName = guide.carrierName || guide.shippingAgency?.name || 'EMPRESA DE TRANSPORTE';
-      doc.text(`Transportista: ${carrName}   |   RUC: ${guide.carrierDocNumber || '-'}   |   Reg. MTC: ${guide.carrierMtcNumber || '-'}`, margin + 4, startY + 6.5);
-    } else {
-      // Privado
-      doc.text(`Conductor: ${guide.driverName || '-'}   |   DNI: ${guide.driverDocNumber || '-'}   |   Licencia: ${guide.driverLicenseNumber || '-'}`, margin + 4, startY + 6.5);
-      doc.text(`Vehículo Placa: ${guide.vehiclePlate || '-'} ${guide.vehicleSecondaryPlate ? `  |   Placa Acoplado: ${guide.vehicleSecondaryPlate}` : ''}`, margin + 4, startY + 11.5);
+      drawPair(margin, margin + 27, "Nombre, Rz. Social:", (agencyObj.name || '-').toUpperCase(), y);
+      drawPair(margin + 90, margin + 98, "Ruc:", agencyObj.ruc || guide.agencyRuc || '-', y);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7);
+      doc.setTextColor(30);
+      doc.text("Dirección:", margin + 118, y);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(0);
+      const agLines = doc.splitTextToSize(agencyAddrStr || '-', pageWidth - margin - (margin + 132));
+      doc.text(agLines, margin + 132, y);
+      y += Math.max(1, agLines.length) * 3.8 + 2.5;
     }
 
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(0, 74, 153);
-    const refDoc = guide.invoiceNumber ? `Comprobante: ${guide.invoiceNumber}` : (guide.orderNumber ? `Pedido: #${guide.orderNumber}` : '-');
-    doc.text(`Doc. Referencia: ${refDoc}`, margin + 4, startY + 16.5);
-    doc.text(`Peso Bruto Total: ${parseFloat(guide.totalWeight || 0).toFixed(2)} KGM   |   Total Bultos: ${guide.totalPackages || (items.length || 1)}`, margin + halfW + 4, startY + 16.5);
-
-    // --- TABLA DE BIENES ---
-    const tableStartY = startY + 24;
-    const tableHeader = [['#', 'CÓDIGO', 'DESCRIPCIÓN DE LOS BIENES', 'CANTIDAD', 'U.M.', 'PESO UNIT (KG)', 'PESO TOTAL (KG)']];
-    const tableData = (items || []).map((it: any, index: number) => {
-      const qty = parseFloat(it.quantity) || 1;
+    // --- TABLA DE BIENES (8 COLUMNAS) ---
+    const tableStartY = y + 1;
+    const tableHeader = [['Código', 'Descripción', 'Cantidad', 'U.M.', 'Bultos', 'Tipo Bulto', 'Peso\nUnit(KG)', 'Peso Total']];
+    const tableData = (items || []).map((it: any) => {
+      const qty = parseFloat(it.quantity) || 0;
       const uWeight = parseFloat(it.unitWeight) || 0;
       const tWeight = parseFloat(it.totalWeight) || (qty * uWeight);
+      const pkgs = parseFloat(it.packages) || 0;
+      const code = it.code || it.product?.code || '-';
+      const baseDesc = it.description || it.product?.name || 'Producto';
+      const lotSuffix = it.lotNumber ? ` - Lote: ${it.lotNumber}` : '';
+      const fullDesc = `${code !== '-' && !baseDesc.startsWith(code) ? `${code} - ` : ''}${baseDesc}${lotSuffix}`;
+
       return [
-        (index + 1).toString(),
-        it.code || it.product?.code || '-',
-        it.description || it.product?.name || 'Producto',
-        qty.toString(),
+        code,
+        fullDesc,
+        qty.toFixed(2),
         it.unitMeasure || 'NIU',
-        uWeight > 0 ? uWeight.toFixed(3) : '-',
-        tWeight > 0 ? tWeight.toFixed(2) : '-'
+        pkgs.toFixed(2),
+        it.packageType || '',
+        uWeight.toFixed(3),
+        tWeight.toFixed(3)
       ];
     });
 
@@ -979,61 +1203,55 @@ export const generateReferralGuidePDF = async (guide: any, items: any[], action:
       startY: tableStartY,
       head: tableHeader,
       body: tableData,
-      theme: 'grid',
+      theme: 'plain',
       headStyles: {
-        fillColor: [0, 74, 153],
-        textColor: [255, 255, 255],
-        fontSize: 7.5,
+        fillColor: [224, 224, 224],
+        textColor: [30, 30, 30],
+        fontSize: 7,
         fontStyle: 'bold',
         halign: 'center',
-        cellPadding: 2
+        valign: 'middle',
+        cellPadding: { top: 2.2, bottom: 2.2, left: 1.5, right: 1.5 }
       },
       styles: {
-        fontSize: 7,
-        cellPadding: 1.8,
-        textColor: [33, 37, 41]
+        fontSize: 6.8,
+        cellPadding: { top: 2, bottom: 2, left: 1.5, right: 1.5 },
+        textColor: [20, 20, 20],
+        overflow: 'linebreak'
       },
       columnStyles: {
-        0: { cellWidth: 10, halign: 'center' },
-        1: { cellWidth: 26, halign: 'center' },
-        2: { cellWidth: 78 },
-        3: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
-        4: { cellWidth: 15, halign: 'center' },
-        5: { cellWidth: 20, halign: 'right' },
-        6: { cellWidth: 21, halign: 'right', fontStyle: 'bold' }
+        0: { cellWidth: 20, halign: 'center' },
+        1: { halign: 'left' },
+        2: { cellWidth: 14, halign: 'right' },
+        3: { cellWidth: 11, halign: 'center' },
+        4: { cellWidth: 13, halign: 'right' },
+        5: { cellWidth: 15, halign: 'center' },
+        6: { cellWidth: 17, halign: 'right' },
+        7: { cellWidth: 18, halign: 'right' }
       },
       margin: { left: margin, right: margin }
     });
 
-    const finalY = (doc as any).lastAutoTable?.finalY || (tableStartY + 40);
+    let finalY = (doc as any).lastAutoTable?.finalY || (tableStartY + 40);
+    if (finalY + 26 > doc.internal.pageSize.height - 10) {
+      doc.addPage();
+      finalY = 15;
+    }
 
-    // --- OBSERVACIONES Y FOOTER ---
-    const footerY = Math.max(finalY + 6, 240);
-
-    doc.setDrawColor(180, 180, 180);
-    doc.setLineWidth(0.2);
-    doc.setFillColor(255, 255, 255);
-    doc.rect(margin, footerY, boxW, 14, 'FD');
-    drawFieldPill("OBSERVACIONES / GLOSA", margin + 25, footerY);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(60, 60, 60);
-    doc.text(guide.notes || "BIENES TRASLADADOS PARA SU ENTREGA EN EL DESTINO INDICADO.", margin + 4, footerY + 6.5);
-
-    // Legal y QR
+    // --- FOOTER LEGAL Y QR ---
+    const footerY = finalY + 6;
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.3);
-    doc.line(margin, footerY + 18, pageWidth - margin, footerY + 18);
+    doc.line(margin, footerY, pageWidth - margin, footerY);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(6.8);
     doc.setTextColor(80, 80, 80);
-    doc.text("Representación Impresa de la GUÍA DE REMISIÓN ELECTRÓNICA - REMITENTE, autorizada por SUNAT", margin + 25, footerY + 23);
-    doc.text(`Establecimiento Emisor SUNAT: [${guide.originSunatCode || '0000'}] | Hash: ${guide.sunatHashCode || 'VALIDADO-DIGITALMENTE'}`, margin + 25, footerY + 27);
-    doc.text("Consulte la validez de este comprobante en https://www.sunat.gob.pe/", margin + 25, footerY + 31);
+    doc.text("Representación Impresa de la GUÍA DE REMISIÓN ELECTRÓNICA - REMITENTE, autorizada por SUNAT", margin, footerY + 5);
+    doc.text(`Establecimiento Emisor SUNAT: [${guide.originSunatCode || '0000'}] | Peso Bruto Total: ${parseFloat(guide.totalWeight || 0).toFixed(2)} ${guide.weightUnit || 'KGM'} | Hash: ${guide.sunatHashCode || 'VALIDADO-DIGITALMENTE'}`, margin, footerY + 9);
+    doc.text("Consulte la validez de este comprobante en https://www.sunat.gob.pe/", margin, footerY + 13);
 
-    drawQRCodeMockup(pageWidth - margin - 20, footerY + 19, 15);
+    drawQRCodeMockup(pageWidth - margin - 16, footerY + 2, 14);
 
     if (action === 'print') {
       doc.autoPrint();
@@ -1044,5 +1262,174 @@ export const generateReferralGuidePDF = async (guide: any, items: any[], action:
   } catch (error: any) {
     console.error("Error al generar PDF de Guía de Remisión:", error);
     alert("Error al generar PDF de Guía de Remisión: " + error.message);
+  }
+};
+
+export const generateKardexPDF = async (
+  kardexData: any,
+  mode: 'valued' | 'physical' = 'valued',
+  action: 'save' | 'print' = 'save'
+) => {
+  try {
+    const settingsRes = await axios.get('/api/settings').catch(() => ({ data: {} }));
+    const settings = settingsRes.data || {};
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.width;
+    const margin = 10;
+
+    const title = mode === 'valued'
+      ? 'FORMATO 13.1: REGISTRO DE INVENTARIO PERMANENTE VALORIZADO - DETALLE DEL INVENTARIO VALORIZADO'
+      : 'FORMATO 12.1: REGISTRO DE INVENTARIO PERMANENTE EN UNIDADES FÍSICAS - DETALLE DEL INVENTARIO FÍSICO';
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(0, 74, 153);
+    doc.text(title, margin, 12);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(20);
+    doc.text(`RUC: ${settings.company_ruc || '20126500603'}   |   RAZÓN SOCIAL: ${(settings.company_name || 'IMPORTACIONES CARMELITA DEL NORTE SAC').toUpperCase()}`, margin, 18);
+
+    const periodText = `${kardexData.period?.startDate || 'INICIO'} AL ${kardexData.period?.endDate || 'HOY'}`;
+    const estText = kardexData.warehouse
+      ? `${kardexData.warehouse.name.toUpperCase()} (${kardexData.warehouse.sunatCode || '0000'})`
+      : 'GENERAL (TODOS LOS ALMACENES)';
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.text(`PERIODO: ${periodText}   |   ESTABLECIMIENTO: ${estText}`, margin, 22.5);
+    doc.text(`EXISTENCIA: [${kardexData.product?.code || '-'}] ${(kardexData.product?.name || '').toUpperCase()}   |   U.M.: ${kardexData.product?.unitSymbol || 'UND'}   |   MÉTODO: PROMEDIO PONDERADO`, margin, 27);
+
+    const rows: any[] = kardexData.rows || [];
+    if (mode === 'valued') {
+      const head = [
+        [
+          { content: 'FECHA', rowSpan: 2 },
+          { content: 'TIPO', rowSpan: 2 },
+          { content: 'SERIE', rowSpan: 2 },
+          { content: 'NÚMERO', rowSpan: 2 },
+          { content: 'OP. 12', rowSpan: 2 },
+          { content: 'ENTRADAS', colSpan: 3 },
+          { content: 'SALIDAS', colSpan: 3 },
+          { content: 'SALDO FINAL', colSpan: 3 }
+        ],
+        ['CANT.', 'C. UNIT.', 'C. TOTAL', 'CANT.', 'C. UNIT.', 'C. TOTAL', 'CANT.', 'C. PROM.', 'C. TOTAL']
+      ];
+
+      const body: any[] = [
+        [
+          { content: `SALDO INICIAL AL ${kardexData.period?.startDate || 'INICIO'}`, colSpan: 11, styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 247, 250] } },
+          { content: formatNumber(kardexData.initialBalance?.quantity || 0, 2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 247, 250] } },
+          { content: Number(kardexData.initialBalance?.unitCost || 0).toFixed(4), styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 247, 250] } },
+          { content: formatNumber(kardexData.initialBalance?.totalCost || 0, 2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 247, 250] } }
+        ],
+        ...rows.map((r) => [
+          r.date,
+          r.docType,
+          r.docSeries || '-',
+          r.docNumber || '-',
+          r.sunatOperationCode,
+          r.inQty > 0 ? formatNumber(r.inQty, 2) : '',
+          r.inQty > 0 ? Number(r.inUnitCost).toFixed(4) : '',
+          r.inQty > 0 ? formatNumber(r.inTotalCost, 2) : '',
+          r.outQty > 0 ? formatNumber(r.outQty, 2) : '',
+          r.outQty > 0 ? Number(r.outUnitCost).toFixed(4) : '',
+          r.outQty > 0 ? formatNumber(r.outTotalCost, 2) : '',
+          formatNumber(r.balanceQty, 2),
+          Number(r.balanceUnitCost).toFixed(4),
+          formatNumber(r.balanceTotalCost, 2),
+        ]),
+        [
+          { content: 'TOTALES DEL PERIODO / SALDO FINAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [232, 240, 254] } },
+          { content: formatNumber(kardexData.totals?.inQty || 0, 2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [232, 240, 254] } },
+          { content: '', styles: { fillColor: [232, 240, 254] } },
+          { content: formatNumber(kardexData.totals?.inTotalCost || 0, 2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [232, 240, 254] } },
+          { content: formatNumber(kardexData.totals?.outQty || 0, 2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [232, 240, 254] } },
+          { content: '', styles: { fillColor: [232, 240, 254] } },
+          { content: formatNumber(kardexData.totals?.outTotalCost || 0, 2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [232, 240, 254] } },
+          { content: formatNumber(kardexData.finalBalance?.quantity || 0, 2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [232, 240, 254] } },
+          { content: Number(kardexData.finalBalance?.unitCost || 0).toFixed(4), styles: { halign: 'right', fontStyle: 'bold', fillColor: [232, 240, 254] } },
+          { content: formatNumber(kardexData.finalBalance?.totalCost || 0, 2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [232, 240, 254] } },
+        ]
+      ];
+
+      autoTable(doc, {
+        startY: 31,
+        head,
+        body,
+        theme: 'grid',
+        headStyles: { fillColor: [0, 74, 153], textColor: 255, fontSize: 6.5, halign: 'center', valign: 'middle' },
+        styles: { fontSize: 6.5, cellPadding: 1.5, textColor: 20 },
+        columnStyles: {
+          0: { cellWidth: 18, halign: 'center' },
+          1: { cellWidth: 10, halign: 'center' },
+          2: { cellWidth: 12, halign: 'center' },
+          3: { cellWidth: 22 },
+          4: { cellWidth: 11, halign: 'center' },
+          5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' },
+          8: { halign: 'right' }, 9: { halign: 'right' }, 10: { halign: 'right' },
+          11: { halign: 'right', fontStyle: 'bold' }, 12: { halign: 'right' }, 13: { halign: 'right', fontStyle: 'bold' }
+        },
+        margin: { left: margin, right: margin },
+      });
+    } else {
+      const head = [['FECHA', 'DOCUMENTO', 'OP. 12', 'LOTE', 'OBSERVACIÓN / ALMACÉN', 'ENTRADA', 'SALIDA', 'SALDO']];
+      const body: any[] = [
+        [
+          { content: `SALDO INICIAL AL ${kardexData.period?.startDate || 'INICIO'}`, colSpan: 7, styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 247, 250] } },
+          { content: formatNumber(kardexData.initialBalance?.quantity || 0, 2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [245, 247, 250] } },
+        ],
+        ...rows.map((r) => [
+          r.date,
+          `${r.docType} ${r.docSeries ? `${r.docSeries}-` : ''}${r.docNumber || '-'}`,
+          r.sunatOperationCode,
+          r.lotNumber || '-',
+          r.observation || r.warehouseName || '-',
+          r.inQty > 0 ? formatNumber(r.inQty, 2) : '',
+          r.outQty > 0 ? formatNumber(r.outQty, 2) : '',
+          formatNumber(r.balanceQty, 2),
+        ]),
+        [
+          { content: 'TOTALES DEL PERIODO / SALDO FINAL', colSpan: 5, styles: { halign: 'right', fontStyle: 'bold', fillColor: [232, 240, 254] } },
+          { content: formatNumber(kardexData.totals?.inQty || 0, 2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [232, 240, 254] } },
+          { content: formatNumber(kardexData.totals?.outQty || 0, 2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [232, 240, 254] } },
+          { content: formatNumber(kardexData.finalBalance?.quantity || 0, 2), styles: { halign: 'right', fontStyle: 'bold', fillColor: [232, 240, 254] } },
+        ]
+      ];
+
+      autoTable(doc, {
+        startY: 31,
+        head,
+        body,
+        theme: 'grid',
+        headStyles: { fillColor: [0, 74, 153], textColor: 255, fontSize: 7, halign: 'center' },
+        styles: { fontSize: 7, cellPadding: 1.8, textColor: 20 },
+        columnStyles: {
+          0: { cellWidth: 22, halign: 'center' },
+          1: { cellWidth: 34, halign: 'center' },
+          2: { cellWidth: 14, halign: 'center' },
+          3: { cellWidth: 28 },
+          5: { cellWidth: 22, halign: 'right' },
+          6: { cellWidth: 22, halign: 'right' },
+          7: { cellWidth: 24, halign: 'right', fontStyle: 'bold' },
+        },
+        margin: { left: margin, right: margin },
+      });
+    }
+
+    doc.setFontSize(7);
+    doc.setTextColor(100);
+    doc.text(`Generado el ${new Date().toLocaleString('es-PE')}`, pageWidth - margin, doc.internal.pageSize.height - 6, { align: 'right' });
+
+    const codeSlug = (kardexData.product?.code || 'PROD').replace(/[^a-zA-Z0-9_-]/g, '_');
+    if (action === 'print') {
+      doc.autoPrint();
+      window.open(doc.output('bloburl'), '_blank');
+    } else {
+      doc.save(`Kardex_${mode === 'valued' ? '13.1_Valorizado' : '12.1_Fisico'}_${codeSlug}.pdf`);
+    }
+  } catch (error: any) {
+    console.error("Error al generar PDF de Kardex:", error);
+    alert("Error al generar PDF de Kardex: " + error.message);
   }
 };

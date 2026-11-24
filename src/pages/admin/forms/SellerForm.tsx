@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, User, Phone, Mail, FileText, Building2, 
-  UserCheck, Save, RefreshCw, Check 
+  UserCheck, Save, RefreshCw, Check, Hash 
 } from 'lucide-react';
 
 interface SellerFormProps {
@@ -14,6 +15,8 @@ interface SellerFormProps {
   isEditing: boolean;
   loading?: boolean;
   warehouses?: any[];
+  series?: any[];
+  token?: string | null;
 }
 
 export const SellerForm: React.FC<SellerFormProps> = ({ 
@@ -24,9 +27,27 @@ export const SellerForm: React.FC<SellerFormProps> = ({
   onClose, 
   isEditing, 
   loading,
-  warehouses = [] 
+  warehouses = [],
+  series = [],
+  token
 }) => {
+  const [users, setUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!isOpen || !token) return;
+    axios.get('/api/users', { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => setUsers(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setUsers([]));
+  }, [isOpen, token]);
+
   if (!isOpen) return null;
+
+  const cotSeriesOptions = Array.from(new Set(
+    series.filter(s => s.documentType === 'COT' && s.isActive !== false).map(s => s.series)
+  ));
+  const pedSeriesOptions = Array.from(new Set(
+    series.filter(s => s.documentType === 'PED' && s.isActive !== false).map(s => s.series)
+  ));
 
   return (
     <AnimatePresence>
@@ -164,6 +185,99 @@ export const SellerForm: React.FC<SellerFormProps> = ({
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-600 uppercase">Cuota de Venta Mensual (S/)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.monthlyQuota ?? ''}
+                    onChange={(e) => setFormData({ ...formData, monthlyQuota: e.target.value })}
+                    className="w-full h-8 px-2.5 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800 focus:border-blue-500 outline-none"
+                    placeholder="Ej: 50000.00"
+                  />
+                </div>
+
+                {/* Sección: Usuario y Series de Cotización / Pedido */}
+                <div className="pt-2 border-t border-slate-100 space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <Hash className="w-3.5 h-3.5 text-blue-700" />
+                    <span className="text-[11px] font-bold text-blue-950 uppercase tracking-tight">Usuario y Series Asignadas</span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-600 uppercase">Usuario del Sistema Vinculado</label>
+                    <select
+                      value={formData.userId || ''}
+                      onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
+                      className="w-full h-8 px-2 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800 focus:border-blue-500 outline-none"
+                    >
+                      <option value="">-- Sin usuario vinculado --</option>
+                      {users.map((u: any) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name || u.email} ({u.email})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase">Serie Cotización (COT)</label>
+                      {cotSeriesOptions.length > 0 ? (
+                        <select
+                          value={formData.quotationSeries || ''}
+                          onChange={(e) => setFormData({ ...formData, quotationSeries: e.target.value })}
+                          className="w-full h-8 px-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold text-blue-800 focus:border-blue-500 outline-none uppercase"
+                        >
+                          <option value="">-- Predeterminada --</option>
+                          {cotSeriesOptions.map((ser: string) => (
+                            <option key={ser} value={ser}>{ser}</option>
+                          ))}
+                          {formData.quotationSeries && !cotSeriesOptions.includes(formData.quotationSeries) && (
+                            <option value={formData.quotationSeries}>{formData.quotationSeries}</option>
+                          )}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={formData.quotationSeries || ''}
+                          onChange={(e) => setFormData({ ...formData, quotationSeries: e.target.value.toUpperCase() })}
+                          className="w-full h-8 px-2.5 bg-white border border-slate-300 rounded text-xs font-mono font-bold text-blue-800 focus:border-blue-500 outline-none uppercase"
+                          placeholder="Ej: 001"
+                        />
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase">Serie Pedido (PED)</label>
+                      {pedSeriesOptions.length > 0 ? (
+                        <select
+                          value={formData.orderSeries || ''}
+                          onChange={(e) => setFormData({ ...formData, orderSeries: e.target.value })}
+                          className="w-full h-8 px-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold text-emerald-800 focus:border-blue-500 outline-none uppercase"
+                        >
+                          <option value="">-- Predeterminada --</option>
+                          {pedSeriesOptions.map((ser: string) => (
+                            <option key={ser} value={ser}>{ser}</option>
+                          ))}
+                          {formData.orderSeries && !pedSeriesOptions.includes(formData.orderSeries) && (
+                            <option value={formData.orderSeries}>{formData.orderSeries}</option>
+                          )}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={formData.orderSeries || ''}
+                          onChange={(e) => setFormData({ ...formData, orderSeries: e.target.value.toUpperCase() })}
+                          className="w-full h-8 px-2.5 bg-white border border-slate-300 rounded text-xs font-mono font-bold text-emerald-800 focus:border-blue-500 outline-none uppercase"
+                          placeholder="Ej: 001"
+                        />
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 p-2 bg-slate-50 rounded border border-slate-200">

@@ -150,6 +150,12 @@ async function main() {
     { tableName: 'TABLA_06', code: '4A', name: 'Bobina' },
     { tableName: 'TABLA_06', code: 'LBR', name: 'Libra' },
     { tableName: 'TABLA_06', code: 'ONZ', name: 'Onza' },
+    { tableName: 'TABLA_06', code: 'BG', name: 'Bolsa' },
+    { tableName: 'TABLA_06', code: 'CEN', name: 'Ciento de unidades' },
+    { tableName: 'TABLA_06', code: 'MIL', name: 'Millar' },
+    { tableName: 'TABLA_06', code: 'RO', name: 'Rollo' },
+    { tableName: 'TABLA_06', code: 'ST', name: 'Pliego / Plancha / Lámina' },
+    { tableName: 'TABLA_06', code: 'L86', name: 'Tonelada métrica (L86)' },
 
     // TABLA 10: TIPO DE COMPROBANTE DE PAGO O DOCUMENTO
     { tableName: 'TABLA_10', code: '00', name: 'Otros' },

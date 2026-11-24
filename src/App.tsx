@@ -6,7 +6,7 @@ import CategorySection from './components/CategorySection';
 import ProductGrid from './components/ProductGrid';
 import CategoryCarousel from './components/CategoryCarousel';
 import Footer from './components/Footer';
-import { motion } from 'motion/react';
+import { motion, MotionConfig } from 'motion/react';
 import { Truck, ShieldCheck, CreditCard, Clock } from 'lucide-react';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
@@ -215,13 +215,15 @@ export default function App() {
   }, []);
 
   return (
-    <AuthProvider>
-      <CartProvider>
-        <Router>
-          <AppContent />
-        </Router>
-      </CartProvider>
-    </AuthProvider>
+    <MotionConfig reducedMotion="user">
+      <AuthProvider>
+        <CartProvider>
+          <Router>
+            <AppContent />
+          </Router>
+        </CartProvider>
+      </AuthProvider>
+    </MotionConfig>
   );
 }
 

@@ -25,7 +25,7 @@ export const SeriesForm: React.FC<SeriesFormProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="absolute inset-0 z-[110] flex items-center justify-center p-3 overflow-hidden">
+        <div key="series-modal" className="fixed inset-0 z-[110] flex items-center justify-center p-3 overflow-hidden">
           <motion.div 
             initial={{ opacity: 0 }} 
             animate={{ opacity: 1 }} 
@@ -35,9 +35,10 @@ export const SeriesForm: React.FC<SeriesFormProps> = ({
           />
           
           <motion.div 
-            initial={{ opacity: 0, scale: 0.97, y: 10 }} 
+            initial={{ opacity: 0, scale: 0.98, y: 8 }} 
             animate={{ opacity: 1, scale: 1, y: 0 }} 
-            exit={{ opacity: 0, scale: 0.97, y: 10 }} 
+            exit={{ opacity: 0, scale: 0.98, y: 8 }} 
+            transition={{ duration: 0.16, ease: 'easeOut' }}
             className="relative w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-300 max-h-[92vh]"
           >
             {/* Header Compacto ERP */}

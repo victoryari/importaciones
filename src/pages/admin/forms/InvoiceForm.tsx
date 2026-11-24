@@ -7,6 +7,7 @@ import {
   Eye, Check, ShieldCheck, AlertCircle, Gift, Link, ArrowLeftRight, CheckCircle2
 } from 'lucide-react';
 import { ProductSearchModal } from './ProductSearchModal';
+import { AssociatedCustomersModal } from './AssociatedCustomersModal';
 import { formatNumber } from '../../../lib/utils';
 import axios from 'axios';
 
@@ -56,6 +57,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
   handleConsultCustomer, handleQuickRegister, onOpenCustomerForm
 }) => {
   const [isProductSearchOpen, setIsProductSearchOpen] = useState(false);
+  const [assocModalCustomer, setAssocModalCustomer] = useState<any | null>(null);
   const [customerSearchResults, setCustomerSearchResults] = useState<any[]>([]);
   const [docSearchResults, setDocSearchResults] = useState<any[]>([]);
   const [isConsulting, setIsConsulting] = useState(false);
@@ -431,7 +433,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     }
   };
 
-  const selectCustomer = (c: any) => {
+  const selectCustomer = (c: any, skipAssociationPrompt = false) => {
     const isRuc = (c.docNumber || '').length === 11 || c.docType === 'RUC';
     if (isRuc && formData.documentType === '03') {
       handleDocumentTypeChange('01');
@@ -451,6 +453,9 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     }));
     setCustomerSearchResults([]);
     setDocSearchResults([]);
+    if (!skipAssociationPrompt && c?.associatedCustomers?.length > 0) {
+      setAssocModalCustomer(c);
+    }
   };
 
   const handleApiPeruSearch = async () => {
@@ -586,12 +591,13 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="absolute inset-0 z-110 flex items-center justify-center p-2 overflow-hidden">
+        <div key="invoice-modal" className="absolute inset-0 z-110 flex items-center justify-center p-2 overflow-hidden">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs" />
           <motion.div
-            initial={{ opacity: 0, scale: 0.98, y: 15 }}
+            initial={{ opacity: 0, scale: 0.98, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.98, y: 15 }}
+            exit={{ opacity: 0, scale: 0.98, y: 8 }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
             className="relative w-full h-full max-w-[99%] max-h-[98vh] bg-[#F1F5F9] rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-300"
           >
             {/* === BARRA DE TITULO ERP === */}
@@ -624,7 +630,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
 
             {/* BANNERS DE ALERTA NORMATIVA SUNAT EN TIEMPO REAL */}
             {isBoletaLimitExceeded && (
-              <div className="bg-amber-500 text-white px-3 py-1.5 flex items-center justify-between text-xs font-bold shrink-0 border-b border-amber-600 animate-pulse">
+              <div className="bg-amber-500 text-white px-3 py-1.5 flex items-center justify-between text-xs font-bold shrink-0 border-b border-amber-600">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>
@@ -1478,6 +1484,15 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         onClose={() => setIsProductSearchOpen(false)} 
         onSelect={(p) => { addQuotationItem(p); setIsProductSearchOpen(false); }} 
         token={token} 
+      />
+      <AssociatedCustomersModal
+        isOpen={Boolean(assocModalCustomer)}
+        primaryCustomer={assocModalCustomer}
+        onSelectCustomer={(chosen) => {
+          selectCustomer(chosen, true);
+          setAssocModalCustomer(null);
+        }}
+        onClose={() => setAssocModalCustomer(null)}
       />
     </AnimatePresence>
   );

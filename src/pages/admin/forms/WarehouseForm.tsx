@@ -88,11 +88,19 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({
 
   const handleAddZone = async (floorId: number) => {
     if (!newZoneName || !newZoneCode) return;
+    const cleanCode = newZoneCode.trim().toUpperCase();
+    const duplicateInWarehouse = (formData?.floors || []).some((f: any) =>
+      (f.zones || []).some((z: any) => (z.code || '').trim().toUpperCase() === cleanCode)
+    );
+    if (duplicateInWarehouse) {
+      alert(`El código de zona "${cleanCode}" ya está registrado en otro piso de este almacén.`);
+      return;
+    }
     try {
       await axios.post('/api/warehouses/zones', {
         floorId,
-        name: newZoneName,
-        code: newZoneCode
+        name: newZoneName.trim(),
+        code: cleanCode
       }, { headers: { Authorization: `Bearer ${token}` } });
       setNewZoneName('');
       setNewZoneCode('');
@@ -105,9 +113,17 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({
 
   const handleEditZone = async () => {
     if (!editZoneName || !editZoneCode || !editingZoneId) return;
+    const cleanCode = editZoneCode.trim().toUpperCase();
+    const duplicateInWarehouse = (formData?.floors || []).some((f: any) =>
+      (f.zones || []).some((z: any) => z.id !== editingZoneId && (z.code || '').trim().toUpperCase() === cleanCode)
+    );
+    if (duplicateInWarehouse) {
+      alert(`El código de zona "${cleanCode}" ya está registrado en otro piso de este almacén.`);
+      return;
+    }
     try {
       await axios.put(`/api/warehouses/zones/${editingZoneId}`, {
-        name: editZoneName, code: editZoneCode
+        name: editZoneName.trim(), code: cleanCode
       }, { headers: { Authorization: `Bearer ${token}` } });
       setEditingZoneId(null);
       await fetchCurrentWarehouse();

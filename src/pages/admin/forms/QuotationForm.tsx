@@ -8,6 +8,7 @@ import {
   Gift
 } from 'lucide-react';
 import { ProductSearchModal } from './ProductSearchModal';
+import { AssociatedCustomersModal } from './AssociatedCustomersModal';
 import axios from 'axios';
 import { useAuth } from '../../../context/AuthContext';
 import { generateQuotationPDF } from '../../../lib/pdfGenerator';
@@ -59,6 +60,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
   const [customerSearchResults, setCustomerSearchResults] = useState<any[]>([]);
   const [rucSearchResults, setRucSearchResults] = useState<any[]>([]);
   const [isProductSearchModalOpen, setIsProductSearchModalOpen] = useState(false);
+  const [assocModalCustomer, setAssocModalCustomer] = useState<any | null>(null);
 
   const handleRefreshTC = async () => {
     if (!formData.date) return;
@@ -96,7 +98,13 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
     if (isOpen && (!formData.sellerId || formData.sellerId === '') && sellers.length > 0) {
       let matchedSeller = null;
       if (user) {
-        if (user.email) {
+        if (user.sellerId) {
+          matchedSeller = sellers.find(s => s.id === user.sellerId && s.isActive !== false);
+        }
+        if (!matchedSeller) {
+          matchedSeller = sellers.find(s => s.userId === user.id && s.isActive !== false);
+        }
+        if (!matchedSeller && user.email) {
           matchedSeller = sellers.find(s => s.email && s.email.toLowerCase() === user.email.toLowerCase() && s.isActive !== false);
         }
         if (!matchedSeller && user.name) {
@@ -130,12 +138,12 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
     if (selected) {
       const warehouse = warehouses.find(w => w.id === selected.warehouseId);
 
-      axios.get(`/api/series/next/${selected.warehouseId}/${formData.docType || 'COT'}`, {
+      axios.get(`/api/series/next/${selected.warehouseId}/${formData.docType || 'COT'}?series=${encodeURIComponent(selected.series)}`, {
         headers: { Authorization: `Bearer ${token}` }
       }).then(res => {
         setFormData((prev: any) => ({
           ...prev,
-          pickupPlace: warehouse?.name || '',
+          pickupPlace: prev.pickupPlace ? String(prev.pickupPlace) : (warehouse?.id ? String(warehouse.id) : ''),
           warehouseId: selected.warehouseId.toString(),
           docSeries: selected.series,
           docNumber: res.data.nextNumber,
@@ -158,7 +166,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
       setFormData((prev: any) => ({
         ...prev,
         warehouseId: warehouseId,
-        pickupPlace: warehouse?.name || '',
+        pickupPlace: prev.pickupPlace ? String(prev.pickupPlace) : (warehouse?.id ? String(warehouse.id) : ''),
         docSeries: '',
         docNumber: '',
         seriesId: ''
@@ -166,21 +174,40 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
     }
   };
 
-  // Auto-seleccionar serie y almacén asignado al abrir
+  // Auto-seleccionar serie y almacén asignado al abrir (priorizando la serie del vendedor)
   useEffect(() => {
-    if (isOpen && (!formData.docSeries || !formData.warehouseId) && series.length > 0) {
+    const docType = formData.docType || 'COT';
+    if (!isOpen || formData.id || series.length === 0) return;
+
+    const selectedSeller = sellers.find(s => String(s.id) === String(formData.sellerId));
+    const sellerAssignedSeries = docType === 'PED' ? selectedSeller?.orderSeries : selectedSeller?.quotationSeries;
+
+    if (sellerAssignedSeries) {
+      const sellerSeriesRec = series.find(
+        s => s.series === sellerAssignedSeries && s.documentType === docType && s.isActive !== false
+      );
+      if (sellerSeriesRec && formData.docSeries !== sellerSeriesRec.series) {
+        handleSeriesChange(sellerSeriesRec.id.toString());
+        return;
+      }
+    }
+
+    const hasValidSeries = !!formData.docSeries && series.some(
+      s => s.series === formData.docSeries && s.documentType === docType && s.isActive !== false
+    );
+    if (!hasValidSeries || !formData.warehouseId) {
       let targetSeries: any = null;
       if (formData.warehouseId) {
-        targetSeries = series.find(s => s.warehouseId === parseInt(formData.warehouseId) && s.documentType === (formData.docType || 'COT') && s.isActive !== false);
+        targetSeries = series.find(s => s.warehouseId === parseInt(formData.warehouseId) && s.documentType === docType && s.isActive !== false);
       }
       if (!targetSeries) {
-        targetSeries = series.find(s => s.documentType === (formData.docType || 'COT') && s.isActive !== false);
+        targetSeries = series.find(s => s.documentType === docType && s.isActive !== false);
       }
       if (targetSeries) {
         handleSeriesChange(targetSeries.id.toString());
       }
     }
-  }, [isOpen, series, formData.warehouseId]);
+  }, [isOpen, series, sellers, formData.sellerId, formData.warehouseId, formData.docType, formData.id]);
 
   const handleDocumentSearch = async () => {
     if (!formData.ruc) return;
@@ -267,7 +294,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
     }
   };
 
-  const selectCustomer = (c: any) => {
+  const selectCustomer = (c: any, skipAssociationPrompt = false) => {
     const clientName = (c.name || `${c.firstName || ''} ${c.lastName || ''}`).trim().toUpperCase();
     const clientAddress = formatFullCustomerAddress(c.address, c.district, c.province, c.department);
     setFormData({
@@ -280,6 +307,9 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
     setCustomerSearchResults([]);
     setRucSearchResults([]);
     setConsultedData(null);
+    if (!skipAssociationPrompt && c?.associatedCustomers?.length > 0) {
+      setAssocModalCustomer(c);
+    }
   };
 
   const totalGratuito = quotationItems.reduce((acc, item) => {
@@ -308,6 +338,36 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
     const valorLine = totalLine / 1.18;
     return acc + (totalLine - valorLine);
   }, 0);
+
+  const handleGeneratePdf = async (action: 'save' | 'print') => {
+    const selectedSeller = sellers.find(s => String(s.id) === String(formData.sellerId));
+    const selectedWarehouse = warehouses.find(
+      w => String(w.id) === String(formData.pickupPlace) || w.name === formData.pickupPlace
+    );
+    const selectedAgency = shippingAgencies.find(a => String(a.id) === String(formData.agencyId));
+    const selectedBranch = selectedAgency?.branches?.find((b: any) => String(b.id) === String(formData.branchId));
+    const agencyLabel = selectedAgency
+      ? `${selectedAgency.name}${selectedBranch?.name ? ` (${selectedBranch.name})` : ''}`
+      : (formData.agencyName || '');
+    const pickupLabel = selectedWarehouse
+      ? `${selectedWarehouse.name}${selectedWarehouse.address ? ` (${selectedWarehouse.address})` : ''}`
+      : (formData.pickupPlace || '');
+
+    const pdfPayload = {
+      ...formData,
+      customerName: formData.razonSocial || formData.customerName || 'PÚBLICO GENERAL',
+      customerDocNumber: formData.ruc || formData.customerDocNumber || '-',
+      customerAddress: formData.address || formData.customerAddress || '-',
+      sellerName: selectedSeller?.name || formData.sellerName || '',
+      pickupPlaceName: pickupLabel,
+      agencyName: agencyLabel,
+      subtotalAmount: valorVenta,
+      igvAmount: igvTotal,
+      totalAmount: quotationTotal,
+    };
+
+    await generateQuotationPDF(pdfPayload, quotationItems, action);
+  };
 
   return (
     <AnimatePresence>
@@ -368,7 +428,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
 
                     <span className="text-[11px] font-bold text-slate-600 shrink-0 ml-2">Serie</span>
                     <select 
-                      value={series.find(s => s.series === formData.docSeries && s.documentType === (formData.docType || 'COT'))?.id || ''} 
+                      value={formData.seriesId || series.find(s => s.series === formData.docSeries && s.documentType === (formData.docType || 'COT'))?.id || ''} 
                       onChange={e => handleSeriesChange(e.target.value)}
                       className="h-8 border border-slate-300 rounded px-2 text-xs font-bold bg-blue-50/80 text-blue-900 focus:bg-white focus:ring-1 focus:ring-blue-500 w-20 text-center"
                     >
@@ -647,54 +707,8 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
 
                 {/* --- SECCIÓN 4: DETALLE TABLA EXTENDIDA --- */}
                 <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-75">
-                  <div className="bg-slate-50 border-b border-slate-200 px-3 py-1 flex items-center justify-between">
+                  <div className="bg-slate-50 border-b border-slate-200 px-3 py-1.5 flex items-center justify-between">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Detalle de Pedido/Cotización</span>
-                    <div className="relative group w-96">
-                      <input 
-                        type="text" 
-                        placeholder="Buscar producto por código o nombre..." 
-                        onChange={e => handleSearchProduct(e.target.value)}
-                        className="h-7 w-full border border-slate-300 rounded px-8 text-xs bg-white outline-none focus:border-blue-500" 
-                      />
-                      <Search className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
-                      {searchResults.length > 0 && (
-                        <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white shadow-xl border border-slate-200 rounded max-h-64 overflow-y-auto">
-                          {searchResults.map(p => (
-                            <div key={p.id} onClick={() => { addQuotationItem(p); handleSearchProduct(''); }} className="p-2 hover:bg-blue-50 cursor-pointer text-xs flex justify-between border-b border-slate-50 items-center">
-                              <div className="flex flex-col">
-                                <span className="font-bold">{p.name}</span>
-                                  <div className="flex flex-wrap gap-1 items-center mt-1">
-                                    <span className="text-[10px] bg-slate-100 px-1 rounded text-slate-500 font-bold">{p.code}</span>
-                                    {p.stockRecords?.filter((sr: any) => {
-                                      const wType = sr.warehouse?.type?.toUpperCase() || '';
-                                      const wName = sr.warehouse?.name?.toUpperCase() || '';
-                                      return !['TRANSITORIO', 'DESPACHO', 'COMPROBANTES', 'SISTEMA', 'CONTROL', 'EXISTENCIAS'].includes(wType) && 
-                                             !wName.includes('DESPACHO') && 
-                                             !wName.includes('COMPROBANTE') && 
-                                             !wName.includes('TRANSITO') &&
-                                             !wName.includes('EXISTENCIAS');
-                                    }).map((sr: any) => (
-                                      <span key={sr.id} className="text-[9px] text-indigo-600 font-black bg-indigo-50 px-1.5 py-0.5 rounded flex items-center gap-1 border border-indigo-100">
-                                        <MapPin className="w-2.5 h-2.5" />
-                                        {sr.warehouse?.name.split(' ')[0]}: {sr.quantity} {sr.zone && <span className="text-indigo-400 font-bold">({sr.zone.name})</span>}
-                                      </span>
-                                    ))}
-                                    {!p.stockRecords?.filter((sr: any) => {
-                                      const wType = sr.warehouse?.type?.toUpperCase() || '';
-                                      const wName = sr.warehouse?.name?.toUpperCase() || '';
-                                      return !['TRANSITORIO', 'DESPACHO', 'COMPROBANTES', 'SISTEMA', 'CONTROL'].includes(wType) && 
-                                             !wName.includes('DESPACHO') && 
-                                             !wName.includes('COMPROBANTE') && 
-                                             !wName.includes('TRANSITO');
-                                    }).length && <span className="text-[9px] text-red-400 font-bold italic">Sin stock en almacenes</span>}
-                                  </div>
-                              </div>
-                              <span className="text-blue-600 font-black whitespace-nowrap ml-4">S/ {p.salePrice}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
                   </div>
 
                   <div className="overflow-x-auto flex-1">
@@ -741,7 +755,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                                   {item.expiryDate && (
                                     <span className="text-[8px] text-amber-600 flex items-center gap-0.5 mt-0.5 font-black leading-none">
                                       <Calendar className="w-2 h-2 shrink-0" />
-                                      {new Date(item.expiryDate).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                                      {new Date(item.expiryDate).toLocaleDateString('es-PE', { timeZone: 'UTC', day: '2-digit', month: '2-digit', year: '2-digit' })}
                                     </span>
                                   )}
                                 </div>
@@ -876,8 +890,8 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                 <div className="bg-white p-3 rounded-lg border border-slate-300 shadow-sm flex flex-col md:flex-row justify-between items-end gap-6">
                   <div className="flex gap-2">
                     <button type="button" onClick={onClose} className="h-10 px-4 bg-slate-50 border border-slate-300 rounded text-xs font-bold hover:bg-slate-100 flex items-center gap-2"><X className="w-4 h-4 text-red-500" /> Salir</button>
-                    <button type="button" onClick={async () => await generateQuotationPDF(formData, quotationItems, 'print')} className="h-10 px-4 bg-white border border-slate-300 rounded text-xs font-bold hover:bg-slate-100 flex items-center gap-2"><Printer className="w-4 h-4 text-slate-600" /> Imprimir</button>
-                    <button type="button" onClick={async () => await generateQuotationPDF(formData, quotationItems, 'print')} className="h-10 px-4 bg-white border border-slate-300 rounded text-[10px] font-bold hover:bg-slate-100 flex items-center gap-1">Imprimir B5</button>
+                    <button type="button" onClick={() => handleGeneratePdf('print')} className="h-10 px-4 bg-white border border-slate-300 rounded text-xs font-bold hover:bg-slate-100 flex items-center gap-2"><Printer className="w-4 h-4 text-slate-600" /> Imprimir</button>
+                    <button type="button" onClick={() => handleGeneratePdf('print')} className="h-10 px-4 bg-white border border-slate-300 rounded text-[10px] font-bold hover:bg-slate-100 flex items-center gap-1">Imprimir B5</button>
                     <button type="submit" disabled={loading} className="h-10 px-8 bg-blue-800 text-white rounded shadow-lg shadow-blue-100 hover:bg-blue-900 flex items-center gap-2 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed">
                       {loading ? (
                         <><RefreshCw className="w-4 h-4 animate-spin" /> Procesando...</>
@@ -885,7 +899,7 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
                         <><Save className="w-4 h-4" /> Guardar</>
                       )}
                     </button>
-                    <button type="button" onClick={async () => await generateQuotationPDF(formData, quotationItems, 'save')} className="h-10 px-4 bg-white border border-slate-300 rounded text-xs font-bold hover:bg-slate-100 flex items-center gap-2"><FileDown className="w-4 h-4 text-red-600" /> PDF</button>
+                    <button type="button" onClick={() => handleGeneratePdf('save')} className="h-10 px-4 bg-white border border-slate-300 rounded text-xs font-bold hover:bg-slate-100 flex items-center gap-2"><FileDown className="w-4 h-4 text-red-600" /> PDF</button>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -919,6 +933,15 @@ export const QuotationForm: React.FC<QuotationFormProps> = ({
           token={token} 
           selectedWarehouseId={formData.warehouseId}
           warehouses={warehouses}
+        />
+        <AssociatedCustomersModal
+          isOpen={Boolean(assocModalCustomer)}
+          primaryCustomer={assocModalCustomer}
+          onSelectCustomer={(chosen) => {
+            selectCustomer(chosen, true);
+            setAssocModalCustomer(null);
+          }}
+          onClose={() => setAssocModalCustomer(null)}
         />
       </>
     )}

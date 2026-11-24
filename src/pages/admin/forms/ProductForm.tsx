@@ -18,6 +18,8 @@ interface ProductFormProps {
   loading: boolean;
   categories: any[];
   brands: any[];
+  lines?: any[];
+  colors?: any[];
   units: any[];
   handleFileUpload: (file: File) => Promise<string>;
   setLoading: (loading: boolean) => void;
@@ -34,6 +36,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   loading,
   categories,
   brands,
+  lines = [],
+  colors = [],
   units,
   handleFileUpload,
   setLoading,
@@ -41,6 +45,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 }) => {
   const [existenceTypes, setExistenceTypes] = React.useState<any[]>([]);
   const [valuationMethods, setValuationMethods] = React.useState<any[]>([]);
+  const [igvAffectations, setIgvAffectations] = React.useState<any[]>([]);
   const [packagingErrors, setPackagingErrors] = React.useState<string[]>([]);
   const [showPackagingPreview, setShowPackagingPreview] = React.useState(false);
 
@@ -51,6 +56,9 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         .catch(() => {});
       axios.get('/api/sunat/TABLA_14', { headers: { Authorization: `Bearer ${token}` } })
         .then(res => setValuationMethods(res.data))
+        .catch(() => {});
+      axios.get('/api/sunat/CAT_07', { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => setIgvAffectations(res.data))
         .catch(() => {});
     }
   }, [isOpen, token]);
@@ -189,6 +197,47 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                         </select>
                       </div>
 
+                      <div className="md:col-span-6 space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase">Línea</label>
+                        <select 
+                          value={formData.lineId || ''} 
+                          onChange={e => setFormData({...formData, lineId: e.target.value})} 
+                          className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold text-slate-800 bg-white focus:border-blue-500 outline-none uppercase"
+                        >
+                          <option value="">-- SELECCIONE LÍNEA --</option>
+                          {lines.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-6 space-y-1">
+                        <label className="text-[10px] font-bold text-slate-600 uppercase">Color</label>
+                        <select 
+                          value={formData.colorId || ''} 
+                          onChange={e => setFormData({...formData, colorId: e.target.value})} 
+                          className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold text-slate-800 bg-white focus:border-blue-500 outline-none uppercase"
+                        >
+                          <option value="">-- SELECCIONE COLOR --</option>
+                          {colors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-12 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-slate-600 uppercase">Certificado(s) de Marca</label>
+                          <span className="text-[9px] font-mono text-slate-400">
+                            {(formData.brandCertificate || '').length}/250
+                          </span>
+                        </div>
+                        <input 
+                          type="text" 
+                          maxLength={250}
+                          value={formData.brandCertificate || ''} 
+                          onChange={e => setFormData({...formData, brandCertificate: e.target.value})} 
+                          className="h-8 w-full border border-slate-300 rounded px-2.5 text-xs font-bold font-mono text-slate-800 uppercase bg-white focus:border-blue-500 outline-none" 
+                          placeholder="Ej. P00257621" 
+                        />
+                      </div>
+
                       {/* Campos SUNAT */}
                       <div className="md:col-span-6 space-y-1">
                         <label className="text-[10px] font-bold text-blue-800 uppercase">Tipo de Existencia (SUNAT)</label>
@@ -211,36 +260,71 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                           {valuationMethods.map(m => <option key={m.code} value={m.code}>{m.code} - {m.name}</option>)}
                         </select>
                       </div>
+
+                      <div className="md:col-span-8 space-y-1">
+                        <label className="text-[10px] font-bold text-blue-800 uppercase">Afectación IGV (SUNAT Cat. 07)</label>
+                        <select 
+                          value={formData.igvAffectationCode || '10'} 
+                          onChange={e => setFormData({...formData, igvAffectationCode: e.target.value})} 
+                          className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-medium text-slate-800 bg-white focus:border-blue-500 outline-none"
+                        >
+                          {igvAffectations.length > 0 ? (
+                            igvAffectations.map(a => <option key={a.code} value={a.code}>{a.code} - {a.name}</option>)
+                          ) : (
+                            <>
+                              <option value="10">10 - Gravado - Operación Onerosa</option>
+                              <option value="20">20 - Exonerado - Operación Onerosa</option>
+                              <option value="30">30 - Inafecto - Operación Onerosa</option>
+                              <option value="40">40 - Exportación</option>
+                            </>
+                          )}
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-4 space-y-1">
+                        <label className="text-[10px] font-bold text-blue-800 uppercase">Cód. SUNAT (UNSPSC)</label>
+                        <input 
+                          type="text" 
+                          maxLength={20}
+                          value={formData.sunatProductCode || ''} 
+                          onChange={e => setFormData({...formData, sunatProductCode: e.target.value})} 
+                          className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-mono font-bold text-slate-800 bg-white focus:border-blue-500 outline-none" 
+                          placeholder="Ej. 52161500" 
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Sección 2: Jerarquía de Empaque */}
+                  {/* Sección 2: Jerarquía de Empaque (Matriz Compacta) */}
                   <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs space-y-2">
-                    <div className="flex items-center gap-1.5 border-b border-slate-100 pb-1.5">
-                      <Layers className="w-3.5 h-3.5 text-blue-700" />
-                      <span className="text-[11px] font-bold text-blue-950 uppercase tracking-tight">Jerarquía de Empaque y Medidas</span>
-                    </div>
-                    
-                    {/* Nivel 1: Empaque Mayor */}
-                    <div className="p-2 bg-blue-50/50 rounded border border-blue-100 space-y-1.5">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
                       <div className="flex items-center gap-1.5">
-                        <Box className="w-3 h-3 text-blue-700" />
-                        <span className="text-[10px] font-bold text-blue-900 uppercase">Nivel 1: Empaque Mayor (Cajas / Master)</span>
+                        <Layers className="w-3.5 h-3.5 text-[#004A99]" />
+                        <span className="text-[11px] font-bold text-slate-900 uppercase tracking-tight">Jerarquía de Empaque y Medidas</span>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
-                        <div className="md:col-span-4 space-y-1">
-                          <label className="text-[10px] font-bold text-slate-600 uppercase">Tipo de Empaque</label>
+                      <span className="text-[10px] text-emerald-700 font-semibold">Stock controlado en Unidad Base</span>
+                    </div>
+
+                    <div className="border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-200">
+                      {/* Fila 1: Empaque Mayor */}
+                      <div className="grid grid-cols-12 gap-2 items-center px-2.5 py-1.5 bg-blue-50/40">
+                        <div className="col-span-12 sm:col-span-3 flex items-center gap-1.5">
+                          <Box className="w-3.5 h-3.5 text-[#004A99] shrink-0" />
+                          <span className="text-[11px] font-bold text-[#004A99] uppercase">1. Mayor</span>
+                        </div>
+                        <div className="col-span-7 sm:col-span-5">
                           <select 
                             value={formData.packageId || ''} 
                             onChange={e => setFormData({...formData, packageId: e.target.value})} 
-                            className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold text-slate-800 bg-white focus:border-blue-500 outline-none uppercase"
+                            aria-label="Tipo de Empaque Mayor"
+                            className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-semibold text-slate-800 bg-white focus:border-[#004A99] outline-none uppercase"
                           >
                             <option value="">-- SIN EMPAQUE MAYOR --</option>
                             {units.map(u => <option key={u.id} value={u.id}>{u.name} ({u.symbol || u.abbreviation})</option>)}
                           </select>
                         </div>
-                        <div className="md:col-span-2 space-y-1">
-                          <label className="text-[10px] font-bold text-slate-600 uppercase">Contiene ({formData.subPackageId ? 'Sub-Emp' : 'Base'})</label>
+                        <div className="col-span-5 sm:col-span-4 flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase shrink-0">Contiene</span>
                           <input 
                             type="number" 
                             min="1" 
@@ -250,33 +334,35 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                               const val = parseInt(e.target.value);
                               setFormData({...formData, quantityPerPackage: val > 0 ? val : ''});
                             }} 
-                            className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold text-center bg-blue-50/60 text-blue-900 focus:border-blue-500 outline-none" 
-                            placeholder="Ej: 10"
+                            aria-label="Cantidad por empaque mayor"
+                            className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-mono font-bold text-center bg-white text-[#004A99] focus:border-[#004A99] outline-none" 
+                            placeholder="10"
                           />
+                          <span className="text-[10px] font-bold text-slate-600 uppercase shrink-0">
+                            {formData.subPackageId ? 'SUB' : 'UND'}
+                          </span>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Nivel 2: Sub Empaque */}
-                    <div className="p-2 bg-amber-50/50 rounded border border-amber-100 space-y-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <Layers className="w-3 h-3 text-amber-700" />
-                        <span className="text-[10px] font-bold text-amber-900 uppercase">Nivel 2: Sub-Empaque (Paquetes / Docenas)</span>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
-                        <div className="md:col-span-4 space-y-1">
-                          <label className="text-[10px] font-bold text-slate-600 uppercase">Tipo de Sub-Empaque</label>
+                      {/* Fila 2: Sub-Empaque */}
+                      <div className="grid grid-cols-12 gap-2 items-center px-2.5 py-1.5 bg-amber-50/40">
+                        <div className="col-span-12 sm:col-span-3 flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                          <span className="text-[11px] font-bold text-amber-900 uppercase">2. Sub-Emp.</span>
+                        </div>
+                        <div className="col-span-7 sm:col-span-5">
                           <select 
                             value={formData.subPackageId || ''} 
                             onChange={e => setFormData({...formData, subPackageId: e.target.value})} 
-                            className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold text-slate-800 bg-white focus:border-blue-500 outline-none uppercase"
+                            aria-label="Tipo de Sub-Empaque"
+                            className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-semibold text-slate-800 bg-white focus:border-[#004A99] outline-none uppercase"
                           >
                             <option value="">-- SIN SUB-EMPAQUE --</option>
                             {units.map(u => <option key={u.id} value={u.id}>{u.name} ({u.symbol || u.abbreviation})</option>)}
                           </select>
                         </div>
-                        <div className="md:col-span-2 space-y-1">
-                          <label className="text-[10px] font-bold text-slate-600 uppercase">Contiene (Unidad Base)</label>
+                        <div className="col-span-5 sm:col-span-4 flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase shrink-0">Contiene</span>
                           <input 
                             type="number" 
                             min="1" 
@@ -286,33 +372,35 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                               const val = parseInt(e.target.value);
                               setFormData({...formData, quantityPerSubPackage: val > 0 ? val : ''});
                             }} 
-                            className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold text-center bg-amber-50/60 text-amber-900 focus:border-blue-500 outline-none" 
-                            placeholder="Ej: 12"
+                            aria-label="Cantidad por sub-empaque"
+                            className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-mono font-bold text-center bg-white text-amber-900 focus:border-[#004A99] outline-none" 
+                            placeholder="12"
                           />
+                          <span className="text-[10px] font-bold text-slate-600 uppercase shrink-0">BASE</span>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Nivel 3: Unidad Base */}
-                    <div className="p-2 bg-emerald-50/50 rounded border border-emerald-100 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <Package className="w-3 h-3 text-emerald-700" />
-                          <span className="text-[10px] font-bold text-emerald-900 uppercase">Nivel 3: Unidad Base (Unidades / Piezas)</span>
+                      {/* Fila 3: Unidad Base */}
+                      <div className="grid grid-cols-12 gap-2 items-center px-2.5 py-1.5 bg-emerald-50/40">
+                        <div className="col-span-12 sm:col-span-3 flex items-center gap-1.5">
+                          <Package className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                          <span className="text-[11px] font-bold text-emerald-900 uppercase">3. Base *</span>
                         </div>
-                        <span className="text-[9px] text-emerald-700 font-bold uppercase">(Stock físico se controla en esta unidad)</span>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-600 uppercase">Unidad de Medida Base</label>
-                        <select 
-                          value={formData.unitId || ''} 
-                          onChange={e => setFormData({...formData, unitId: e.target.value})} 
-                          className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-bold text-slate-800 bg-white focus:border-blue-500 outline-none uppercase"
-                          required
-                        >
-                          <option value="">-- SELECCIONE UNIDAD BASE --</option>
-                          {units.map(u => <option key={u.id} value={u.id}>{u.name} ({u.symbol || u.abbreviation})</option>)}
-                        </select>
+                        <div className="col-span-12 sm:col-span-5">
+                          <select 
+                            value={formData.unitId || ''} 
+                            onChange={e => setFormData({...formData, unitId: e.target.value})} 
+                            aria-label="Unidad de Medida Base"
+                            className="h-8 w-full border border-slate-300 rounded px-2 text-xs font-semibold text-slate-800 bg-white focus:border-[#004A99] outline-none uppercase"
+                            required
+                          >
+                            <option value="">-- SELECCIONE UNIDAD BASE --</option>
+                            {units.map(u => <option key={u.id} value={u.id}>{u.name} ({u.symbol || u.abbreviation})</option>)}
+                          </select>
+                        </div>
+                        <div className="col-span-12 sm:col-span-4 text-[10px] font-semibold text-emerald-800">
+                          Unidad mínima de inventario
+                        </div>
                       </div>
                     </div>
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Truck, X, Search, Save, Package, Calendar, UserPlus, AlertCircle, ClipboardList } from 'lucide-react';
+import { Truck, X, Search, Save, Package, UserPlus, ClipboardList, FileText, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 import { ProductSearchModal } from './ProductSearchModal';
 import { SupplierSearchModal } from './SupplierSearchModal';
@@ -17,8 +17,8 @@ interface ReferralGuideFormProps {
 }
 
 const DEFAULT_GUIDE_DOC_TYPES = [
-  { code: '09', name: 'Guía de Remisión - Remitente' },
-  { code: '31', name: 'Guía de Remisión - Transportista' }
+  { code: '09', name: 'Guía de Remisión - Remitente', sigla: 'GRM' },
+  { code: '31', name: 'Guía de Remisión - Transportista', sigla: 'GRT' }
 ];
 
 export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({ 
@@ -101,7 +101,10 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({
       const filtered = dts.filter((d: any) => ['09', '31', 'GRM', 'GRT'].includes(d.code));
       setDocTypes(filtered.length > 0 ? filtered : DEFAULT_GUIDE_DOC_TYPES);
       
-      const defaultWh = whs.find((w: any) => w.name.toUpperCase().includes('COMPRAS IMP/NAC'))?.id?.toString();
+      const defaultWh = whs.find((w: any) => {
+        const name = (w.name || '').toUpperCase();
+        return name.includes('COMPRAS NAC') || name.includes('COMPRAS IMP') || (w.type === 'TRANSITORIO' && name.includes('COMPRAS'));
+      })?.id?.toString();
       
       setFormData((prev: any) => ({ 
         ...prev, 
@@ -140,7 +143,7 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({
       items: [...(prev.items || []), { 
         productId: p.id, name: p.name, code: p.code, unitSymbol: p.package?.symbol || p.subPackage?.symbol || p.unit?.symbol || 'UND',
         quantity: 1, 
-        price: p.costPrice || 0, // Guía puede tener costo referencial
+        price: 0,
         lotNumber: '', 
         expiryDate: '', 
         entranceDate: new Date().toISOString().split('T')[0],
@@ -162,7 +165,8 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({
     setLoading(true);
     try {
       const selectedSupplier = suppliers.find(s => s.id.toString() === formData.supplierId.toString());
-      const payload = { ...formData, supplierName: selectedSupplier?.name };
+      const normalizedDocNumber = formData.docNumber ? String(formData.docNumber).replace(/\D/g, '').padStart(8, '0') : '';
+      const payload = { ...formData, docNumber: normalizedDocNumber, supplierName: selectedSupplier?.name };
       
       if (formData.id) await axios.put(`/api/purchases/${formData.id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
       else await axios.post('/api/purchases', payload, { headers: { Authorization: `Bearer ${token}` } });
@@ -177,201 +181,354 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div key="referral-guide"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="absolute inset-0 z-[150] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-hidden"
-        >
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-6xl max-h-full bg-[#E8EBF0] flex flex-col border border-[#8A9DB8] shadow-2xl overflow-hidden rounded-sm">
-          
-          <div className="bg-[#5C7285] px-3 py-1.5 flex items-center justify-between border-b border-white shadow-sm">
-            <div className="flex items-center gap-2">
-              <Truck className="w-4 h-4 text-white" />
-              <h2 className="text-xs font-bold text-white uppercase tracking-wider">Módulo de Almacén: Guía de Remisión de Ingreso</h2>
-            </div>
-            <button onClick={onClose} className="text-white hover:text-red-200 transition-colors"><X className="w-4 h-4" /></button>
-          </div>
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-3 overflow-hidden">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-slate-900/50 backdrop-blur-xs"
+          />
 
-          <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col p-3 gap-3">
-            
-            <div className="bg-white p-4 border border-[#B0BCCB] rounded shadow-sm flex flex-col gap-4 text-[11px]">
-              
-              <div className="grid grid-cols-12 gap-4">
-                <div className="col-span-12 lg:col-span-6 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px] flex justify-between">
-                    <span>Proveedor:</span>
-                    <span className="text-blue-600 cursor-pointer hover:underline flex items-center gap-1" onClick={() => setIsSupplierFormOpen(true)}>
-                      <UserPlus className="w-3 h-3" /> REGISTRO RÁPIDO
+          <motion.div
+            key="referral-guide"
+            initial={{ opacity: 0, scale: 0.97, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 10 }}
+            className="relative w-full max-w-5xl bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-300 max-h-[92vh]"
+          >
+            {/* Cabecera Institucional ERP */}
+            <div className="bg-[#004A99] px-4 py-2.5 flex items-center justify-between text-white shadow-sm shrink-0 border-b border-blue-900">
+              <div className="flex items-center gap-2">
+                <div className="p-1 bg-white/10 rounded">
+                  <Truck className="w-4 h-4 text-blue-200" />
+                </div>
+                <div>
+                  <h2 className="text-xs font-bold text-white uppercase tracking-tight">
+                    Guía de Remisión de Ingreso
+                  </h2>
+                  <p className="text-[9px] text-blue-200 uppercase font-medium">
+                    Módulo de Almacén · Recepción de Mercadería
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1 hover:bg-red-600 rounded text-white/80 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-3 space-y-2.5 bg-slate-50/70 flex flex-col">
+                {/* Sección 1: Datos del Proveedor y Documento */}
+                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs space-y-2.5 shrink-0">
+                  <div className="flex items-center gap-1.5 border-b border-slate-100 pb-1.5">
+                    <FileText className="w-3.5 h-3.5 text-blue-700" />
+                    <span className="text-[11px] font-bold text-blue-950 uppercase tracking-tight">
+                      Datos del Proveedor y Documento
                     </span>
-                  </label>
-                  <div className="flex gap-1">
-                    <div className="relative flex-1">
-                      <select value={formData.supplierId} onChange={e => setFormData({...formData, supplierId: e.target.value})} className="w-full h-7 bg-slate-50 border border-slate-200 px-2 outline-none font-bold">
-                        <option value="">-- SELECCIONE PROVEEDOR --</option>
-                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.docNumber} | {s.name.toUpperCase()}</option>)}
+                  </div>
+
+                  <div className="grid grid-cols-12 gap-3">
+                    <div className="col-span-12 lg:col-span-6 space-y-1 min-w-0">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase flex items-center justify-between">
+                        <span>Proveedor</span>
+                        <button
+                          type="button"
+                          onClick={() => setIsSupplierFormOpen(true)}
+                          className="text-blue-700 hover:text-blue-800 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <UserPlus className="w-3 h-3" /> Registro Rápido
+                        </button>
+                      </label>
+                      <div className="flex gap-1.5 min-w-0">
+                        <select
+                          value={formData.supplierId}
+                          onChange={e => setFormData({ ...formData, supplierId: e.target.value })}
+                          className="flex-1 min-w-0 w-full h-8 px-2 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800 focus:border-blue-500 outline-none truncate"
+                        >
+                          <option value="">-- SELECCIONE PROVEEDOR --</option>
+                          {suppliers.map(s => (
+                            <option key={s.id} value={s.id}>{s.docNumber} | {s.name.toUpperCase()}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setIsSupplierSearchOpen(true)}
+                          title="Buscar proveedor"
+                          className="h-8 px-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                        >
+                          <Search className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="col-span-12 lg:col-span-4 space-y-1 min-w-0">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase block">Documento</label>
+                      <div className="flex items-center gap-1">
+                        <select
+                          value={formData.docType}
+                          onChange={e => setFormData({ ...formData, docType: e.target.value })}
+                          className="w-20 h-8 px-1 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800 text-center focus:border-blue-500 outline-none"
+                        >
+                          {docTypes.map(d => (
+                            <option key={d.code} value={d.code}>
+                              {d.sigla || (d.code === '09' ? 'GRM' : d.code === '31' ? 'GRT' : d.code)}
+                            </option>
+                          ))}
+                          {formData.docType === 'GRM' && <option value="GRM">GRM</option>}
+                        </select>
+                        <input
+                          placeholder="SERIE"
+                          value={formData.docSeries}
+                          onChange={e => setFormData({ ...formData, docSeries: e.target.value.toUpperCase() })}
+                          className="w-20 h-8 px-2 bg-white border border-slate-300 rounded text-xs font-bold font-mono text-slate-800 text-center focus:border-blue-500 outline-none"
+                        />
+                        <span className="font-bold text-slate-400 text-xs">-</span>
+                        <input
+                          placeholder="NÚMERO"
+                          maxLength={8}
+                          value={formData.docNumber}
+                          onChange={e => setFormData({ ...formData, docNumber: e.target.value.replace(/\D/g, '').slice(0, 8) })}
+                          onBlur={() => {
+                            if (formData.docNumber && formData.docNumber.trim()) {
+                              setFormData({ ...formData, docNumber: formData.docNumber.replace(/\D/g, '').padStart(8, '0') });
+                            }
+                          }}
+                          className="flex-1 min-w-0 h-8 px-2 bg-white border border-slate-300 rounded text-xs font-bold font-mono text-slate-800 text-center focus:border-blue-500 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="col-span-12 lg:col-span-2 space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase block">Fecha Ingreso</label>
+                      <input
+                        type="date"
+                        value={formData.date}
+                        onChange={e => setFormData({ ...formData, date: e.target.value })}
+                        className="w-full h-8 px-2 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-12 gap-2">
+                    <div className="col-span-6 lg:col-span-2 space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase block">Tipo Cambio</label>
+                      <input
+                        value={formData.exchangeRate}
+                        onChange={e => setFormData({ ...formData, exchangeRate: e.target.value })}
+                        className={`w-full h-8 px-2 border rounded text-xs text-right font-bold font-mono focus:border-blue-500 outline-none ${tcWarning ? 'border-amber-400 bg-amber-50 text-amber-900' : 'border-slate-300 bg-white text-slate-800'}`}
+                      />
+                    </div>
+
+                    <div className="col-span-6 lg:col-span-3 space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase block">Moneda</label>
+                      <select
+                        value={formData.currency}
+                        onChange={e => setFormData({ ...formData, currency: e.target.value })}
+                        className="w-full h-8 px-2 bg-white border border-slate-300 rounded text-xs font-bold text-blue-700 focus:border-blue-500 outline-none"
+                      >
+                        {currencies.map(c => <option key={c.code} value={c.code}>{c.name.toUpperCase()}</option>)}
                       </select>
                     </div>
-                    <button type="button" onClick={() => setIsSupplierSearchOpen(true)} className="w-8 h-7 bg-blue-600 text-white rounded flex items-center justify-center hover:bg-blue-700 shadow-sm transition-colors">
-                      <Search className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
 
-                <div className="col-span-12 lg:col-span-4 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px]">Documento:</label>
-                  <div className="flex items-center gap-1">
-                    <select value={formData.docType} onChange={e => setFormData({...formData, docType: e.target.value})} className="w-20 h-7 bg-slate-50 border border-slate-200 px-1 outline-none font-bold text-center">
-                      {docTypes.map(d => <option key={d.code} value={d.code}>{d.code}</option>)}
-                      <option value="GRM">GRM</option>
-                    </select>
-                    <input placeholder="SERIE" value={formData.docSeries} onChange={e => setFormData({...formData, docSeries: e.target.value.toUpperCase()})} className="w-20 h-7 border border-slate-200 px-2 outline-none font-bold text-center" />
-                    <span className="font-bold text-slate-400">-</span>
-                    <input placeholder="NÚMERO" value={formData.docNumber} onChange={e => setFormData({...formData, docNumber: e.target.value})} className="flex-1 h-7 border border-slate-200 px-2 outline-none font-bold text-center" />
-                  </div>
-                </div>
-
-                <div className="col-span-12 lg:col-span-2 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px]">Fecha Ingreso:</label>
-                  <div className="relative">
-                    <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full h-7 border border-slate-200 px-2 outline-none font-bold bg-slate-50" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-12 gap-4 border-t border-slate-50 pt-3">
-                <div className="col-span-12 lg:col-span-2 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px]">Tipo Cambio:</label>
-                  <div className="flex items-center gap-1">
-                    <input value={formData.exchangeRate} onChange={e => setFormData({...formData, exchangeRate: e.target.value})} className={`w-full h-7 border rounded px-2 text-right font-black ${tcWarning ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-slate-50'}`} />
-                  </div>
-                </div>
-
-                <div className="col-span-12 lg:col-span-3 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px]">Moneda:</label>
-                  <select value={formData.currency} onChange={e => setFormData({...formData, currency: e.target.value})} className="w-full h-7 bg-slate-50 border border-slate-200 px-2 outline-none font-black text-blue-600">
-                    {currencies.map(c => <option key={c.code} value={c.code}>{c.name.toUpperCase()}</option>)}
-                  </select>
-                </div>
-
-                <div className="col-span-12 lg:col-span-4 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px]">Tipo Compra:</label>
-                  <select value={formData.purchaseType || 'MERCADERIA'} onChange={e => setFormData({...formData, purchaseType: e.target.value})} className="w-full h-7 bg-slate-50 border border-slate-200 px-2 outline-none font-bold">
-                    {SUNAT_PURCHASE_TYPES.map(t => (
-                      <option key={t.code} value={t.code}>{t.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="col-span-12 lg:col-span-3 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px]">Estado:</label>
-                  <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full h-7 bg-slate-50 border border-slate-200 px-2 outline-none font-bold text-emerald-600">
-                    <option value="ACTIVO">ACTIVO</option>
-                    <option value="INACTIVO">INACTIVO</option>
-                    <option value="ANULADO">ANULADO</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-12 gap-4 border-t border-slate-50 pt-3">
-                <div className="col-span-12 lg:col-span-5 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px]">Almacén de Recepción:</label>
-                  <select value={formData.warehouseId} onChange={e => setFormData({...formData, warehouseId: e.target.value})} className="w-full h-7 bg-blue-50 border border-blue-200 px-2 outline-none font-black text-blue-900">
-                    <option value="">-- SELECCIONE DESTINO --</option>
-                    {warehouses.map(w => <option key={w.id} value={w.id}>{w.name.toUpperCase()}</option>)}
-                  </select>
-                </div>
-                <div className="col-span-12 lg:col-span-7 flex flex-col gap-1">
-                  <label className="font-black text-slate-500 uppercase text-[9px]">Observaciones / Glosa:</label>
-                  <input placeholder="Motivo de ingreso, referencia adicional..." value={formData.observation} onChange={e => setFormData({...formData, observation: e.target.value})} className="w-full h-7 border border-slate-200 px-2 outline-none bg-slate-50" />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-1 flex flex-col bg-white border border-[#B0BCCB] rounded shadow-inner overflow-hidden">
-              <div className="bg-[#F0F2F5] px-4 py-1.5 flex justify-between items-center border-b border-[#B0BCCB]">
-                <div className="flex items-center gap-2">
-                  <Package className="w-3.5 h-3.5 text-slate-500" />
-                  <span className="text-[10px] font-black text-slate-700 uppercase">Productos a Ingresar</span>
-                </div>
-                <div className="flex gap-2 items-center">
-                  <div className="relative w-64">
-                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input placeholder="Buscar producto por nombre o código..." value={prodSearch} onChange={e => setProdSearch(e.target.value)} className="w-full h-7 pl-9 pr-3 text-[11px] border border-[#B0BCCB] rounded-full outline-none focus:ring-2 focus:ring-blue-500/20" />
-                    {prodSearch && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#B0BCCB] shadow-2xl z-50 max-h-60 overflow-auto rounded-md">
-                        {products.filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase()) || p.code?.toLowerCase().includes(prodSearch.toLowerCase())).map(p => (
-                          <div key={p.id} onClick={() => addItem(p)} className="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-50 flex justify-between items-center">
-                            <div className="flex flex-col">
-                              <span className="text-[11px] font-bold text-slate-800">{p.name}</span>
-                              <span className="text-[9px] text-slate-400">{p.code}</span>
-                            </div>
-                            <span className="text-[9px] font-black text-slate-400 uppercase">{p.unit?.symbol}</span>
-                          </div>
+                    <div className="col-span-12 lg:col-span-4 space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase block">Tipo Compra</label>
+                      <select
+                        value={formData.purchaseType || 'MERCADERIA'}
+                        onChange={e => setFormData({ ...formData, purchaseType: e.target.value })}
+                        className="w-full h-8 px-2 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800 focus:border-blue-500 outline-none"
+                      >
+                        {SUNAT_PURCHASE_TYPES.map(t => (
+                          <option key={t.code} value={t.code}>{t.name}</option>
                         ))}
-                      </div>
-                    )}
+                      </select>
+                    </div>
+
+                    <div className="col-span-12 lg:col-span-3 space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase block">Estado</label>
+                      <select
+                        value={formData.status}
+                        onChange={e => setFormData({ ...formData, status: e.target.value })}
+                        className="w-full h-8 px-2 bg-white border border-slate-300 rounded text-xs font-bold text-emerald-700 focus:border-blue-500 outline-none"
+                      >
+                        <option value="ACTIVO">ACTIVO</option>
+                        <option value="INACTIVO">INACTIVO</option>
+                        <option value="ANULADO">ANULADO</option>
+                      </select>
+                    </div>
                   </div>
-                  <button type="button" onClick={() => setIsSearchModalOpen(true)} className="h-7 px-4 bg-slate-700 text-white text-[10px] font-bold rounded-full hover:bg-slate-800 shadow-sm flex items-center gap-2 transition-all">
-                    <PlusCircle className="w-3.5 h-3.5" /> AGREGAR ÍTEM
-                  </button>
+
+                  <div className="grid grid-cols-12 gap-2">
+                    <div className="col-span-12 lg:col-span-5 space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase block">Almacén de Recepción</label>
+                      <select
+                        value={formData.warehouseId}
+                        onChange={e => setFormData({ ...formData, warehouseId: e.target.value })}
+                        className="w-full h-8 px-2 bg-blue-50/60 border border-blue-300 rounded text-xs font-bold text-blue-900 focus:border-blue-500 outline-none"
+                      >
+                        <option value="">-- SELECCIONE DESTINO --</option>
+                        {warehouses.map(w => <option key={w.id} value={w.id}>{w.name.toUpperCase()}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-span-12 lg:col-span-7 space-y-1">
+                      <label className="text-[10px] font-bold text-slate-600 uppercase block">Observaciones / Glosa</label>
+                      <input
+                        placeholder="Motivo de ingreso, referencia adicional..."
+                        value={formData.observation}
+                        onChange={e => setFormData({ ...formData, observation: e.target.value })}
+                        className="w-full h-8 px-2.5 bg-white border border-slate-300 rounded text-xs font-medium text-slate-800 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sección 2: Productos a Ingresar */}
+                <div className="bg-white rounded-lg border border-slate-200 shadow-2xs flex-1 flex flex-col min-h-[220px] overflow-hidden">
+                  <div className="px-3 py-2 border-b border-slate-100 flex flex-wrap justify-between items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1.5">
+                      <Package className="w-3.5 h-3.5 text-blue-700" />
+                      <span className="text-[11px] font-bold text-blue-950 uppercase tracking-tight">
+                        Productos a Ingresar
+                      </span>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <div className="relative w-64">
+                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          placeholder="Buscar producto por nombre o código..."
+                          value={prodSearch}
+                          onChange={e => setProdSearch(e.target.value)}
+                          className="w-full h-8 pl-8 pr-3 text-xs border border-slate-300 rounded-lg outline-none focus:border-blue-500 bg-white text-slate-800"
+                        />
+                        {prodSearch && (
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-300 shadow-2xl z-50 max-h-60 overflow-auto rounded-lg">
+                            {products
+                              .filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase()) || p.code?.toLowerCase().includes(prodSearch.toLowerCase()))
+                              .map(p => (
+                                <div
+                                  key={p.id}
+                                  onClick={() => addItem(p)}
+                                  className="p-2 hover:bg-blue-50 cursor-pointer border-b border-slate-100 flex justify-between items-center"
+                                >
+                                  <div className="flex flex-col">
+                                    <span className="text-xs font-bold text-slate-800">{p.name}</span>
+                                    <span className="text-[10px] font-mono text-slate-400">{p.code}</span>
+                                  </div>
+                                  <span className="text-[10px] font-bold text-slate-500 uppercase">{p.unit?.symbol}</span>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsSearchModalOpen(true)}
+                        className="h-8 px-3.5 bg-[#004A99] hover:bg-blue-800 text-white text-xs font-bold rounded-lg shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5" /> Agregar Ítem
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-auto">
+                    <table className="w-full border-collapse text-xs">
+                      <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 z-10">
+                        <tr className="text-[10px] text-slate-600 font-bold uppercase tracking-tight">
+                          <th className="px-3 py-2 text-left w-28">Código</th>
+                          <th className="px-3 py-2 text-left">Descripción del Producto</th>
+                          <th className="px-2 py-2 text-center w-24">Cantidad</th>
+                          <th className="px-2 py-2 text-center w-16">U.M.</th>
+                          <th className="px-2 py-2 text-center w-32">Nro. Lote</th>
+                          <th className="px-2 py-2 text-center w-36">F. Vencimiento</th>
+                          <th className="px-2 py-2 w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {formData.items.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="px-4 py-8 text-center text-xs text-slate-400 font-medium">
+                              No hay productos agregados. Utiliza el buscador o haz clic en "Agregar Ítem".
+                            </td>
+                          </tr>
+                        ) : (
+                          formData.items.map((item: any, idx: number) => (
+                            <tr key={idx} className="hover:bg-blue-50/40 transition-colors">
+                              <td className="px-3 py-1.5 font-mono text-[11px] text-slate-500">{item.code}</td>
+                              <td className="px-3 py-1.5 font-bold text-slate-800 uppercase text-[11px]">{item.name}</td>
+                              <td className="px-2 py-1">
+                                <input
+                                  type="number"
+                                  value={item.quantity}
+                                  onChange={e => updateItem(idx, 'quantity', e.target.value)}
+                                  className="w-full h-8 text-center border border-slate-300 focus:border-blue-500 bg-white rounded outline-none text-xs font-bold text-blue-700"
+                                />
+                              </td>
+                              <td className="px-2 py-1.5 text-center text-slate-600 font-bold text-[11px]">{item.unitSymbol}</td>
+                              <td className="px-2 py-1">
+                                <input
+                                  placeholder="LOTE-001"
+                                  value={item.lotNumber}
+                                  onChange={e => updateItem(idx, 'lotNumber', e.target.value.toUpperCase())}
+                                  className="w-full h-8 px-2 text-center border border-slate-300 focus:border-blue-500 bg-white outline-none font-bold font-mono text-[11px] text-slate-800 rounded"
+                                />
+                              </td>
+                              <td className="px-2 py-1">
+                                <input
+                                  type="date"
+                                  value={item.expiryDate}
+                                  onChange={e => updateItem(idx, 'expiryDate', e.target.value)}
+                                  className="w-full h-8 px-2 text-center border border-slate-300 focus:border-blue-500 bg-white outline-none text-[11px] font-medium text-slate-800 rounded"
+                                />
+                              </td>
+                              <td className="px-2 py-1.5 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => { const itms = [...formData.items]; itms.splice(idx, 1); setFormData({ ...formData, items: itms }); }}
+                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
+                                  title="Quitar ítem"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex-1 overflow-auto">
-                <table className="w-full border-collapse text-[10px]">
-                  <thead className="sticky top-0 bg-slate-50 border-b border-[#B0BCCB] shadow-sm z-10">
-                    <tr className="text-slate-500 font-bold uppercase tracking-tighter">
-                      <th className="p-2 text-left w-24">Código</th>
-                      <th className="p-2 text-left">Descripción del Producto</th>
-                      <th className="p-2 text-center w-20">Cantidad</th>
-                      <th className="p-2 text-center w-16">U.M.</th>
-                      <th className="p-2 text-center w-32">Nro. Lote</th>
-                      <th className="p-2 text-center w-32">F. Vencimiento</th>
-                      <th className="p-2 w-10"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {formData.items.map((item: any, idx: number) => (
-                      <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
-                        <td className="p-2 font-mono text-slate-500">{item.code}</td>
-                        <td className="p-2 font-bold text-slate-800 uppercase">{item.name}</td>
-                        <td className="p-1">
-                          <input type="number" value={item.quantity} onChange={e => updateItem(idx, 'quantity', e.target.value)} className="w-full h-7 text-center border border-transparent focus:border-blue-400 focus:bg-white bg-slate-50/50 rounded outline-none font-black text-blue-700" />
-                        </td>
-                        <td className="p-2 text-center text-slate-500 font-bold">{item.unitSymbol}</td>
-                        <td className="p-1">
-                          <input placeholder="LOTE-001" value={item.lotNumber} onChange={e => updateItem(idx, 'lotNumber', e.target.value.toUpperCase())} className="w-full h-7 text-center border border-slate-200 focus:border-blue-400 focus:bg-white bg-transparent outline-none font-bold text-[10px] rounded" />
-                        </td>
-                        <td className="p-1">
-                          <input type="date" value={item.expiryDate} onChange={e => updateItem(idx, 'expiryDate', e.target.value)} className="w-full h-7 text-center border border-slate-200 focus:border-blue-400 focus:bg-white bg-transparent outline-none text-[10px] rounded" />
-                        </td>
-                        <td className="p-2 text-center">
-                          <button type="button" onClick={() => { const itms = [...formData.items]; itms.splice(idx,1); setFormData({...formData, items: itms}); }} className="text-slate-300 hover:text-red-500 transition-colors font-bold text-base">×</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+              {/* Footer Estándar ERP */}
+              <div className="px-4 py-2.5 bg-slate-100/90 border-t border-slate-200 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="h-8 px-4 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5 text-red-500" /> Cancelar
+                  </button>
+                  <div className="flex items-center gap-1.5 px-3 h-8 bg-blue-50 rounded-lg border border-blue-200">
+                    <ClipboardList className="w-3.5 h-3.5 text-blue-700" />
+                    <span className="text-[10px] font-bold text-blue-900 uppercase">Total Ítems: {formData.items.length}</span>
+                  </div>
+                </div>
 
-            <div className="flex justify-between items-center bg-white p-3 border border-[#B0BCCB] rounded shadow-sm">
-              <div className="flex gap-3">
-                <button type="submit" disabled={loading} className="h-10 px-8 bg-emerald-600 text-white font-black rounded flex items-center gap-2 hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all transform active:scale-95">
-                  <Save className="w-5 h-5" /> {loading ? 'PROCESANDO...' : 'CONFIRMAR INGRESO'}
-                </button>
-                <button type="button" onClick={onClose} className="h-10 px-6 bg-white border border-slate-300 text-slate-500 font-bold rounded flex items-center gap-2 hover:bg-slate-50 transition-all">
-                  <X className="w-5 h-5" /> CANCELAR
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="h-8 px-5 bg-[#004A99] hover:bg-blue-800 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md disabled:opacity-50 cursor-pointer"
+                >
+                  {loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  {loading ? 'Procesando...' : 'Confirmar Ingreso'}
                 </button>
               </div>
-              <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-lg border border-blue-100">
-                <ClipboardList className="w-4 h-4 text-blue-500" />
-                <span className="text-[10px] font-black text-blue-700 uppercase">Total Ítems: {formData.items.length}</span>
-              </div>
-            </div>
-
-          </form>
+            </form>
 
           <ProductSearchModal 
             isOpen={isSearchModalOpen}
@@ -399,7 +556,7 @@ export const ReferralGuideForm: React.FC<ReferralGuideFormProps> = ({
             token={token || ''}
           />
         </motion.div>
-      </motion.div>
+      </div>
     )}
   </AnimatePresence>
   );
